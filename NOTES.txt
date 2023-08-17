@@ -1,0 +1,45 @@
+Main Code:
+
+Boris, BorisLib, BorisCUDALib
+
+----------------------------------------------------------
+
+Boris Article: do not modify, just leave all scripts as are.
+
+----------------------------------------------------------
+
+Documentation, GraphicsObjects: auxiliary, not for public release.
+
+----------------------------------------------------------
+
+Launcher: Produces Boris.exe for Windows release, which launches required CUDA version.
+
+----------------------------------------------------------
+
+Manual: Contains manual and examples folders. Tutorial 9 contains Python scripting templates and NetSocks.py.
+
+----------------------------------------------------------
+
+Material Parameters: auxiliary for Materials Database, not for public release.
+
+----------------------------------------------------------
+
+Patcher:
+
+PatchApply: produces PatchApply.exe which is used to apply patches to Boris executable using differential compression through xdelta.
+Patcher: used to create patch files
+Utilities: all up to date executable utilities, with NOTES on usage.
+
+----------------------------------------------------------
+
+PythonScripting:
+
+Auxiliary for creating methods from commands dump, to be used in NetSocks.py
+
+----------------------------------------------------------
+
+SFML: external dependency
+
+----------------------------------------------------------
+
+TestingScripts: collection of useful python scripts, some for external release, some just for internal use.
