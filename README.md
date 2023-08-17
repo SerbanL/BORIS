@@ -9,11 +9,14 @@ Will be available when released here : https://boris-spintronics.uk/download
 
 # Manual
 Latest manual rolled in with installer, also found here in the Manual directory together with examples.
+
 Standalone version here: https://www.researchgate.net/publication/331715880_Boris_Computational_Spintronics_User_Manual
 
 # External Dependencies
 CUDA 9.2 or newer : https://developer.nvidia.com/cuda-92-download-archive
+
 Python3 development version : https://www.python.org/downloads/
+
 FFTW3 : http://www.fftw.org/download.html
 
 # OS
