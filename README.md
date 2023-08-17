@@ -4,6 +4,8 @@ BORIS multi-GPU upgrade (also includes all single-GPU and CPU functionality of B
 
 !!! NOTE !!! Currently this is a pre-release version as not all parts of the code have been upgraded to multi-GPU.
 
+Pre-print on multi-GPU upgrade here: https://arxiv.org/abs/2308.08447
+
 # Download
 Will be available when released here : https://boris-spintronics.uk/download
 
