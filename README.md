@@ -2,7 +2,7 @@
 
 BORIS multi-GPU upgrade (also includes all single-GPU and CPU functionality of Boris v3.8 found here: https://github.com/SerbanL/Boris2)
 
-!!! NOTE !!! Currently this is a pre-release version as not all parts of the code have been upgraded to multi-GPU.
+!!! NOTE !!! Currently this is a pre-release version as upgrade is not fully finished (vast majority of codebase is upgraded and usable - compile as usual, instructions below). Currently missing Oersted field module and multi-mesh demag; all individual demag and dipole-dipole mesh modules are fully functional.
 
 Pre-print on multi-GPU upgrade here: https://arxiv.org/abs/2308.08447
 
