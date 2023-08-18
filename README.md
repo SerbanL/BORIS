@@ -2,7 +2,11 @@
 
 BORIS multi-GPU upgrade (also includes all single-GPU and CPU functionality of Boris v3.8 found here: https://github.com/SerbanL/Boris2)
 
-!!! NOTE !!! Currently this is a pre-release version as upgrade is not fully finished (vast majority of codebase is upgraded and usable - compile as usual, instructions below). Currently missing Oersted field module and multi-mesh demag; all individual demag and dipole-dipole mesh modules are fully functional.
+# NOTES
+
+!!! IMPORTANT !!! Currently this is a pre-release version as upgrade is not fully finished (vast majority of codebase is upgraded and usable - compile as usual, instructions below). Currently missing Oersted field module and multi-mesh demag; all individual demag and dipole-dipole mesh modules are fully functional.
+
+All Python scripts from previous versions will work on the new code, however older bsm files no longer compatible. To select more than one GPU simply use the selectcudadevice command, but pass it a list of GPU ids, e.g. ns.selectcudadevice([0, 1, 2, 3]) etc.
 
 Pre-print on multi-GPU upgrade here: https://arxiv.org/abs/2308.08447
 
