@@ -14,12 +14,12 @@
 #define OS_WIN	1
 #define OS_LIN	2
 
-#define OPERATING_SYSTEM	OS_WIN
+#define OPERATING_SYSTEM	OS_LIN
 
 //----------------------------------------------------------------- INTERFACE
 
 //turn graphical interface on or off. If turned off then only use a basic text console.
-#define GRAPHICS	1
+#define GRAPHICS	0
 
 //----------------------------------------------------------------- CUDA
 
