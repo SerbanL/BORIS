@@ -177,6 +177,10 @@ private:
 	//for configured number of devices and given n value, calculate the number of cells (as cuSZ3) each device should be assigned
 	//this is returned as first: n value for all devices but last. second: n value for last device (this can differ if devices cannot be assigned all same n value)
 	std::pair<cuSZ3, cuSZ3> get_devices_n_values(cuSZ3 new_n);
+	//same as above, but instead of calculating device dimensions, used the device_dimension passed in
+	//this is used for special resizing mode where device dimensions are specified externally
+	//note, the last device can differ in dimension as usual to make up any existing difference, thus device_dimension is set for all but possibly last one
+	std::pair<cuSZ3, cuSZ3> get_devices_n_values(cuSZ3 new_n, cuSZ3 device_dimension);
 
 	//set origin value as rect.s in managed cuVECs - must be called whenever rect is changed
 	void set_collection_origin(void);
@@ -261,7 +265,7 @@ public:
 	//number of points allocated for a given GPU (linear index, not physical device index)
 	size_t device_size(int idx) const { return pn_d[idx].dim(); }
 	
-	cuSZ3 device_n(int idx) const { return pn_d[idx]; }
+	const cuSZ3& device_n(int idx) const { return pn_d[idx]; }
 
 	//smallest allocated number of points from all devices
 	size_t min_device_size(void)
@@ -271,8 +275,8 @@ public:
 		return min_size;
 	}
 
-	cuRect device_rect(int idx) { return prect_d[idx]; }
-	cuBox device_box(int idx) { return pbox_d[idx]; }
+	const cuRect& device_rect(int idx) const { return prect_d[idx]; }
+	const cuBox& device_box(int idx) const { return pbox_d[idx]; }
 
 	//given a box (relative to entire cuVEC), return sub-box for given device idx (relative to device cuVEC)
 	cuBox device_sub_box(cuBox box, int idx) { return (box.IsNull() ? pbox_d[idx] - pbox_d[idx].s : box.get_intersection(pbox_d[idx]) - pbox_d[idx].s); }
@@ -304,7 +308,7 @@ public:
 
 	//copy values from a std::vector (cpu memory)
 	template <typename SType>
-	bool copy_from_vector(std::vector<SType>& vec);
+	bool copy_from_vector(std::vector<SType> vec);
 
 	//copy values to a std::vector (cpu memory)
 	template <typename SType>
@@ -398,6 +402,11 @@ public:
 	//resize number of cells, breaking up space amongst devices
 	bool resize(cuSZ3 new_n);
 	
+	//special resizing mode where the device dimensions are specified externally 
+	//device_dimension specifies dimensions for all but possibly last device
+	//last device dimension adjusted to make up any difference
+	bool resize(cuSZ3 new_n, cuSZ3 device_dimension);
+
 	//resize and set shape using linked vec. Applicable to cuVEC_VC only
 	template <typename LVType, typename VType_ = VType, typename MType_ = MType, std::enable_if_t<std::is_same<MType_, cuVEC_VC<VType_>>::value>* = nullptr>
 	bool resize(cuSZ3 new_n, mcu_obj<cuVEC_VC<LVType>, mcuVEC<LVType, cuVEC_VC<LVType>>>& linked_vec);
@@ -476,6 +485,11 @@ public:
 	//clear all Robin boundary conditions and values. Applicable to cuVEC_VC only
 	template <typename VType_ = VType, typename MType_ = MType, std::enable_if_t<std::is_same<MType_, cuVEC_VC<VType_>>::value>* = nullptr>
 	void clear_robin_conditions(void);
+
+	//when enabled then set_faces_and_edges_flags method will be called by set_ngbrFlags every time it is executed
+	//if false then faces and edges flags not calculated to avoid extra unnecessary initialization work
+	template <typename VType_ = VType, typename MType_ = MType, std::enable_if_t<std::is_same<MType_, cuVEC_VC<VType_>>::value>* = nullptr>
+	void set_calculate_faces_and_edges(bool status);
 
 	//--------------------------------------------MULTIPLE ENTRIES SETTERS : mcuVEC_oper.h
 

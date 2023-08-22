@@ -358,8 +358,7 @@ void TMRCUDA::CalculateElectricalConductivity_TMR(TMR_ TMR_type)
 
 		for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
-			cuSZ3& dn_e = pMeshCUDA->elC.device_n(mGPU);
-
+			cuSZ3 dn_e = pMeshCUDA->elC.device_n(mGPU);
 			CalculateElectricalConductivity_TMR_COS_Kernel <<< (dn_e.x * dn_e.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
 				(pMeshCUDA->cuMesh.get_deviceobject(mGPU),
 					(RAtmr_p_equation.is_set() ? &RAtmr_p_equation.get_x(mGPU) : nullptr), (RAtmr_ap_equation.is_set() ? &RAtmr_ap_equation.get_x(mGPU) : nullptr),
@@ -373,8 +372,7 @@ void TMRCUDA::CalculateElectricalConductivity_TMR(TMR_ TMR_type)
 
 		for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
-			cuSZ3& dn_e = pMeshCUDA->elC.device_n(mGPU);
-
+			cuSZ3 dn_e = pMeshCUDA->elC.device_n(mGPU);
 			CalculateElectricalConductivity_TMR_SLONCZEWSKI_Kernel <<< (dn_e.x * dn_e.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
 				(pMeshCUDA->cuMesh.get_deviceobject(mGPU),
 					(RAtmr_p_equation.is_set() ? &RAtmr_p_equation.get_x(mGPU) : nullptr), (RAtmr_ap_equation.is_set() ? &RAtmr_ap_equation.get_x(mGPU) : nullptr),

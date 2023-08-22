@@ -10,7 +10,7 @@
 #include "Mesh.h"
 #include "DataDefs.h"
 
-#include "MElastic_BoundariesCUDA.h"
+#include "MElastic_PolicyBoundariesCUDA.h"
 #include "MElastic_Boundaries.h"
 
 #include "HeatBase.h"
@@ -23,6 +23,8 @@ MElasticCUDA::MElasticCUDA(Mesh* pMesh_, MElastic* pMElastic_) :
 	sdd(mGPU), sxy(mGPU), sxz(mGPU), syz(mGPU),
 	vx2(mGPU), vy2(mGPU), vz2(mGPU),
 	sdd2(mGPU), sxy2(mGPU), sxz2(mGPU), syz2(mGPU),
+	external_stress_surfaces_arr(mGPU),
+	Sd_equation(mGPU), Sod_equation(mGPU),
 	Temp_previous(mGPU), T_ambient(mGPU)
 {
 	pMesh = pMesh_;
@@ -73,7 +75,51 @@ MElasticCUDA::~MElasticCUDA()
 		pMeshCUDA->strain_diag.clear();
 		pMeshCUDA->strain_odiag.clear();
 	}
+
+	clear_Fext_equationCUDA();
+	clear_external_stress_surfaces();
 }
+
+//----------------------------------------------- Auxiliary
+
+void MElasticCUDA::clear_Fext_equationCUDA(void)
+{
+	for (int idx = 0; idx < Fext_equationCUDA.size(); idx++) {
+
+		if (Fext_equationCUDA[idx]) delete Fext_equationCUDA[idx];
+		Fext_equationCUDA[idx] = nullptr;
+	}
+	Fext_equationCUDA.clear();
+}
+
+void MElasticCUDA::make_Fext_equationCUDA(size_t size)
+{
+	clear_Fext_equationCUDA();
+	Fext_equationCUDA.resize(size, nullptr);
+}
+
+void MElasticCUDA::clear_external_stress_surfaces(void)
+{
+	for (int idx = 0; idx < external_stress_surfaces.size(); idx++) {
+
+		if (external_stress_surfaces[idx]) delete external_stress_surfaces[idx];
+		external_stress_surfaces[idx] = nullptr;
+	}
+	external_stress_surfaces.clear();
+}
+
+void MElasticCUDA::make_external_stress_surfaces(size_t size)
+{
+	clear_external_stress_surfaces();
+	external_stress_surfaces.resize(size, nullptr);
+
+	for (int idx = 0; idx < external_stress_surfaces.size(); idx++) {
+
+		external_stress_surfaces[idx] = new mcu_obj<MElastic_BoundaryCUDA, MElastic_PolicyBoundaryCUDA>(mGPU);
+	}
+}
+
+//-------------------Abstract base class method implementations
 
 BError MElasticCUDA::Initialize(void)
 {
@@ -91,39 +137,42 @@ BError MElasticCUDA::Initialize(void)
 
 		error = pMElastic->Initialize();
 		if (error) return error;
-
-		Fext_equationCUDA.clear();
-		Fext_equationCUDA.resize(pMElastic->external_stress_surfaces.size());
-
-		external_stress_surfaces.clear();
-		external_stress_surfaces.resize(pMElastic->external_stress_surfaces.size());
-
+		
+		make_Fext_equationCUDA(pMElastic->external_stress_surfaces.size());
+		make_external_stress_surfaces(pMElastic->external_stress_surfaces.size());
 		external_stress_surfaces_arr.clear();
-
+		
 		//Setup MElastic_BoundariesCUDA
 		for (int idx = 0; idx < pMElastic->external_stress_surfaces.size(); idx++) {
 
 			//setup surface
-			external_stress_surfaces[idx]()->setup_surface(
+			external_stress_surfaces[idx]->setup_surface(
+				pMeshCUDA->u_disp,
 				pMElastic->external_stress_surfaces[idx].get_box(),
-				pMElastic->external_stress_surfaces[idx].get_cellsize(),
 				pMElastic->external_stress_surfaces[idx].get_orientation());
-
+			
 			//now setup force (constant or equation)
 			if (pMElastic->external_stress_surfaces[idx].is_constant_force()) {
 
-				external_stress_surfaces[idx]()->setup_fixed_stimulus(pMElastic->external_stress_surfaces[idx].get_constant_force());
-				Fext_equationCUDA[idx].clear();
+				external_stress_surfaces[idx]->setup_fixed_stimulus(pMElastic->external_stress_surfaces[idx].get_constant_force());
+				if (Fext_equationCUDA[idx]) delete Fext_equationCUDA[idx];
+				Fext_equationCUDA[idx] = nullptr;
 			}
 			else if (pMElastic->external_stress_surfaces[idx].is_equation_set()) {
 
-				if (!external_stress_surfaces[idx]()->make_cuda_equation(
-					Fext_equationCUDA[idx], pMElastic->external_stress_surfaces[idx].get_equation_fspec())) return error(BERROR_OUTOFGPUMEMORY_CRIT);
+				Set_Fext_equation(idx, pMElastic->external_stress_surfaces[idx].get_equation_fspec());
+				external_stress_surfaces[idx]->make_cuda_equation(*Fext_equationCUDA[idx]);
 			}
+			
+			//store external stress surfaces in the external_stress_surfaces_arr mcu_arr
+			//each cu_arr managed by mcu_arr for a respective device will then contain MElastic_BoundaryCUDA objects for that respective device
+			//then the cu_arr can be passed into coputation routines for that respective device, noting that only the MElastic_BoundaryCUDA objects for that device will be needed there, not from other devices
+			for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
-			external_stress_surfaces_arr.push_back(external_stress_surfaces[idx].get_managed_object());
+				external_stress_surfaces_arr.push_back(mGPU, external_stress_surfaces[idx]->get_managed_object(mGPU));
+			}
 		}
-
+		
 		//set Dirichlet conditions for u_disp (zero, i.e. fixed, or zero displacement, points)
 		pMeshCUDA->u_disp.clear_dirichlet_flags();
 		for (auto& fixed_rect : pMElastic->fixed_u_surfaces) pMeshCUDA->u_disp.set_dirichlet_conditions(fixed_rect, cuReal3());
@@ -144,9 +193,9 @@ BError MElasticCUDA::Initialize(void)
 			(MOD_)pMeshCUDA->Get_Module_Heff_Display() == MOD_MELASTIC || pMeshCUDA->IsOutputDataSet_withRect(DATA_E_MELASTIC),
 			(MOD_)pMeshCUDA->Get_Module_Energy_Display() == MOD_MELASTIC || pMeshCUDA->IsOutputDataSet_withRect(DATA_E_MELASTIC),
 			pMeshCUDA->GetMeshType() == MESH_ANTIFERROMAGNETIC);
-		if (!error)	initialized = true;
 	}
 
+	if (!error)	initialized = true;
 	return error;
 }
 
@@ -184,6 +233,7 @@ BError MElasticCUDA::UpdateConfiguration(UPDATECONFIG_ cfgMessage)
 		if (pMeshCUDA->u_disp.size_cpu().dim()) {
 
 			success &= pMeshCUDA->u_disp.resize(pMeshCUDA->h_m, pMeshCUDA->meshRect);
+			pMeshCUDA->u_disp.set_calculate_faces_and_edges(true);
 		}
 		else {
 
@@ -203,14 +253,14 @@ BError MElasticCUDA::UpdateConfiguration(UPDATECONFIG_ cfgMessage)
 		}
 
 		//correct size for FDTD data
-		success &= vx.resize(cuSZ3(pMeshCUDA->n_m.x, pMeshCUDA->n_m.y + 1, pMeshCUDA->n_m.z + 1));
-		success &= vy.resize(cuSZ3(pMeshCUDA->n_m.x + 1, pMeshCUDA->n_m.y, pMeshCUDA->n_m.z + 1));
-		success &= vz.resize(cuSZ3(pMeshCUDA->n_m.x + 1, pMeshCUDA->n_m.y + 1, pMeshCUDA->n_m.z));
+		success &= vx.resize(cuSZ3(pMeshCUDA->n_m.x, pMeshCUDA->n_m.y + 1, pMeshCUDA->n_m.z + 1), pMeshCUDA->u_disp.device_n(0));
+		success &= vy.resize(cuSZ3(pMeshCUDA->n_m.x + 1, pMeshCUDA->n_m.y, pMeshCUDA->n_m.z + 1), pMeshCUDA->u_disp.device_n(0));
+		success &= vz.resize(cuSZ3(pMeshCUDA->n_m.x + 1, pMeshCUDA->n_m.y + 1, pMeshCUDA->n_m.z), pMeshCUDA->u_disp.device_n(0));
 
-		success &= sdd.resize(cuSZ3(pMeshCUDA->n_m.x + 1, pMeshCUDA->n_m.y + 1, pMeshCUDA->n_m.z + 1));
-		success &= sxy.resize(cuSZ3(pMeshCUDA->n_m.x, pMeshCUDA->n_m.y, pMeshCUDA->n_m.z + 1));
-		success &= sxz.resize(cuSZ3(pMeshCUDA->n_m.x, pMeshCUDA->n_m.y + 1, pMeshCUDA->n_m.z));
-		success &= syz.resize(cuSZ3(pMeshCUDA->n_m.x + 1, pMeshCUDA->n_m.y, pMeshCUDA->n_m.z));
+		success &= sdd.resize(cuSZ3(pMeshCUDA->n_m.x + 1, pMeshCUDA->n_m.y + 1, pMeshCUDA->n_m.z + 1), pMeshCUDA->u_disp.device_n(0));
+		success &= sxy.resize(cuSZ3(pMeshCUDA->n_m.x, pMeshCUDA->n_m.y, pMeshCUDA->n_m.z + 1), pMeshCUDA->u_disp.device_n(0));
+		success &= sxz.resize(cuSZ3(pMeshCUDA->n_m.x, pMeshCUDA->n_m.y + 1, pMeshCUDA->n_m.z), pMeshCUDA->u_disp.device_n(0));
+		success &= syz.resize(cuSZ3(pMeshCUDA->n_m.x + 1, pMeshCUDA->n_m.y, pMeshCUDA->n_m.z), pMeshCUDA->u_disp.device_n(0));
 
 		//update mesh dimensions in equation constants
 		if (pMElastic->Sd_equation.is_set()) Set_Sd_Equation(pMElastic->Sd_equation.get_vector_fspec());
@@ -219,24 +269,24 @@ BError MElasticCUDA::UpdateConfiguration(UPDATECONFIG_ cfgMessage)
 		//for trigonal crystal system need additional velocity and stress components
 		if (pMElastic->crystal == CRYSTAL_TRIGONAL) {
 
-			success &= vx2()->resize(cuSZ3(pMeshCUDA->n_m.x, pMeshCUDA->n_m.y, pMeshCUDA->n_m.z));
-			success &= vy2()->resize(cuSZ3(pMeshCUDA->n_m.x + 1, pMeshCUDA->n_m.y + 1, pMeshCUDA->n_m.z));
-			success &= vz2()->resize(cuSZ3(pMeshCUDA->n_m.x + 1, pMeshCUDA->n_m.y, pMeshCUDA->n_m.z + 1));
+			success &= vx2.resize(cuSZ3(pMeshCUDA->n_m.x, pMeshCUDA->n_m.y, pMeshCUDA->n_m.z), pMeshCUDA->u_disp.device_n(0));
+			success &= vy2.resize(cuSZ3(pMeshCUDA->n_m.x + 1, pMeshCUDA->n_m.y + 1, pMeshCUDA->n_m.z), pMeshCUDA->u_disp.device_n(0));
+			success &= vz2.resize(cuSZ3(pMeshCUDA->n_m.x + 1, pMeshCUDA->n_m.y, pMeshCUDA->n_m.z + 1), pMeshCUDA->u_disp.device_n(0));
 
-			success &= sdd2()->resize(cuSZ3(pMeshCUDA->n_m.x + 1, pMeshCUDA->n_m.y, pMeshCUDA->n_m.z));
-			success &= sxy2()->resize(cuSZ3(pMeshCUDA->n_m.x, pMeshCUDA->n_m.y + 1, pMeshCUDA->n_m.z));
-			success &= sxz2()->resize(cuSZ3(pMeshCUDA->n_m.x, pMeshCUDA->n_m.y, pMeshCUDA->n_m.z + 1));
-			success &= syz2()->resize(cuSZ3(pMeshCUDA->n_m.x + 1, pMeshCUDA->n_m.y + 1, pMeshCUDA->n_m.z + 1));
+			success &= sdd2.resize(cuSZ3(pMeshCUDA->n_m.x + 1, pMeshCUDA->n_m.y, pMeshCUDA->n_m.z), pMeshCUDA->u_disp.device_n(0));
+			success &= sxy2.resize(cuSZ3(pMeshCUDA->n_m.x, pMeshCUDA->n_m.y + 1, pMeshCUDA->n_m.z), pMeshCUDA->u_disp.device_n(0));
+			success &= sxz2.resize(cuSZ3(pMeshCUDA->n_m.x, pMeshCUDA->n_m.y, pMeshCUDA->n_m.z + 1), pMeshCUDA->u_disp.device_n(0));
+			success &= syz2.resize(cuSZ3(pMeshCUDA->n_m.x + 1, pMeshCUDA->n_m.y + 1, pMeshCUDA->n_m.z + 1), pMeshCUDA->u_disp.device_n(0));
 		}
 		else {
 
-			vx2()->clear();
-			vy2()->clear();
-			vz2()->clear();
-			sdd2()->clear();
-			sxy2()->clear();
-			sxz2()->clear();
-			syz2()->clear();
+			vx2.clear();
+			vy2.clear();
+			vz2.clear();
+			sdd2.clear();
+			sxy2.clear();
+			sxz2.clear();
+			syz2.clear();
 		}
 	}
 
@@ -262,11 +312,11 @@ void MElasticCUDA::UpdateConfiguration_Values(UPDATECONFIG_ cfgMessage)
 //reset stress-strain solver to initial values (zero velocity, displacement and stress)
 void MElasticCUDA::Reset_ElSolver(void)
 {
-	vx()->set(0.0); vy()->set(0.0); vz()->set(0.0);
+	vx.set(0.0); vy.set(0.0); vz.set(0.0);
 
-	pMeshCUDA->u_disp()->set(cuReal3());
-	pMeshCUDA->strain_diag()->set(cuReal3());
-	pMeshCUDA->strain_odiag()->set(cuReal3());
+	pMeshCUDA->u_disp.set(cuReal3());
+	pMeshCUDA->strain_diag.set(cuReal3());
+	pMeshCUDA->strain_odiag.set(cuReal3());
 
 	if (thermoelasticity_enabled) {
 
@@ -277,7 +327,7 @@ void MElasticCUDA::Reset_ElSolver(void)
 	//Additional discretization scheme
 	if (pMElastic->vx2.linear_size()) {
 
-		vx2()->set(0.0); vy2()->set(0.0); vz2()->set(0.0);
+		vx2.set(0.0); vy2.set(0.0); vz2.set(0.0);
 	}
 
 	//setting the stress depends on if thermoelasticity or magnetostriction are enabled, so not straightforward
@@ -298,30 +348,30 @@ BError MElasticCUDA::copy_VECs_to_GPU(void)
 
 	bool success = true;
 
-	success &= pMeshCUDA->u_disp()->set_from_cpuvec(pMesh->u_disp);
-	success &= pMeshCUDA->strain_diag()->set_from_cpuvec(pMesh->strain_diag);
-	success &= pMeshCUDA->strain_odiag()->set_from_cpuvec(pMesh->strain_odiag);
+	success &= pMeshCUDA->u_disp.set_from_cpuvec(pMesh->u_disp);
+	success &= pMeshCUDA->strain_diag.set_from_cpuvec(pMesh->strain_diag);
+	success &= pMeshCUDA->strain_odiag.set_from_cpuvec(pMesh->strain_odiag);
 
-	success &= vx()->set_from_cpuvec(pMElastic->vx);
-	success &= vy()->set_from_cpuvec(pMElastic->vy);
-	success &= vz()->set_from_cpuvec(pMElastic->vz);
+	success &= vx.set_from_cpuvec(pMElastic->vx);
+	success &= vy.set_from_cpuvec(pMElastic->vy);
+	success &= vz.set_from_cpuvec(pMElastic->vz);
 
-	success &= sdd()->set_from_cpuvec(pMElastic->sdd);
-	success &= sxy()->set_from_cpuvec(pMElastic->sxy);
-	success &= sxz()->set_from_cpuvec(pMElastic->sxz);
-	success &= syz()->set_from_cpuvec(pMElastic->syz);
+	success &= sdd.set_from_cpuvec(pMElastic->sdd);
+	success &= sxy.set_from_cpuvec(pMElastic->sxy);
+	success &= sxz.set_from_cpuvec(pMElastic->sxz);
+	success &= syz.set_from_cpuvec(pMElastic->syz);
 
 	//Additional discretization scheme
 	if (pMElastic->vx2.linear_size()) {
 
-		success &= vx2()->set_from_cpuvec(pMElastic->vx2);
-		success &= vy2()->set_from_cpuvec(pMElastic->vy2);
-		success &= vz2()->set_from_cpuvec(pMElastic->vz2);
+		success &= vx2.set_from_cpuvec(pMElastic->vx2);
+		success &= vy2.set_from_cpuvec(pMElastic->vy2);
+		success &= vz2.set_from_cpuvec(pMElastic->vz2);
 
-		success &= sdd2()->set_from_cpuvec(pMElastic->sdd2);
-		success &= sxy2()->set_from_cpuvec(pMElastic->sxy2);
-		success &= sxz2()->set_from_cpuvec(pMElastic->sxz2);
-		success &= syz2()->set_from_cpuvec(pMElastic->syz2);
+		success &= sdd2.set_from_cpuvec(pMElastic->sdd2);
+		success &= sxy2.set_from_cpuvec(pMElastic->sxy2);
+		success &= sxz2.set_from_cpuvec(pMElastic->sxz2);
+		success &= syz2.set_from_cpuvec(pMElastic->syz2);
 	}
 
 	if (!success) return error(BERROR_OUTOFGPUMEMORY_CRIT);

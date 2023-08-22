@@ -204,7 +204,7 @@ public:
 
 	//copy values from a std::vector (cpu memory)
 	template <typename SType>
-	__host__ bool copy_from_vector(std::vector<SType>& vec);
+	__host__ bool copy_from_vector(std::vector<SType> vec);
 
 	//copy values to a std::vector (cpu memory)
 	template <typename SType>

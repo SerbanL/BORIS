@@ -35,7 +35,7 @@ BError SHeatCUDA::Initialize(void)
 	error = pSHeat->Initialize();
 	if (error) return error;
 
-	//check meshes to set heat boundary flags (NF_CMBND flags for Temp)
+	//check meshes to set heat boundary flags (NF2_CMBND flags for Temp)
 
 	//clear everything then rebuild
 	pHeat.clear();

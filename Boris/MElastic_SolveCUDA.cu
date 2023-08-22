@@ -6,19 +6,19 @@
 
 #include "BorisCUDALib.cuh"
 
-#include "ManagedDiffEqFMCUDA.h"
+#include "ManagedDiffEqPolicyFMCUDA.h"
 #include "MeshParamsControlCUDA.h"
 
-#include "MElastic_BoundariesCUDA.h"
+#include "MElastic_PolicyBoundariesCUDA.h"
 
 //----------------------- Iterate_Elastic_Solver KERNELS
 
 __global__ void Iterate_Elastic_Solver_Velocity1_Kernel(
 	ManagedMeshCUDA& cuMesh,
 	MElastic_BoundaryCUDA* external_stress_surfaces, size_t num_surfaces,
-	cuVEC<cuBReal>& vx, cuVEC<cuBReal>& vy, cuVEC<cuBReal>& vz,
-	cuVEC<cuReal3>& sdd,
-	cuVEC<cuBReal>& sxy, cuVEC<cuBReal>& sxz, cuVEC<cuBReal>& syz,
+	cuVEC_VC<cuBReal>& vx, cuVEC_VC<cuBReal>& vy, cuVEC_VC<cuBReal>& vz,
+	cuVEC_VC<cuReal3>& sdd,
+	cuVEC_VC<cuBReal>& sxy, cuVEC_VC<cuBReal>& sxz, cuVEC_VC<cuBReal>& syz,
 	cuBReal time, cuBReal dT)
 {
 	cuVEC_VC<cuReal3>& u_disp = *cuMesh.pu_disp;
@@ -27,14 +27,16 @@ __global__ void Iterate_Elastic_Solver_Velocity1_Kernel(
 	cuReal3& h_m = u_disp.h;
 	cuSZ3& n_m = u_disp.n;
 
-	//kernel launch with size (n_m.i + 1) * (n_m.j + 1) * (n_m.k + 1) 
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
-	int i = idx % (n_m.i + 1);
-	int j = (idx / (n_m.i + 1)) % (n_m.j + 1);
-	int k = idx / ((n_m.i + 1)*(n_m.j + 1));
+	//kernel launched with size sdd.device_size(mGPU). For a single GPU this has (n_m.i + 1) * (n_m.j + 1) * (n_m.k + 1) cells.
+	//for multiple GPUs only last one has an extra cell along partition dimension, the other ones have same dimension as u_disp along partition dimension
+	//this means the ijk index can always be used for reading and writing, but with +/-1 along partition direction need to use the () operator to read values
+	int i = idx % sdd.n.i;
+	int j = (idx / sdd.n.i) % sdd.n.j;
+	int k = idx / (sdd.n.i * sdd.n.j);
 
-	if (idx < (n_m.i + 1) * (n_m.j + 1) * (n_m.k + 1)) {
+	if (idx < sdd.n.dim()) {
 
 		//convert vertex index to cell-center index by capping maximum index size (use this to index u_disp)
 		cuINT3 ijk_u = cuINT3(i < n_m.i ? i : n_m.i - 1, j < n_m.j ? j : n_m.j - 1, k < n_m.k ? k : n_m.k - 1);
@@ -96,25 +98,10 @@ __global__ void Iterate_Elastic_Solver_Velocity1_Kernel(
 				int nkend = (k < n_m.k);
 
 				//check for required axis normal faces being present
-				bool zface_u =
-					j < n_m.j &&
-					(u_disp.is_not_empty(idx_u) ||
-					(k > 0 && u_disp.is_not_empty(idx_u - nkend * n_m.x*n_m.y)));
-
-				bool zface_l =
-					j > 0 &&
-					(u_disp.is_not_empty(idx_u - njend * n_m.x) ||
-					(k > 0 && u_disp.is_not_empty(idx_u - nkend * n_m.x*n_m.y - njend * n_m.x)));
-
-				bool yface_u =
-					k < n_m.k &&
-					(u_disp.is_not_empty(idx_u) ||
-					(j > 0 && u_disp.is_not_empty(idx_u - njend * n_m.x)));
-
-				bool yface_l =
-					k > 0 &&
-					(u_disp.is_not_empty(idx_u - nkend * n_m.x*n_m.y) ||
-					(j > 0 && u_disp.is_not_empty(idx_u - nkend * n_m.x*n_m.y - njend * n_m.x)));
+				bool zface_u = j < n_m.j && u_disp.is_face_z(idx_u);
+				bool zface_l = j > 0 && u_disp.is_face_z(idx_u - njend * n_m.x);
+				bool yface_u = k < n_m.k && u_disp.is_face_y(idx_u);
+				bool yface_l = k > 0 && u_disp.is_face_y(idx_u - nkend * n_m.x * n_m.y);
 
 				//at least one face is required, otherwise velocity must be zero
 				if (zface_u || zface_l || yface_u || yface_l) {
@@ -122,16 +109,16 @@ __global__ void Iterate_Elastic_Solver_Velocity1_Kernel(
 					cuBReal dsxx_dx = 0.0, dsxy_dy = 0.0, dsxz_dz = 0.0;
 
 					//always interior
-					dsxx_dx = (sdd[cuINT3(i + 1, j, k)].x - sdd[ijk].x) / h_m.x;
+					dsxx_dx = (sdd(cuINT3(i + 1, j, k)).x - sdd[ijk].x) / h_m.x;
 
 					//interior
-					if (zface_u && zface_l) dsxy_dy = (sxy[ijk] - sxy[cuINT3(i, j - 1, k)]) / h_m.y;
-					else if (zface_l) dsxy_dy = (Fext_yface.x - sxy[cuINT3(i, j - 1, k)]) / (h_m.y / 2);
+					if (zface_u && zface_l) dsxy_dy = (sxy[ijk] - sxy(cuINT3(i, j - 1, k))) / h_m.y;
+					else if (zface_l) dsxy_dy = (Fext_yface.x - sxy(cuINT3(i, j - 1, k))) / (h_m.y / 2);
 					else if (zface_u) dsxy_dy = (sxy[ijk] - Fext_yface.x) / (h_m.y / 2);
 
 					//interior
-					if (yface_u && yface_l) dsxz_dz = (sxz[ijk] - sxz[cuINT3(i, j, k - 1)]) / h_m.z;
-					else if (yface_l) dsxz_dz = (Fext_zface.x - sxz[cuINT3(i, j, k - 1)]) / (h_m.z / 2);
+					if (yface_u && yface_l) dsxz_dz = (sxz[ijk] - sxz(cuINT3(i, j, k - 1))) / h_m.z;
+					else if (yface_l) dsxz_dz = (Fext_zface.x - sxz(cuINT3(i, j, k - 1))) / (h_m.z / 2);
 					else if (yface_u) dsxz_dz = (sxz[ijk] - Fext_zface.x) / (h_m.z / 2);
 
 					vx[ijk] += dT * (dsxx_dx + dsxy_dy + dsxz_dz - mdamping * vx[ijk]) / density;
@@ -154,25 +141,10 @@ __global__ void Iterate_Elastic_Solver_Velocity1_Kernel(
 				int nkend = (k < n_m.k);
 
 				//check for required axis normal faces being present
-				bool zface_u =
-					i < n_m.i &&
-					(u_disp.is_not_empty(idx_u) ||
-					(k > 0 && u_disp.is_not_empty(idx_u - nkend * n_m.x*n_m.y)));
-
-				bool zface_l =
-					i > 0 &&
-					(u_disp.is_not_empty(idx_u - niend) ||
-					(k > 0 && u_disp.is_not_empty(idx_u - nkend * n_m.x*n_m.y - niend)));
-
-				bool xface_u =
-					k < n_m.k &&
-					(u_disp.is_not_empty(idx_u) ||
-					(i > 0 && u_disp.is_not_empty(idx_u - niend)));
-
-				bool xface_l =
-					k > 0 &&
-					(u_disp.is_not_empty(idx_u - nkend * n_m.x*n_m.y) ||
-					(i > 0 && u_disp.is_not_empty(idx_u - nkend * n_m.x*n_m.y - niend)));
+				bool zface_u = i < n_m.i && u_disp.is_face_z(idx_u);
+				bool zface_l = (i > 0 && u_disp.is_face_z(idx_u - niend)) || (i == 0 && (u_disp.is_halo_nx(idx_u) || (k > 0 && u_disp.is_halo_nx(idx_u - nkend * n_m.x * n_m.y))));
+				bool xface_u = k < n_m.k && u_disp.is_face_x(idx_u);
+				bool xface_l = k > 0 && u_disp.is_face_x(idx_u - nkend * n_m.x * n_m.y);
 
 				//at least one face is required, otherwise velocity must be zero
 				if (zface_u || zface_l || xface_u || xface_l) {
@@ -180,16 +152,16 @@ __global__ void Iterate_Elastic_Solver_Velocity1_Kernel(
 					cuBReal dsxy_dx = 0.0, dsyy_dy = 0.0, dsyz_dz = 0.0;
 
 					//always interior
-					dsyy_dy = (sdd[cuINT3(i, j + 1, k)].y - sdd[ijk].y) / h_m.y;
+					dsyy_dy = (sdd(cuINT3(i, j + 1, k)).y - sdd[ijk].y) / h_m.y;
 
 					//interior
-					if (zface_u && zface_l) dsxy_dx = (sxy[ijk] - sxy[cuINT3(i - 1, j, k)]) / h_m.x;
-					else if (zface_l) dsxy_dx = (Fext_xface.y - sxy[cuINT3(i - 1, j, k)]) / (h_m.x / 2);
+					if (zface_u && zface_l) dsxy_dx = (sxy[ijk] - sxy(cuINT3(i - 1, j, k))) / h_m.x;
+					else if (zface_l) dsxy_dx = (Fext_xface.y - sxy(cuINT3(i - 1, j, k))) / (h_m.x / 2);
 					else if (zface_u) dsxy_dx = (sxy[ijk] - Fext_xface.y) / (h_m.x / 2);
 
 					//interior
-					if (xface_u && xface_l) dsyz_dz = (syz[ijk] - syz[cuINT3(i, j, k - 1)]) / h_m.z;
-					else if (xface_l) dsyz_dz = (Fext_zface.y - syz[cuINT3(i, j, k - 1)]) / (h_m.z / 2);
+					if (xface_u && xface_l) dsyz_dz = (syz[ijk] - syz(cuINT3(i, j, k - 1))) / h_m.z;
+					else if (xface_l) dsyz_dz = (Fext_zface.y - syz(cuINT3(i, j, k - 1))) / (h_m.z / 2);
 					else if (xface_u) dsyz_dz = (syz[ijk] - Fext_zface.y) / (h_m.z / 2);
 
 					vy[ijk] += dT * (dsxy_dx + dsyy_dy + dsyz_dz - mdamping * vy[ijk]) / density;
@@ -212,25 +184,10 @@ __global__ void Iterate_Elastic_Solver_Velocity1_Kernel(
 				int njend = (j < n_m.j);
 
 				//check for required axis normal faces being present
-				bool yface_u =
-					i < n_m.i &&
-					(u_disp.is_not_empty(idx_u) ||
-					(j > 0 && u_disp.is_not_empty(idx_u - njend * n_m.x)));
-
-				bool yface_l =
-					i > 0 &&
-					(u_disp.is_not_empty(idx_u - niend) ||
-					(j > 0 && u_disp.is_not_empty(idx_u - njend * n_m.x - niend)));
-
-				bool xface_u =
-					j < n_m.j &&
-					(u_disp.is_not_empty(idx_u) ||
-					(i > 0 && u_disp.is_not_empty(idx_u - niend)));
-
-				bool xface_l =
-					j > 0 &&
-					(u_disp.is_not_empty(idx_u - njend * n_m.x) ||
-					(i > 0 && u_disp.is_not_empty(idx_u - njend * n_m.x - niend)));
+				bool yface_u = i < n_m.i && u_disp.is_face_y(idx_u);
+				bool yface_l = (i > 0 && u_disp.is_face_y(idx_u - niend)) || (i == 0 && (u_disp.is_halo_nx(idx_u) || (j > 0 && u_disp.is_halo_nx(idx_u - njend * n_m.x))));
+				bool xface_u = j < n_m.j && u_disp.is_face_x(idx_u);
+				bool xface_l = j > 0 && u_disp.is_face_x(idx_u - njend * n_m.x);
 
 				//at least one face is required, otherwise velocity must be zero
 				if (yface_u || yface_l || xface_u || xface_l) {
@@ -238,16 +195,16 @@ __global__ void Iterate_Elastic_Solver_Velocity1_Kernel(
 					cuBReal dsxz_dx = 0.0, dsyz_dy = 0.0, dszz_dz = 0.0;
 
 					//always interior
-					dszz_dz = (sdd[cuINT3(i, j, k + 1)].z - sdd[ijk].z) / h_m.z;
+					dszz_dz = (sdd(cuINT3(i, j, k + 1)).z - sdd[ijk].z) / h_m.z;
 
 					//interior
-					if (yface_u && yface_l) dsxz_dx = (sxz[ijk] - sxz[cuINT3(i - 1, j, k)]) / h_m.x;
-					else if (yface_l) dsxz_dx = (Fext_xface.z - sxz[cuINT3(i - 1, j, k)]) / (h_m.x / 2);
+					if (yface_u && yface_l) dsxz_dx = (sxz[ijk] - sxz(cuINT3(i - 1, j, k))) / h_m.x;
+					else if (yface_l) dsxz_dx = (Fext_xface.z - sxz(cuINT3(i - 1, j, k))) / (h_m.x / 2);
 					else if (yface_u) dsxz_dx = (sxz[ijk] - Fext_xface.z) / (h_m.x / 2);
 
 					//interior
-					if (xface_u && xface_l) dsyz_dy = (syz[ijk] - syz[cuINT3(i, j - 1, k)]) / h_m.y;
-					else if (xface_l) dsyz_dy = (Fext_yface.z - syz[cuINT3(i, j - 1, k)]) / (h_m.y / 2);
+					if (xface_u && xface_l) dsyz_dy = (syz[ijk] - syz(cuINT3(i, j - 1, k))) / h_m.y;
+					else if (xface_l) dsyz_dy = (Fext_yface.z - syz(cuINT3(i, j - 1, k))) / (h_m.y / 2);
 					else if (xface_u) dsyz_dy = (syz[ijk] - Fext_yface.z) / (h_m.y / 2);
 
 					vz[ijk] += dT * (dsxz_dx + dsyz_dy + dszz_dz - mdamping * vz[ijk]) / density;
@@ -267,16 +224,26 @@ __global__ void Iterate_Elastic_Solver_Velocity1_Kernel(
 //update velocity for dT time increment (also updating displacement)
 void MElasticCUDA::Iterate_Elastic_Solver_Velocity1(double dT)
 {
-	size_t size = (pMeshCUDA->n_m.i + 1) * (pMeshCUDA->n_m.j + 1) * (pMeshCUDA->n_m.k + 1);
+	//use sdd device dimensions, since this has total size (pMeshCUDA->n_m.i + 1) * (pMeshCUDA->n_m.j + 1) * (pMeshCUDA->n_m.k + 1)
+
+	sdd.exchange_halos();
+	sxy.exchange_halos();
+	sxz.exchange_halos();
+	syz.exchange_halos();
 
 	//1a. Update velocity
-	Iterate_Elastic_Solver_Velocity1_Kernel <<< (size + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
-		(pMeshCUDA->cuMesh, external_stress_surfaces_arr, external_stress_surfaces.size(),
-		vx, vy, vz, sdd, sxy, sxz, syz,
-		pMeshCUDA->GetStageTime(), dT);
+	for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
+
+		Iterate_Elastic_Solver_Velocity1_Kernel <<< (sdd.device_size(mGPU) + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
+			(pMeshCUDA->cuMesh.get_deviceobject(mGPU), 
+			external_stress_surfaces_arr(mGPU), external_stress_surfaces.size(),
+			vx.get_deviceobject(mGPU), vy.get_deviceobject(mGPU), vz.get_deviceobject(mGPU), 
+			sdd.get_deviceobject(mGPU), sxy.get_deviceobject(mGPU), sxz.get_deviceobject(mGPU), syz.get_deviceobject(mGPU),
+			pMeshCUDA->GetStageTime(), dT);
+	}
 }
 
-__global__ void Save_Current_Temperature_Kernel(cuBReal* Temp_previous, cuVEC_VC<cuBReal>& Temp, cuVEC_VC<cuBReal>& Temp_l)
+__global__ void Save_Current_Temperature_Kernel(cuVEC<cuBReal>& Temp_previous, cuVEC_VC<cuBReal>& Temp, cuVEC_VC<cuBReal>& Temp_l)
 {
 	//kernel launch with size n_m.i * n_m.j * n_m.k 
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -295,7 +262,11 @@ void MElasticCUDA::Save_Current_Temperature(void)
 {
 	if (thermoelasticity_enabled) {
 
-		Save_Current_Temperature_Kernel <<< (pMeshCUDA->n_t.dim() + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (Temp_previous, pMeshCUDA->Temp, pMeshCUDA->Temp_l);
+		for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
+
+			Save_Current_Temperature_Kernel <<< (pMeshCUDA->Temp.device_size(mGPU) + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> 
+				(Temp_previous.get_deviceobject(mGPU), pMeshCUDA->Temp.get_deviceobject(mGPU), pMeshCUDA->Temp_l.get_deviceobject(mGPU));
+		}
 	}
 }
 
@@ -304,11 +275,11 @@ void MElasticCUDA::Save_Current_Temperature(void)
 __global__ void make_velocity_continuous_x_Kernel(
 	ManagedMeshCUDA& cuMesh, ManagedMeshCUDA& cuMesh_sec,
 	CMBNDInfoCUDA& contact,
-	cuVEC<cuBReal>& vx, cuVEC<cuBReal>& vy, cuVEC<cuBReal>& vz,
-	cuVEC<cuBReal>& vx_sec, cuVEC<cuBReal>& vy_sec, cuVEC<cuBReal>& vz_sec)
+	cuVEC_VC<cuBReal>& vx, cuVEC_VC<cuBReal>& vy, cuVEC_VC<cuBReal>& vz,
+	mcuVEC_Managed<cuVEC_VC<cuBReal>, cuBReal>& vx_sec, mcuVEC_Managed<cuVEC_VC<cuBReal>, cuBReal>& vy_sec, mcuVEC_Managed<cuVEC_VC<cuBReal>, cuBReal>& vz_sec,
+	mcuVEC_Managed<cuVEC_VC<cuReal3>, cuReal3>& u_disp_sec)
 {
 	cuVEC_VC<cuReal3>& u_disp = *cuMesh.pu_disp;
-	cuVEC_VC<cuReal3>& u_disp_sec = *cuMesh_sec.pu_disp;
 
 	cuReal3& h_m = u_disp.h;
 	cuSZ3& n_m = u_disp.n;
@@ -432,11 +403,11 @@ __global__ void make_velocity_continuous_x_Kernel(
 __global__ void make_velocity_continuous_y_Kernel(
 	ManagedMeshCUDA& cuMesh, ManagedMeshCUDA& cuMesh_sec,
 	CMBNDInfoCUDA& contact,
-	cuVEC<cuBReal>& vx, cuVEC<cuBReal>& vy, cuVEC<cuBReal>& vz,
-	cuVEC<cuBReal>& vx_sec, cuVEC<cuBReal>& vy_sec, cuVEC<cuBReal>& vz_sec)
+	cuVEC_VC<cuBReal>& vx, cuVEC_VC<cuBReal>& vy, cuVEC_VC<cuBReal>& vz,
+	mcuVEC_Managed<cuVEC_VC<cuBReal>, cuBReal>& vx_sec, mcuVEC_Managed<cuVEC_VC<cuBReal>, cuBReal>& vy_sec, mcuVEC_Managed<cuVEC_VC<cuBReal>, cuBReal>& vz_sec,
+	mcuVEC_Managed<cuVEC_VC<cuReal3>, cuReal3>& u_disp_sec)
 {
 	cuVEC_VC<cuReal3>& u_disp = *cuMesh.pu_disp;
-	cuVEC_VC<cuReal3>& u_disp_sec = *cuMesh_sec.pu_disp;
 
 	cuReal3& h_m = u_disp.h;
 	cuSZ3& n_m = u_disp.n;
@@ -558,11 +529,11 @@ __global__ void make_velocity_continuous_y_Kernel(
 __global__ void make_velocity_continuous_z_Kernel(
 	ManagedMeshCUDA& cuMesh, ManagedMeshCUDA& cuMesh_sec,
 	CMBNDInfoCUDA& contact,
-	cuVEC<cuBReal>& vx, cuVEC<cuBReal>& vy, cuVEC<cuBReal>& vz,
-	cuVEC<cuBReal>& vx_sec, cuVEC<cuBReal>& vy_sec, cuVEC<cuBReal>& vz_sec)
+	cuVEC_VC<cuBReal>& vx, cuVEC_VC<cuBReal>& vy, cuVEC_VC<cuBReal>& vz,
+	mcuVEC_Managed<cuVEC_VC<cuBReal>, cuBReal>& vx_sec, mcuVEC_Managed<cuVEC_VC<cuBReal>, cuBReal>& vy_sec, mcuVEC_Managed<cuVEC_VC<cuBReal>, cuBReal>& vz_sec,
+	mcuVEC_Managed<cuVEC_VC<cuReal3>, cuReal3>& u_disp_sec)
 {
 	cuVEC_VC<cuReal3>& u_disp = *cuMesh.pu_disp;
-	cuVEC_VC<cuReal3>& u_disp_sec = *cuMesh_sec.pu_disp;
 
 	cuReal3& h_m = u_disp.h;
 	cuSZ3& n_m = u_disp.n;
@@ -683,39 +654,57 @@ __global__ void make_velocity_continuous_z_Kernel(
 
 //---------------------------------------------- CMBND routines (stress) LAUNCHER
 
-void MElasticCUDA::make_velocity_continuous(
-	cuSZ3 box_dims, int axis,
-	cu_obj<CMBNDInfoCUDA>& contact,
-	MElasticCUDA* pMElastic_sec)
+void MElasticCUDA::make_velocity_continuous(int axis, mCMBNDInfoCUDA& contact, MElasticCUDA* pMElastic_sec)
 {
 	//+/-x normal face
 	if (axis == 1) {
 
-		make_velocity_continuous_x_Kernel <<< ((box_dims.j + 1)*(box_dims.k + 1) + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
-			(pMeshCUDA->cuMesh, pMElastic_sec->pMeshCUDA->cuMesh,
-			contact,
-			vx, vy, vz,
-			pMElastic_sec->vx, pMElastic_sec->vy, pMElastic_sec->vz);
+		for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
+
+			cuSZ3 box_dims = contact.cells_box(mGPU).size();
+			if (!box_dims.dim()) continue;
+			
+			make_velocity_continuous_x_Kernel <<< ((box_dims.j + 1) * (box_dims.k + 1) + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
+				(pMeshCUDA->cuMesh.get_deviceobject(mGPU), pMElastic_sec->pMeshCUDA->cuMesh.get_deviceobject(mGPU),
+				contact.get_deviceobject(mGPU),
+				vx.get_deviceobject(mGPU), vy.get_deviceobject(mGPU), vz.get_deviceobject(mGPU),
+				pMElastic_sec->vx.get_managed_mcuvec(mGPU), pMElastic_sec->vy.get_managed_mcuvec(mGPU), pMElastic_sec->vz.get_managed_mcuvec(mGPU),
+				pMElastic_sec->pMeshCUDA->u_disp.get_managed_mcuvec(mGPU));
+		}
 	}
 
 	//+/-y normal face
 	else if (axis == 2) {
 
-		make_velocity_continuous_y_Kernel <<< ((box_dims.i + 1)*(box_dims.k + 1) + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
-			(pMeshCUDA->cuMesh, pMElastic_sec->pMeshCUDA->cuMesh, 
-			contact,
-			vx, vy, vz,
-			pMElastic_sec->vx, pMElastic_sec->vy, pMElastic_sec->vz);
+		for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
+
+			cuSZ3 box_dims = contact.cells_box(mGPU).size();
+			if (!box_dims.dim()) continue;
+
+			make_velocity_continuous_y_Kernel <<< ((box_dims.i + 1) * (box_dims.k + 1) + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
+				(pMeshCUDA->cuMesh.get_deviceobject(mGPU), pMElastic_sec->pMeshCUDA->cuMesh.get_deviceobject(mGPU),
+				contact.get_deviceobject(mGPU),
+				vx.get_deviceobject(mGPU), vy.get_deviceobject(mGPU), vz.get_deviceobject(mGPU),
+				pMElastic_sec->vx.get_managed_mcuvec(mGPU), pMElastic_sec->vy.get_managed_mcuvec(mGPU), pMElastic_sec->vz.get_managed_mcuvec(mGPU),
+				pMElastic_sec->pMeshCUDA->u_disp.get_managed_mcuvec(mGPU));
+		}
 	}
 
 	//+/-z normal face
 	else if (axis == 3) {
 
-		make_velocity_continuous_z_Kernel <<< ((box_dims.i + 1)*(box_dims.j + 1) + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
-			(pMeshCUDA->cuMesh, pMElastic_sec->pMeshCUDA->cuMesh, 
-			contact,
-			vx, vy, vz,
-			pMElastic_sec->vx, pMElastic_sec->vy, pMElastic_sec->vz);
+		for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
+
+			cuSZ3 box_dims = contact.cells_box(mGPU).size();
+			if (!box_dims.dim()) continue;
+
+			make_velocity_continuous_z_Kernel <<< ((box_dims.i + 1) * (box_dims.j + 1) + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
+				(pMeshCUDA->cuMesh.get_deviceobject(mGPU), pMElastic_sec->pMeshCUDA->cuMesh.get_deviceobject(mGPU),
+				contact.get_deviceobject(mGPU),
+				vx.get_deviceobject(mGPU), vy.get_deviceobject(mGPU), vz.get_deviceobject(mGPU),
+				pMElastic_sec->vx.get_managed_mcuvec(mGPU), pMElastic_sec->vy.get_managed_mcuvec(mGPU), pMElastic_sec->vz.get_managed_mcuvec(mGPU),
+				pMElastic_sec->pMeshCUDA->u_disp.get_managed_mcuvec(mGPU));
+		}
 	}
 }
 
@@ -724,9 +713,9 @@ void MElasticCUDA::make_velocity_continuous(
 __global__ void make_stress_continuous_x_Kernel(
 	ManagedMeshCUDA& cuMesh,
 	CMBNDInfoCUDA& contact,
-	cuVEC<cuReal3>& sdd, cuVEC<cuBReal>& sxy, cuVEC<cuBReal>& sxz, cuVEC<cuBReal>& syz,
-	cuVEC<cuReal3>& sdd_sec, cuVEC<cuBReal>& sxy_sec, cuVEC<cuBReal>& sxz_sec, cuVEC<cuBReal>& syz_sec,
-	cuVEC_VC<cuReal3>& u_disp_sec)
+	cuVEC_VC<cuReal3>& sdd, cuVEC_VC<cuBReal>& sxy, cuVEC_VC<cuBReal>& sxz, cuVEC_VC<cuBReal>& syz,
+	mcuVEC_Managed<cuVEC_VC<cuReal3>, cuReal3>& sdd_sec, mcuVEC_Managed<cuVEC_VC<cuBReal>, cuBReal>& sxy_sec, mcuVEC_Managed<cuVEC_VC<cuBReal>, cuBReal>& sxz_sec, mcuVEC_Managed<cuVEC_VC<cuBReal>, cuBReal>& syz_sec,
+	mcuVEC_Managed<cuVEC_VC<cuReal3>, cuReal3>& u_disp_sec)
 {
 	cuVEC_VC<cuReal3>& u_disp = *cuMesh.pu_disp;
 	
@@ -819,9 +808,9 @@ __global__ void make_stress_continuous_x_Kernel(
 __global__ void make_stress_continuous_y_Kernel(
 	ManagedMeshCUDA& cuMesh,
 	CMBNDInfoCUDA& contact,
-	cuVEC<cuReal3>& sdd, cuVEC<cuBReal>& sxy, cuVEC<cuBReal>& sxz, cuVEC<cuBReal>& syz,
-	cuVEC<cuReal3>& sdd_sec, cuVEC<cuBReal>& sxy_sec, cuVEC<cuBReal>& sxz_sec, cuVEC<cuBReal>& syz_sec,
-	cuVEC_VC<cuReal3>& u_disp_sec)
+	cuVEC_VC<cuReal3>& sdd, cuVEC_VC<cuBReal>& sxy, cuVEC_VC<cuBReal>& sxz, cuVEC_VC<cuBReal>& syz,
+	mcuVEC_Managed<cuVEC_VC<cuReal3>, cuReal3>& sdd_sec, mcuVEC_Managed<cuVEC_VC<cuBReal>, cuBReal>& sxy_sec, mcuVEC_Managed<cuVEC_VC<cuBReal>, cuBReal>& sxz_sec, mcuVEC_Managed<cuVEC_VC<cuBReal>, cuBReal>& syz_sec,
+	mcuVEC_Managed<cuVEC_VC<cuReal3>, cuReal3>& u_disp_sec)
 {
 	cuVEC_VC<cuReal3>& u_disp = *cuMesh.pu_disp;
 
@@ -916,9 +905,9 @@ __global__ void make_stress_continuous_y_Kernel(
 __global__ void make_stress_continuous_z_Kernel(
 	ManagedMeshCUDA& cuMesh,
 	CMBNDInfoCUDA& contact,
-	cuVEC<cuReal3>& sdd, cuVEC<cuBReal>& sxy, cuVEC<cuBReal>& sxz, cuVEC<cuBReal>& syz,
-	cuVEC<cuReal3>& sdd_sec, cuVEC<cuBReal>& sxy_sec, cuVEC<cuBReal>& sxz_sec, cuVEC<cuBReal>& syz_sec,
-	cuVEC_VC<cuReal3>& u_disp_sec)
+	cuVEC_VC<cuReal3>& sdd, cuVEC_VC<cuBReal>& sxy, cuVEC_VC<cuBReal>& sxz, cuVEC_VC<cuBReal>& syz,
+	mcuVEC_Managed<cuVEC_VC<cuReal3>, cuReal3>& sdd_sec, mcuVEC_Managed<cuVEC_VC<cuBReal>, cuBReal>& sxy_sec, mcuVEC_Managed<cuVEC_VC<cuBReal>, cuBReal>& sxz_sec, mcuVEC_Managed<cuVEC_VC<cuBReal>, cuBReal>& syz_sec,
+	mcuVEC_Managed<cuVEC_VC<cuReal3>, cuReal3>& u_disp_sec)
 {
 	cuVEC_VC<cuReal3>& u_disp = *cuMesh.pu_disp;
 
@@ -1013,40 +1002,55 @@ __global__ void make_stress_continuous_z_Kernel(
 
 //---------------------------------------------- CMBND routines (stress) LAUNCHERS
 
-void MElasticCUDA::make_stress_continuous(
-	cuSZ3 box_dims, int axis,
-	cu_obj<CMBNDInfoCUDA>& contact,
-	cu_obj<cuVEC<cuReal3>>& sdd_sec, cu_obj<cuVEC<cuBReal>>& sxy_sec, cu_obj<cuVEC<cuBReal>>& sxz_sec, cu_obj<cuVEC<cuBReal>>& syz_sec,
-	cu_obj<cuVEC_VC<cuReal3>>& u_disp_sec)
+void MElasticCUDA::make_stress_continuous(int axis, mCMBNDInfoCUDA& contact, MElasticCUDA* pMElastic_sec)
 {
+
 	//+/-x normal face
 	if (axis == 1) {
 
-		make_stress_continuous_x_Kernel <<< ((box_dims.j + 1)*(box_dims.k + 1) + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
-			(pMeshCUDA->cuMesh, contact, 
-			sdd, sxy, sxz, syz,
-			sdd_sec, sxy_sec, sxz_sec, syz_sec,
-			u_disp_sec);
+		for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
+
+			cuSZ3 box_dims = contact.cells_box(mGPU).size();
+			if (!box_dims.dim()) continue;
+
+			make_stress_continuous_x_Kernel <<< ((box_dims.j + 1) * (box_dims.k + 1) + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
+				(pMeshCUDA->cuMesh.get_deviceobject(mGPU), contact.get_deviceobject(mGPU),
+				sdd.get_deviceobject(mGPU), sxy.get_deviceobject(mGPU), sxz.get_deviceobject(mGPU), syz.get_deviceobject(mGPU),
+				pMElastic_sec->sdd.get_managed_mcuvec(mGPU), pMElastic_sec->sxy.get_managed_mcuvec(mGPU), pMElastic_sec->sxz.get_managed_mcuvec(mGPU), pMElastic_sec->syz.get_managed_mcuvec(mGPU),
+				pMElastic_sec->pMeshCUDA->u_disp.get_managed_mcuvec(mGPU));
+		}
 	}
 
 	//+/-y normal face
 	else if (axis == 2) {
 
-		make_stress_continuous_y_Kernel <<< ((box_dims.i + 1)*(box_dims.k + 1) + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
-			(pMeshCUDA->cuMesh, contact,
-			sdd, sxy, sxz, syz,
-			sdd_sec, sxy_sec, sxz_sec, syz_sec,
-			u_disp_sec);
+		for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
+
+			cuSZ3 box_dims = contact.cells_box(mGPU).size();
+			if (!box_dims.dim()) continue;
+
+			make_stress_continuous_y_Kernel <<< ((box_dims.i + 1) * (box_dims.k + 1) + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
+				(pMeshCUDA->cuMesh.get_deviceobject(mGPU), contact.get_deviceobject(mGPU),
+				sdd.get_deviceobject(mGPU), sxy.get_deviceobject(mGPU), sxz.get_deviceobject(mGPU), syz.get_deviceobject(mGPU),
+				pMElastic_sec->sdd.get_managed_mcuvec(mGPU), pMElastic_sec->sxy.get_managed_mcuvec(mGPU), pMElastic_sec->sxz.get_managed_mcuvec(mGPU), pMElastic_sec->syz.get_managed_mcuvec(mGPU),
+				pMElastic_sec->pMeshCUDA->u_disp.get_managed_mcuvec(mGPU));
+		}
 	}
 
 	//+/-z normal face
 	else if (axis == 3) {
 
-		make_stress_continuous_z_Kernel <<< ((box_dims.i + 1)*(box_dims.j + 1) + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
-			(pMeshCUDA->cuMesh, contact,
-			sdd, sxy, sxz, syz,
-			sdd_sec, sxy_sec, sxz_sec, syz_sec,
-			u_disp_sec);
+		for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
+
+			cuSZ3 box_dims = contact.cells_box(mGPU).size();
+			if (!box_dims.dim()) continue;
+
+			make_stress_continuous_z_Kernel <<< ((box_dims.i + 1) * (box_dims.j + 1) + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
+				(pMeshCUDA->cuMesh.get_deviceobject(mGPU), contact.get_deviceobject(mGPU),
+				sdd.get_deviceobject(mGPU), sxy.get_deviceobject(mGPU), sxz.get_deviceobject(mGPU), syz.get_deviceobject(mGPU),
+				pMElastic_sec->sdd.get_managed_mcuvec(mGPU), pMElastic_sec->sxy.get_managed_mcuvec(mGPU), pMElastic_sec->sxz.get_managed_mcuvec(mGPU), pMElastic_sec->syz.get_managed_mcuvec(mGPU),
+				pMElastic_sec->pMeshCUDA->u_disp.get_managed_mcuvec(mGPU));
+		}
 	}
 }
 

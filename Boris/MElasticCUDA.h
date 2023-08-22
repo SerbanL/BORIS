@@ -12,6 +12,8 @@ class SMElasticCUDA;
 class MElastic;
 class MeshCUDA;
 class Mesh;
+
+class MElastic_PolicyBoundaryCUDA;
 class MElastic_BoundaryCUDA;
 
 class MElasticCUDA :
@@ -38,71 +40,71 @@ private:
 	//---- Main scheme
 
 	//velocity x : mid x edges, size nx * (ny + 1) * (nz + 1)
-	mcu_VEC(cuBReal) vx;
+	mcu_VEC_VC(cuBReal) vx;
 
 	//velocity y : mid y edges, size (nx + 1) * ny * (nz + 1)
-	mcu_VEC(cuBReal) vy;
+	mcu_VEC_VC(cuBReal) vy;
 
 	//velocity z : mid z edges, size (nx + 1) * (ny + 1) * nz
-	mcu_VEC(cuBReal) vz;
+	mcu_VEC_VC(cuBReal) vz;
 
 	//diagonal stress components : vertices, size (nx + 1)*(ny + 1)*(nz + 1)
-	mcu_VEC(cuReal3) sdd;
+	mcu_VEC_VC(cuReal3) sdd;
 
 	//off-diagonal stress sigma_xy : mid xy faces, size nx*ny*(nz + 1)
-	mcu_VEC(cuBReal) sxy;
+	mcu_VEC_VC(cuBReal) sxy;
 
 	//off-diagonal stress sigma_xz : mid xz faces, size nx*(ny + 1)*nz
-	mcu_VEC(cuBReal) sxz;
+	mcu_VEC_VC(cuBReal) sxz;
 
 	//off-diagonal stress sigma_yz : mid yz faces, size (nx + 1)*ny*nz
-	mcu_VEC(cuBReal) syz;
+	mcu_VEC_VC(cuBReal) syz;
 
 	//---- Additional discretization scheme needed for trigonal crystal system. These are velocity and stress values on rectangular frame at +hy/2, -hz/2 staggering w.r.t. main one.
 	//positions below indicated for 1) main discretization frame, 2) additional staggered discretization frame
 
 	//velocity x : 1) centers of cells, 2) mid x edges, size nx * ny * nz
-	mcu_VEC(cuBReal) vx2;
+	mcu_VEC_VC(cuBReal) vx2;
 
 	//velocity y : 1) mid z edges 2) mid y edges, size (nx + 1) * (ny + 1) * nz
-	mcu_VEC(cuBReal) vy2;
+	mcu_VEC_VC(cuBReal) vy2;
 
 	//velocity z : 1) mid y edges 2) mid z edges, size (nx + 1) * ny * (nz + 1)
-	mcu_VEC(cuBReal) vz2;
+	mcu_VEC_VC(cuBReal) vz2;
 
 	//diagonal stress components : 1) mid yz faces 2) vertices, size (nx + 1) * ny * nz
-	mcu_VEC(cuReal3) sdd2;
+	mcu_VEC_VC(cuReal3) sdd2;
 
 	//off-diagonal stress sigma_xy : 1) mid xz faces  2) mid xy faces, size nx * (ny + 1) * nz
-	mcu_VEC(cuBReal) sxy2;
+	mcu_VEC_VC(cuBReal) sxy2;
 
 	//off-diagonal stress sigma_xz : 1) mid xy faces 2) mid xz faces, size nx * ny * (nz + 1)
-	mcu_VEC(cuBReal) sxz2;
+	mcu_VEC_VC(cuBReal) sxz2;
 
 	//off-diagonal stress sigma_yz : 1) vertices 2) mid yz faces, size (nx + 1) * (ny + 1) * (nz + 1)
-	mcu_VEC(cuBReal) syz2;
+	mcu_VEC_VC(cuBReal) syz2;
 
 	//----------------------
-	//MCUDA
+	
 	//corresponds to MElastic::external_stress_surfaces
-	std::vector<cu_obj<MElastic_BoundaryCUDA>> external_stress_surfaces;
-	//MCUDA
+	std::vector<mcu_obj<MElastic_BoundaryCUDA, MElastic_PolicyBoundaryCUDA>*> external_stress_surfaces;
+	
 	//same information as in external_stress_surfaces, but stored in a cu_arr so we can pass it whole into a CUDA kernel
-	cu_arr<MElastic_BoundaryCUDA> external_stress_surfaces_arr;
-	//MCUDA
+	mcu_arr<MElastic_BoundaryCUDA> external_stress_surfaces_arr;
+	
 	//with cuda switched on this will hold the text equation object (TEquationCUDA manages GPU memory but is held in CPU memory itself, so cannot place it directly in MElastic_BoundaryCUDA)
 	//vector size same as MElastic(CUDA)::external_stress_surfaces
-	std::vector<TEquationCUDA<cuBReal, cuBReal, cuBReal>> Fext_equationCUDA;
+	std::vector<mTEquationCUDA<cuBReal, cuBReal, cuBReal>*> Fext_equationCUDA;
 
 	//----------------------
-	//MCUDA
+	
 	//Strain using user equation, thus allowing simultaneous spatial (x, y, z), and stage time (t) dependence.
 	//A number of constants are always present : mesh dimensions in m (Lx, Ly, Lz)
 	//When text equation set, then elastodynamics solver is disabled.
 	//diagonal
-	TEquationCUDA<cuBReal, cuBReal, cuBReal, cuBReal> Sd_equation;
+	mTEquationCUDA<cuBReal, cuBReal, cuBReal, cuBReal> Sd_equation;
 	//off-diagonal
-	TEquationCUDA<cuBReal, cuBReal, cuBReal, cuBReal> Sod_equation;
+	mTEquationCUDA<cuBReal, cuBReal, cuBReal, cuBReal> Sod_equation;
 
 	//----------------------
 
@@ -132,6 +134,12 @@ private:
 
 	//Run-time auxiliary to set strain directly from user supplied text formulas
 	void Set_Strain_From_Formula(void);
+
+	void clear_Fext_equationCUDA(void);
+	void make_Fext_equationCUDA(size_t size);
+
+	void clear_external_stress_surfaces(void);
+	void make_external_stress_surfaces(size_t size);
 
 	//----------------------------------------------- Computational Helpers
 
@@ -193,18 +201,11 @@ private:
 
 	//-----Velocity
 
-	void make_velocity_continuous(
-		cuSZ3 box_dims, int axis,
-		mCMBNDInfoCUDA& contact,
-		MElasticCUDA* pMElastic_sec);
+	void make_velocity_continuous(int axis, mCMBNDInfoCUDA& contact, MElasticCUDA* pMElastic_sec);
 
 	//-----Stress
 
-	void make_stress_continuous(
-		cuSZ3 box_dims, int axis,
-		mCMBNDInfoCUDA& contact,
-		mcu_VEC(cuReal3)& sdd_sec, mcu_VEC(cuBReal)& sxy_sec, mcu_VEC(cuBReal)& sxz_sec, mcu_VEC(cuBReal)& syz_sec,
-		mcu_VEC_VC(cuReal3)& u_disp_sec);
+	void make_stress_continuous(int axis, mCMBNDInfoCUDA& contact, MElasticCUDA* pMElastic_sec);
 
 public:
 
@@ -232,6 +233,9 @@ public:
 	BError Set_Sod_Equation(std::vector<std::vector< std::vector<EqComp::FSPEC> >> fspec);
 	//clear text equations
 	void Clear_Sd_Sod_Equations(void);
+
+	//make Fext_equationCUDA[external_stress_surfaces_index], where external_stress_surfaces_index is an index in external_stress_surfaces
+	BError Set_Fext_equation(int external_stress_surfaces_index, std::vector<std::vector< std::vector<EqComp::FSPEC> >> fspec);
 
 	//-------------------
 	

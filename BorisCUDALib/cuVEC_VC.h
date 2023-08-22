@@ -60,26 +60,22 @@ class cuVEC_VC :
 //this is not necessarily an empty cell, but mark them to be skipped during computations for some algorithms (e.g. moving mesh algorithm where the ends of the magnetic mesh must not be updated by the ODE solver) : bit 10
 #define NF_SKIPCELL	1024
 
-//composite media boundary cells (used to flag cells where boundary conditions must be applied). These flags are not set using set_ngbrFlags, but must be externally set
-//cell on positive x side of boundary : bit 11
-#define NF_CMBNDPX	2048
-//cell on negative x side of boundary : bit 12
-#define NF_CMBNDNX	4096
-//cell on positive y side of boundary : bit 13
-#define NF_CMBNDPY	8192
-//cell on negative y side of boundary : bit 14
-#define NF_CMBNDNY	16384
-//cell on positive z side of boundary : bit 15
-#define NF_CMBNDPZ	32768
-//cell on negative z side of boundary : bit 16
-#define NF_CMBNDNZ	65536
+//NOTE for faces : only presence of lower faces is marked, i.e. those which contain the cube origin
+//If next cell cannot be checked because
+//lower face with x surface normal (yz face) present, i.e. there is a non-empty cell which contains it : bit 11
+#define NF_FACEX	2048
+//lower face with y surface normal (xz face) present, i.e. there is a non-empty cell which contains it : bit 12
+#define NF_FACEY	4096
+//lower face with z surface normal (xy face) present, i.e. there is a non-empty cell which contains it : bit 13
+#define NF_FACEZ	8192
 
-//mask for all cmbnd flags
-#define NF_CMBND	(NF_CMBNDPX + NF_CMBNDNX + NF_CMBNDPY + NF_CMBNDNY + NF_CMBNDPZ + NF_CMBNDNZ)
-//masks for cmbnd flags along the x, y, or z axes
-#define NF_CMBNDX	(NF_CMBNDPX + NF_CMBNDNX)
-#define NF_CMBNDY	(NF_CMBNDPY + NF_CMBNDNY)
-#define NF_CMBNDZ	(NF_CMBNDPZ + NF_CMBNDNZ)
+//NOTE for edges : only presence of lower edges is marked, i.e. those which contain the cube origin
+//lower x edge present : bit 14
+#define NF_EDGEX	16384
+//lower y edge present : bit 15
+#define NF_EDGEY	32768
+//lower z edge present : bit 16
+#define NF_EDGEZ	65536
 
 //off-axis neighbor at +x, +y, 0z (xy differentials) : bit 17
 #define NF_XY_PXPY	131072
@@ -185,6 +181,27 @@ class cuVEC_VC :
 #define NF2_HALOZ (NF2_HALOPZ + NF2_HALONZ)
 #define NF2_HALO (NF2_HALOX + NF2_HALOY + NF2_HALOZ)
 
+//composite media boundary cells (used to flag cells where boundary conditions must be applied). These flags are not set using set_ngbrFlags, but must be externally set
+//cell on positive x side of boundary : bit 19
+#define NF2_CMBNDPX	524288
+//cell on negative x side of boundary : bit 20
+#define NF2_CMBNDNX	1048576
+//cell on positive y side of boundary : bit 21
+#define NF2_CMBNDPY	2097152
+//cell on negative y side of boundary : bit 22
+#define NF2_CMBNDNY	4194304
+//cell on positive z side of boundary : bit 23
+#define NF2_CMBNDPZ	8388608
+//cell on negative z side of boundary : bit 24
+#define NF2_CMBNDNZ	16777216
+
+//mask for all cmbnd flags
+#define NF2_CMBND	(NF2_CMBNDPX + NF2_CMBNDNX + NF2_CMBNDPY + NF2_CMBNDNY + NF2_CMBNDPZ + NF2_CMBNDNZ)
+//masks for cmbnd flags along the x, y, or z axes
+#define NF2_CMBNDX	(NF2_CMBNDPX + NF2_CMBNDNX)
+#define NF2_CMBNDY	(NF2_CMBNDPY + NF2_CMBNDNY)
+#define NF2_CMBNDZ	(NF2_CMBNDPZ + NF2_CMBNDNZ)
+
 private:
 
 	//NEIGHBORS
@@ -200,6 +217,9 @@ private:
 
 	//indicates if ngbrFlags2 is in use, and is meant to speed up checks during computations only. This is strictly linked to the size of ngbrFlags2: if nullptr this is false, else it is true.
 	bool using_extended_flags;
+
+	//if true then faces and edges flags in ngbrFlags are also calculated. turn on only if needed.
+	bool calculate_faces_and_edges;
 
 	//number of non-empty cells (i.e. cells  not marked with NF_NOTEMPTY)
 	int nonempty_cells;
@@ -234,6 +254,11 @@ private:
 	cuReal2 robin_pz, robin_nz;
 	//robin_v applies for boundary conditions at void cells - more precisely for cells next to a void cell. Use this when flagged with NF2_ROBINNX etc. and also flagged with NF2_ROBINV
 	cuReal2 robin_v;
+
+	//CMBND
+	
+	//when cmbnd flags set (with set_cmbnd_flags in VEC_VC), set this to true (clear_cmbnd_flags will set it to false). This is checked by use_extended_flags as cmbnd flags are set in ngbrFlags2.
+	bool cmbnd_conditions_set;
 
 	//PBC AND AUXILIARY
 
@@ -320,6 +345,9 @@ private:
 	//initialization method for neighbor flags : set flags at size cuVEC<VType>::n, counting neighbors etc. Use current shape in ngbrFlags
 	__host__ void set_ngbrFlags(void);
 	
+	//calculate faces and edges flags - called by set_ngbrFlags if calculate_faces_and_edges is true
+	__host__ void set_faces_and_edges_flags(void);
+
 	//from NF2_DIRICHLET type flag and cell_idx return boundary value from one of the dirichlet vectors
 	__device__ VType get_dirichlet_value(int dirichlet_flag, int idx) const;
 	__device__ VType get_dirichlet_value(int dirichlet_flag, const cuINT3& ijk) const;
@@ -378,6 +406,31 @@ public:
 	__host__ void set_pUVA_haloVEC_right(cuVEC_VC<VType>*& pUVA_haloVEC_right_) { set_gpu_value(pUVA_haloVEC_right, pUVA_haloVEC_right_); }
 
 	__device__ mcuVEC_Managed<cuVEC_VC<VType>, VType>& mcuvec(void);
+
+	//--------------------------------------------INDEXING
+
+	//Special indexing mode where ijk value is checked for bounds, and which allows to read out-of-bounds value using halos/UVA. Writing not allowed.
+	__device__ const VType& operator()(const cuINT3& ijk) 
+	{ 
+		if (ijk.i >= 0 && ijk.i < cuVEC<VType>::n.i && ijk.j >= 0 && ijk.j < cuVEC<VType>::n.j && ijk.k >= 0 && ijk.k < cuVEC<VType>::n.k) 
+			return cuVEC<VType>::quantity[ijk.i + ijk.j * cuVEC<VType>::n.x + ijk.k * cuVEC<VType>::n.x * cuVEC<VType>::n.y];
+		else if (using_extended_flags) {
+			int idx = ijk.i + ijk.j * cuVEC<VType>::n.x + ijk.k * cuVEC<VType>::n.x * cuVEC<VType>::n.y;
+			if (ijk.i == cuVEC<VType>::n.x && (ngbrFlags2[idx - 1] & NF2_HALOPX)) 
+				return (pUVA_haloVEC_right ? (*pUVA_haloVEC_right)[ijk.j * pUVA_haloVEC_right->n.x + ijk.k * pUVA_haloVEC_right->n.x * pUVA_haloVEC_right->n.y] : halo_p[ijk.j + ijk.k * cuVEC<VType>::n.y]);
+			else if (ijk.i == -1 && (ngbrFlags2[idx + 1] & NF2_HALONX)) 
+				return (pUVA_haloVEC_left ? (*pUVA_haloVEC_left)[(pUVA_haloVEC_left->n.x - 1) + ijk.j * pUVA_haloVEC_left->n.x + ijk.k * pUVA_haloVEC_left->n.x * pUVA_haloVEC_left->n.y] : halo_n[ijk.j + ijk.k * cuVEC<VType>::n.y]);
+			else if (ijk.j == cuVEC<VType>::n.y && (ngbrFlags2[idx - cuVEC<VType>::n.x] & NF2_HALOPY))
+				return (pUVA_haloVEC_right ? (*pUVA_haloVEC_right)[ijk.i + ijk.k * pUVA_haloVEC_right->n.x * pUVA_haloVEC_right->n.y] : halo_p[ijk.i + ijk.k * cuVEC<VType>::n.x]);
+			else if (ijk.j == -1 && (ngbrFlags2[idx + cuVEC<VType>::n.x] & NF2_HALONY))
+				return (pUVA_haloVEC_left ? (*pUVA_haloVEC_left)[ijk.i + (pUVA_haloVEC_left->n.y - 1) * pUVA_haloVEC_left->n.x + ijk.k * pUVA_haloVEC_left->n.x * pUVA_haloVEC_left->n.y] : halo_n[ijk.i + ijk.k * cuVEC<VType>::n.x]);
+			else if (ijk.k == cuVEC<VType>::n.z && (ngbrFlags2[idx - cuVEC<VType>::n.x* cuVEC<VType>::n.y] & NF2_HALOPZ))
+				return (pUVA_haloVEC_right ? (*pUVA_haloVEC_right)[ijk.i + ijk.j * pUVA_haloVEC_right->n.x] : halo_p[ijk.i + ijk.j * cuVEC<VType>::n.x]);
+			else if (ijk.k == -1 && (ngbrFlags2[idx + cuVEC<VType>::n.x * cuVEC<VType>::n.y] & NF2_HALONZ))
+				return (pUVA_haloVEC_left ? (*pUVA_haloVEC_left)[ijk.i + ijk.j * pUVA_haloVEC_left->n.x + (pUVA_haloVEC_left->n.z - 1) * pUVA_haloVEC_left->n.x * pUVA_haloVEC_left->n.y] : halo_n[ijk.i + ijk.j * cuVEC<VType>::n.x]);
+		}
+		return VType();
+	}
 
 	//--------------------------------------------COPY TO / FROM VEC_VC
 
@@ -462,24 +515,32 @@ public:
 
 	__device__ bool is_empty(const cuRect& rectangle) const;
 
-	__device__ bool is_not_cmbnd(int index) const { return !(ngbrFlags[index] & NF_CMBND); }
-	__device__ bool is_not_cmbnd(const cuINT3& ijk) const { return !(ngbrFlags[ijk.i + ijk.j*cuVEC<VType>::n.x + ijk.k*cuVEC<VType>::n.x*cuVEC<VType>::n.y] & NF_CMBND); }
-	__device__ bool is_not_cmbnd(const cuReal3& rel_pos) const { return !(ngbrFlags[int(rel_pos.x / cuVEC<VType>::h.x) + int(rel_pos.y / cuVEC<VType>::h.y) * cuVEC<VType>::n.x + int(rel_pos.z / cuVEC<VType>::h.z) * cuVEC<VType>::n.x * cuVEC<VType>::n.y] & NF_CMBND); }
+	__device__ bool is_face_x(int index) const { return (ngbrFlags[index] & NF_FACEX); }
+	__device__ bool is_face_y(int index) const { return (ngbrFlags[index] & NF_FACEY); }
+	__device__ bool is_face_z(int index) const { return (ngbrFlags[index] & NF_FACEZ); }
 
-	__device__ bool is_cmbnd(int index) const { return (ngbrFlags[index] & NF_CMBND); }
-	__device__ bool is_cmbnd(const cuINT3& ijk) const { return (ngbrFlags[ijk.i + ijk.j*cuVEC<VType>::n.x + ijk.k*cuVEC<VType>::n.x*cuVEC<VType>::n.y] & NF_CMBND); }
-	__device__ bool is_cmbnd(const cuReal3& rel_pos) const { return (ngbrFlags[int(rel_pos.x / cuVEC<VType>::h.x) + int(rel_pos.y / cuVEC<VType>::h.y) * cuVEC<VType>::n.x + int(rel_pos.z / cuVEC<VType>::h.z) * cuVEC<VType>::n.x * cuVEC<VType>::n.y] & NF_CMBND); }
+	__device__ bool is_edge_x(int index) const { return (ngbrFlags[index] & NF_EDGEX); }
+	__device__ bool is_edge_y(int index) const { return (ngbrFlags[index] & NF_EDGEY); }
+	__device__ bool is_edge_z(int index) const { return (ngbrFlags[index] & NF_EDGEZ); }
 
-	__device__ bool is_cmbnd_px(int index) const { return (ngbrFlags[index] & NF_CMBNDPX); }
-	__device__ bool is_cmbnd_nx(int index) const { return (ngbrFlags[index] & NF_CMBNDNX); }
-	__device__ bool is_cmbnd_py(int index) const { return (ngbrFlags[index] & NF_CMBNDPY); }
-	__device__ bool is_cmbnd_ny(int index) const { return (ngbrFlags[index] & NF_CMBNDNY); }
-	__device__ bool is_cmbnd_pz(int index) const { return (ngbrFlags[index] & NF_CMBNDPZ); }
-	__device__ bool is_cmbnd_nz(int index) const { return (ngbrFlags[index] & NF_CMBNDNZ); }
+	__device__ bool is_not_cmbnd(int index) const { return !(using_extended_flags && (ngbrFlags2[index] & NF2_CMBND)); }
+	__device__ bool is_not_cmbnd(const cuINT3& ijk) const { return !(using_extended_flags && (ngbrFlags2[ijk.i + ijk.j*cuVEC<VType>::n.x + ijk.k*cuVEC<VType>::n.x*cuVEC<VType>::n.y] & NF2_CMBND)); }
+	__device__ bool is_not_cmbnd(const cuReal3& rel_pos) const { return !(using_extended_flags && (ngbrFlags2[int(rel_pos.x / cuVEC<VType>::h.x) + int(rel_pos.y / cuVEC<VType>::h.y) * cuVEC<VType>::n.x + int(rel_pos.z / cuVEC<VType>::h.z) * cuVEC<VType>::n.x * cuVEC<VType>::n.y] & NF2_CMBND)); }
 
-	__device__ bool is_cmbnd_x(int index) const { return (ngbrFlags[index] & NF_CMBNDX); }
-	__device__ bool is_cmbnd_y(int index) const { return (ngbrFlags[index] & NF_CMBNDY); }
-	__device__ bool is_cmbnd_z(int index) const { return (ngbrFlags[index] & NF_CMBNDZ); }
+	__device__ bool is_cmbnd(int index) const { return (using_extended_flags && (ngbrFlags2[index] & NF2_CMBND)); }
+	__device__ bool is_cmbnd(const cuINT3& ijk) const { return (using_extended_flags && (ngbrFlags2[ijk.i + ijk.j*cuVEC<VType>::n.x + ijk.k*cuVEC<VType>::n.x*cuVEC<VType>::n.y] & NF2_CMBND)); }
+	__device__ bool is_cmbnd(const cuReal3& rel_pos) const { return (using_extended_flags && (ngbrFlags2[int(rel_pos.x / cuVEC<VType>::h.x) + int(rel_pos.y / cuVEC<VType>::h.y) * cuVEC<VType>::n.x + int(rel_pos.z / cuVEC<VType>::h.z) * cuVEC<VType>::n.x * cuVEC<VType>::n.y] & NF2_CMBND)); }
+
+	__device__ bool is_cmbnd_px(int index) const { return (using_extended_flags && (ngbrFlags2[index] & NF2_CMBNDPX)); }
+	__device__ bool is_cmbnd_nx(int index) const { return (using_extended_flags && (ngbrFlags2[index] & NF2_CMBNDNX)); }
+	__device__ bool is_cmbnd_py(int index) const { return (using_extended_flags && (ngbrFlags2[index] & NF2_CMBNDPY)); }
+	__device__ bool is_cmbnd_ny(int index) const { return (using_extended_flags && (ngbrFlags2[index] & NF2_CMBNDNY)); }
+	__device__ bool is_cmbnd_pz(int index) const { return (using_extended_flags && (ngbrFlags2[index] & NF2_CMBNDPZ)); }
+	__device__ bool is_cmbnd_nz(int index) const { return (using_extended_flags && (ngbrFlags2[index] & NF2_CMBNDNZ)); }
+
+	__device__ bool is_cmbnd_x(int index) const { return (using_extended_flags && (ngbrFlags2[index] & NF2_CMBNDX)); }
+	__device__ bool is_cmbnd_y(int index) const { return (using_extended_flags && (ngbrFlags2[index] & NF2_CMBNDY)); }
+	__device__ bool is_cmbnd_z(int index) const { return (using_extended_flags && (ngbrFlags2[index] & NF2_CMBNDZ)); }
 
 	__device__ bool is_skipcell(int index) const { return (ngbrFlags[index] & NF_SKIPCELL); }
 	__device__ bool is_skipcell(const cuINT3& ijk) const { return (ngbrFlags[ijk.i + ijk.j*cuVEC<VType>::n.x + ijk.k*cuVEC<VType>::n.x*cuVEC<VType>::n.y] & NF_SKIPCELL); }
@@ -497,6 +558,13 @@ public:
 	__device__ bool is_dirichlet_x(int index) const { return using_extended_flags && (ngbrFlags2[index] & NF2_DIRICHLETX); }
 	__device__ bool is_dirichlet_y(int index) const { return using_extended_flags && (ngbrFlags2[index] & NF2_DIRICHLETY); }
 	__device__ bool is_dirichlet_z(int index) const { return using_extended_flags && (ngbrFlags2[index] & NF2_DIRICHLETZ); }
+
+	__device__ bool is_halo_px(int index) const { return using_extended_flags && (ngbrFlags2[index] & NF2_HALOPX); }
+	__device__ bool is_halo_nx(int index) const { return using_extended_flags && (ngbrFlags2[index] & NF2_HALONX); }
+	__device__ bool is_halo_py(int index) const { return using_extended_flags && (ngbrFlags2[index] & NF2_HALOPY); }
+	__device__ bool is_halo_ny(int index) const { return using_extended_flags && (ngbrFlags2[index] & NF2_HALONY); }
+	__device__ bool is_halo_pz(int index) const { return using_extended_flags && (ngbrFlags2[index] & NF2_HALOPZ); }
+	__device__ bool is_halo_nz(int index) const { return using_extended_flags && (ngbrFlags2[index] & NF2_HALONZ); }
 
 	//are all neighbors available? (for 2D don't check the z neighbors)
 	__device__ bool is_interior(int index) const { return (((ngbrFlags[index] & NF_BOTHX) == NF_BOTHX) && ((ngbrFlags[index] & NF_BOTHY) == NF_BOTHY) && (cuVEC<VType>::n.z == 1 || ((ngbrFlags[index] & NF_BOTHZ) == NF_BOTHZ))); }
@@ -548,6 +616,10 @@ public:
 	//clear all Robin boundary conditions and values
 	__host__ void clear_robin_conditions(void);
 	
+	//when enabled then set_faces_and_edges_flags method will be called by set_ngbrFlags every time it is executed
+	//if false then faces and edges flags not calculated to avoid extra unnecessary initialization work
+	__host__ void set_calculate_faces_and_edges(bool status) { set_gpu_value(calculate_faces_and_edges, status); if (status) set_faces_and_edges_flags(); }
+
 	//--------------------------------------------MULTIPLE ENTRIES SETTERS - SHAPE CHANGERS : cuVEC_VC_shape.h and cuVEC_VC_shape.cuh
 
 	//set value in box (i.e. in cells entirely included in box) - all cells become non-empty cells irrespective of value set

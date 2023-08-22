@@ -375,7 +375,7 @@ void Atom_STFieldCUDA::UpdateField(void)
 
 			for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
-				cuSZ3& n_device = paMeshCUDA->M1.device_n(mGPU);
+				cuSZ3 n_device = paMeshCUDA->M1.device_n(mGPU);
 				Atom_STFieldCUDA_TopFM_UpdateField <<< (n_device.x * n_device.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
 					(paMeshCUDA->cuaMesh.get_deviceobject(mGPU), pMeshFM_Top.get_array(mGPU), pMeshFM_Top.size(mGPU), cuModule.get_deviceobject(mGPU));
 			}
@@ -386,7 +386,7 @@ void Atom_STFieldCUDA::UpdateField(void)
 
 			for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
-				cuSZ3& n_device = paMeshCUDA->M1.device_n(mGPU);
+				cuSZ3 n_device = paMeshCUDA->M1.device_n(mGPU);
 				Atom_STFieldCUDA_BotFM_UpdateField <<< (n_device.x * n_device.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
 					(paMeshCUDA->cuaMesh.get_deviceobject(mGPU), pMeshFM_Bot.get_array(mGPU), pMeshFM_Bot.size(mGPU), cuModule.get_deviceobject(mGPU));
 			}
@@ -399,7 +399,7 @@ void Atom_STFieldCUDA::UpdateField(void)
 
 			for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
-				cuSZ3& n_device = paMeshCUDA->M1.device_n(mGPU);
+				cuSZ3 n_device = paMeshCUDA->M1.device_n(mGPU);
 				Atom_STFieldCUDA_TopAtom_UpdateField <<< (n_device.x * n_device.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
 					(paMeshCUDA->cuaMesh.get_deviceobject(mGPU), paMesh_Top.get_array(mGPU), paMesh_Top.size(mGPU), cuModule.get_deviceobject(mGPU));
 			}
@@ -410,7 +410,7 @@ void Atom_STFieldCUDA::UpdateField(void)
 
 			for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
-				cuSZ3& n_device = paMeshCUDA->M1.device_n(mGPU);
+				cuSZ3 n_device = paMeshCUDA->M1.device_n(mGPU);
 				Atom_STFieldCUDA_BotAtom_UpdateField <<< (n_device.x * n_device.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
 					(paMeshCUDA->cuaMesh.get_deviceobject(mGPU), paMesh_Bot.get_array(mGPU), paMesh_Bot.size(mGPU), cuModule.get_deviceobject(mGPU));
 			}

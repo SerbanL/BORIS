@@ -1,9 +1,10 @@
 #BORIS Computational Spintronics 2022
 
-Update_Date = '22/07/2023'
-Boris_version = 3.83
+Update_Date = '22/08/2023'
+Boris_version = 4.0
+Notes = 'u'
 
-print("Using NetSocks Module Updated on : %s (v%0.2f)" % (Update_Date, Boris_version))
+print("Using NetSocks Module Updated on : %s (v%0.2f%s)" % (Update_Date, Boris_version, Notes))
 
 import sys
 import os

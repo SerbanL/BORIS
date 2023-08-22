@@ -11,13 +11,13 @@ VEC_VC<VType>::VEC_VC(void) :
 	ProgramState<VEC_VC<VType>, 
 	std::tuple<SZ3, DBL3, Rect, std::vector<VType>, std::vector<int>, std::vector<int>, int,
 	std::vector<VType>, std::vector<VType>, std::vector<VType>, std::vector<VType>, std::vector<VType>, std::vector<VType>,
-	DBL2, DBL2, DBL2, DBL2, DBL2, DBL2, DBL2, DBL3, int, int, int>,
+	DBL2, DBL2, DBL2, DBL2, DBL2, DBL2, DBL2, DBL3, int, int, int, bool, bool>,
 	std::tuple<>>
 	(this, 
 	{ VINFO(VEC<VType>::n), VINFO(VEC<VType>::h), VINFO(VEC<VType>::rect), VINFO(VEC<VType>::quantity), VINFO(ngbrFlags), VINFO(ngbrFlags2), VINFO(nonempty_cells),
 	  VINFO(dirichlet_nx), VINFO(dirichlet_px), VINFO(dirichlet_ny), VINFO(dirichlet_py), VINFO(dirichlet_nz), VINFO(dirichlet_pz),
 	  VINFO(robin_px), VINFO(robin_nx), VINFO(robin_py), VINFO(robin_ny), VINFO(robin_pz), VINFO(robin_nz), VINFO(robin_v), VINFO(shift_debt),
-	  VINFO(pbc_x), VINFO(pbc_y), VINFO(pbc_z) }, {})
+	  VINFO(pbc_x), VINFO(pbc_y), VINFO(pbc_z), VINFO(cmbnd_conditions_set), VINFO(calculate_faces_and_edges) }, {})
 {
 }
 
@@ -27,13 +27,13 @@ VEC_VC<VType>::VEC_VC(const SZ3& n_) :
 	ProgramState<VEC_VC<VType>,
 	std::tuple<SZ3, DBL3, Rect, std::vector<VType>, std::vector<int>, std::vector<int>, int,
 	std::vector<VType>, std::vector<VType>, std::vector<VType>, std::vector<VType>, std::vector<VType>, std::vector<VType>,
-	DBL2, DBL2, DBL2, DBL2, DBL2, DBL2, DBL2, DBL3, int, int, int>,
+	DBL2, DBL2, DBL2, DBL2, DBL2, DBL2, DBL2, DBL3, int, int, int, bool, bool>,
 	std::tuple<>>
 	(this,
 		{ VINFO(VEC<VType>::n), VINFO(VEC<VType>::h), VINFO(VEC<VType>::rect), VINFO(VEC<VType>::quantity), VINFO(ngbrFlags), VINFO(ngbrFlags2), VINFO(nonempty_cells),
 		  VINFO(dirichlet_nx), VINFO(dirichlet_px), VINFO(dirichlet_ny), VINFO(dirichlet_py), VINFO(dirichlet_nz), VINFO(dirichlet_pz),
 		  VINFO(robin_px), VINFO(robin_nx), VINFO(robin_py), VINFO(robin_ny), VINFO(robin_pz), VINFO(robin_nz), VINFO(robin_v), VINFO(shift_debt),
-		  VINFO(pbc_x), VINFO(pbc_y), VINFO(pbc_z) }, {})
+		  VINFO(pbc_x), VINFO(pbc_y), VINFO(pbc_z), VINFO(cmbnd_conditions_set), VINFO(calculate_faces_and_edges) }, {})
 {
 	if (!mreserve_vector(ngbrFlags, n_.dim()) || VEC<VType>::quantity.size() != n_.dim()) {
 
@@ -51,13 +51,13 @@ VEC_VC<VType>::VEC_VC(const DBL3& h_, const Rect& rect_) :
 	ProgramState<VEC_VC<VType>,
 	std::tuple<SZ3, DBL3, Rect, std::vector<VType>, std::vector<int>, std::vector<int>, int,
 	std::vector<VType>, std::vector<VType>, std::vector<VType>, std::vector<VType>, std::vector<VType>, std::vector<VType>,
-	DBL2, DBL2, DBL2, DBL2, DBL2, DBL2, DBL2, DBL3, int, int, int>,
+	DBL2, DBL2, DBL2, DBL2, DBL2, DBL2, DBL2, DBL3, int, int, int, bool, bool>,
 	std::tuple<>>
 	(this,
 		{ VINFO(VEC<VType>::n), VINFO(VEC<VType>::h), VINFO(VEC<VType>::rect), VINFO(VEC<VType>::quantity), VINFO(ngbrFlags), VINFO(ngbrFlags2), VINFO(nonempty_cells),
 		  VINFO(dirichlet_nx), VINFO(dirichlet_px), VINFO(dirichlet_ny), VINFO(dirichlet_py), VINFO(dirichlet_nz), VINFO(dirichlet_pz),
 		  VINFO(robin_px), VINFO(robin_nx), VINFO(robin_py), VINFO(robin_ny), VINFO(robin_pz), VINFO(robin_nz), VINFO(robin_v), VINFO(shift_debt),
-		  VINFO(pbc_x), VINFO(pbc_y), VINFO(pbc_z) }, {})
+		  VINFO(pbc_x), VINFO(pbc_y), VINFO(pbc_z), VINFO(cmbnd_conditions_set), VINFO(calculate_faces_and_edges) }, {})
 {
 	//new_n : the size we should have if everything succeeds - VEC<VType>::n will take on this value if so
 	SZ3 new_n = VEC<VType>::get_n_from_h_and_rect(h_, rect_);
@@ -79,13 +79,13 @@ VEC_VC<VType>::VEC_VC(const DBL3& h_, const Rect& rect_, VType value) :
 	ProgramState<VEC_VC<VType>,
 	std::tuple<SZ3, DBL3, Rect, std::vector<VType>, std::vector<int>, std::vector<int>, int,
 	std::vector<VType>, std::vector<VType>, std::vector<VType>, std::vector<VType>, std::vector<VType>, std::vector<VType>,
-	DBL2, DBL2, DBL2, DBL2, DBL2, DBL2, DBL2, DBL3, int, int, int>,
+	DBL2, DBL2, DBL2, DBL2, DBL2, DBL2, DBL2, DBL3, int, int, int, bool, bool>,
 	std::tuple<>>
 	(this,
 		{ VINFO(VEC<VType>::n), VINFO(VEC<VType>::h), VINFO(VEC<VType>::rect), VINFO(VEC<VType>::quantity), VINFO(ngbrFlags), VINFO(ngbrFlags2), VINFO(nonempty_cells),
 		  VINFO(dirichlet_nx), VINFO(dirichlet_px), VINFO(dirichlet_ny), VINFO(dirichlet_py), VINFO(dirichlet_nz), VINFO(dirichlet_pz),
 		  VINFO(robin_px), VINFO(robin_nx), VINFO(robin_py), VINFO(robin_ny), VINFO(robin_pz), VINFO(robin_nz), VINFO(robin_v), VINFO(shift_debt),
-		  VINFO(pbc_x), VINFO(pbc_y), VINFO(pbc_z) }, {})
+		  VINFO(pbc_x), VINFO(pbc_y), VINFO(pbc_z), VINFO(cmbnd_conditions_set), VINFO(calculate_faces_and_edges) }, {})
 {
 	//new_n : the size we should have if everything succeeds - VEC<VType>::n will take on this value if so
 	SZ3 new_n = VEC<VType>::get_n_from_h_and_rect(h_, rect_);
@@ -336,17 +336,18 @@ void VEC_VC<VType>::clear(void)
 {
 	VEC<VType>::clear();
 
+	clear_dirichlet_flags();
+	clear_robin_conditions();
+	clear_cmbnd_flags();
+	clear_pbc();
+
+	shift_debt = DBL3();
+
 	ngbrFlags.clear();
 	ngbrFlags.shrink_to_fit();
 
 	ngbrFlags2.clear();
 	ngbrFlags2.shrink_to_fit();
-
-	clear_dirichlet_flags();
-
-	clear_pbc();
-
-	shift_debt = DBL3();
 }
 
 template <typename VType>

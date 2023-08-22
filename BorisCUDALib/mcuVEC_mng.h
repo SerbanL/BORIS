@@ -177,7 +177,14 @@ bool mcuVEC<VType, MType>::assign(cuSZ3 new_n, VType value)
 	//synch dimensions in man_mcuVEC since they have changed here
 	synch_dimensions();
 
-	//no halos used in this mode
+	//allocate halo spaces
+	allocate_halos();
+
+	//set halo flags in managed devices
+	set_halo_conditions();
+
+	//setup histogram transfer data
+	setup_histogram_transfers();
 
 	return true;
 }
@@ -225,7 +232,73 @@ bool mcuVEC<VType, MType>::resize(cuSZ3 new_n)
 	//synch dimensions in man_mcuVEC since they have changed here
 	synch_dimensions();
 
-	//no halos used in this mode
+	//allocate halo spaces
+	allocate_halos();
+
+	//set halo flags in managed devices
+	set_halo_conditions();
+
+	//setup histogram transfer data
+	setup_histogram_transfers();
+
+	return true;
+}
+
+//special resizing mode where the device dimensions are specified externally 
+	//device_dimension specifies dimensions for all but possibly last device
+	//last device dimension adjusted to make up any difference
+template <typename VType, typename MType>
+bool mcuVEC<VType, MType>::resize(cuSZ3 new_n, cuSZ3 device_dimension)
+{
+	//nothing to do if dimensions already set with matching device dimension
+	if (new_n == n && pn_d[0] == device_dimension) return true;
+
+	//get required n values for all devices, including last one which could differ in size from the rest
+	std::pair<cuSZ3, cuSZ3> nd = get_devices_n_values(new_n, device_dimension);
+	//if  nd.second then device_dimension passed in is too large, or else we are using only one GPU
+	if (mGPU.get_num_devices() > 1 && nd.second == cuSZ3()) return false;
+
+	//starting point for box of first device (relative to cuVEC), i.e. zero.
+	cuSZ3 box_start = cuINT3();
+
+	//set sizes for all devices
+	for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
+
+		if (mGPU < mGPU.get_num_devices() - 1) {
+
+			if (!mng(mGPU)->resize(nd.first)) return false;
+			pn_d[mGPU] = nd.first;
+
+			//setup box with cell coordinates relative to entire cuVEC
+			pbox_d[mGPU] = cuBox(box_start, box_start + nd.first);
+			box_start += nd.first & cu_normalize(new_n - pbox_d[mGPU].e);
+		}
+		else {
+
+			if (!mng(mGPU)->resize(nd.second)) return false;
+			pn_d[mGPU] = nd.second;
+
+			//setup box with cell coordinates relative to entire cuVEC
+			pbox_d[mGPU] = cuBox(box_start, box_start + nd.second);
+		}
+	}
+
+	//new values
+	n = new_n;
+	rect = cuRect(); set_collection_origin();
+	h = cuReal3();
+
+	//synch dimensions in man_mcuVEC since they have changed here
+	synch_dimensions();
+
+	//allocate halo spaces
+	allocate_halos();
+
+	//set halo flags in managed devices
+	set_halo_conditions();
+
+	//setup histogram transfer data
+	setup_histogram_transfers();
 
 	return true;
 }
@@ -519,12 +592,12 @@ template <typename cpuVEC>
 bool mcuVEC<VType, MType>::copy_to_cpuvec(cpuVEC& vec)
 {
 	bool success = true;
-
+	
 	//auxiliary subVEC
 	cpuVEC svec;
 
 	for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
-
+		
 		//get values from gpu into svec
 		success &= mng(mGPU)->set_cpuvec(svec);
 
@@ -541,7 +614,7 @@ bool mcuVEC<VType, MType>::copy_to_cpuvec(cpuVEC& vec)
 //copy values from a std::vector (cpu memory)
 template <typename VType, typename MType>
 template <typename SType>
-bool mcuVEC<VType, MType>::copy_from_vector(std::vector<SType>& vec)
+bool mcuVEC<VType, MType>::copy_from_vector(std::vector<SType> vec)
 {
 	bool success = true;
 

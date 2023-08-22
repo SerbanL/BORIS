@@ -374,7 +374,7 @@ void MElastic::Save_Current_Temperature(void)
 
 void MElastic::make_velocity_continuous(
 	CMBNDInfo& contact,
-	VEC<double>& vx_sec, VEC<double>& vy_sec, VEC<double>& vz_sec, VEC_VC<DBL3>& u_disp_sec,
+	VEC_VC<double>& vx_sec, VEC_VC<double>& vy_sec, VEC_VC<double>& vz_sec, VEC_VC<DBL3>& u_disp_sec,
 	Mesh *pMesh_sec)
 {
 	const Box& cb = contact.cells_box;
@@ -724,7 +724,7 @@ void MElastic::make_velocity_continuous(
 
 void MElastic::make_stress_continuous(
 	CMBNDInfo& contact,
-	VEC<DBL3>& sdd_sec, VEC<double>& sxy_sec, VEC<double>& sxz_sec, VEC<double>& syz_sec,
+	VEC_VC<DBL3>& sdd_sec, VEC_VC<double>& sxy_sec, VEC_VC<double>& sxz_sec, VEC_VC<double>& syz_sec,
 	VEC_VC<DBL3>& u_disp_sec)
 {
 	const Box& cb = contact.cells_box;

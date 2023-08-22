@@ -146,3 +146,15 @@ void mcuVEC<VType, MType>::clear_robin_conditions(void)
 		mng(mGPU)->clear_robin_conditions();
 	}
 }
+
+//when enabled then set_faces_and_edges_flags method will be called by set_ngbrFlags every time it is executed
+//if false then faces and edges flags not calculated to avoid extra unnecessary initialization work
+template <typename VType, typename MType>
+template <typename VType_, typename MType_, std::enable_if_t<std::is_same<MType_, cuVEC_VC<VType_>>::value>*>
+void mcuVEC<VType, MType>::set_calculate_faces_and_edges(bool status)
+{
+	for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
+
+		mng(mGPU)->set_calculate_faces_and_edges(status);
+	}
+}

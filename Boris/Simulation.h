@@ -822,16 +822,30 @@ private:
 	void AutoSetMeshDisplay_Sudden(void) { BD.AutoSetMeshDisplaySettings_Sudden(SMesh.FetchOnScreenPhysicalQuantity(BD.Get_MeshDisplay_DetailLevel())); }
 
 	//update mesh viewer with physical quantity - do not call directly, call it through UpdateScreen(); Also refreshes screen, updating interactive objects
-	void UpdateMeshDisplay(bool asynchronous = false) { BD.UpdateMeshDisplay(SMesh.FetchOnScreenPhysicalQuantity(BD.Get_MeshDisplay_DetailLevel()), asynchronous); }
+	//it is important displayMutex is locked before FetchOnScreenPhysicalQuantity, since mouse interaction with mesh can cause a data race
+	void UpdateMeshDisplay(void) 
+	{ 
+		if (BD.displayMutex.try_lock()) {
+			BD.UpdateMeshDisplay(SMesh.FetchOnScreenPhysicalQuantity(BD.Get_MeshDisplay_DetailLevel()));
+			BD.displayMutex.unlock();
+		}
+	}
+
 	//update mesh viewer with physical quantity - do not call directly, call it through UpdateScreen_Quick(); Also refreshes screen, but does not update interactive objects, so slightly quicker than UpdateMeshDisplay
-	void UpdateMeshDisplay_Quick(bool asynchronous = false) { BD.UpdateMeshDisplay_Quick(SMesh.FetchOnScreenPhysicalQuantity(BD.Get_MeshDisplay_DetailLevel()), asynchronous); }
+	void UpdateMeshDisplay_Quick(void)
+	{
+		if (BD.displayMutex.try_lock()) {
+			BD.UpdateMeshDisplay_Quick(SMesh.FetchOnScreenPhysicalQuantity(BD.Get_MeshDisplay_DetailLevel()));
+			BD.displayMutex.unlock();
+		}
+	}
 
 	//-------------------------------------Display update methods
 
 	//refresh screen (so similar to RefreshScreen();) but also update displayed quantites. 
-	void UpdateScreen(bool asynchronous = false) { UpdateDataBox(); UpdateMeshDisplay(asynchronous); }
+	void UpdateScreen(void) { UpdateDataBox(); UpdateMeshDisplay(); }
 	//quicker version where interactive objects are not updated
-	void UpdateScreen_Quick(bool asynchronous = false) { UpdateDataBox(); UpdateMeshDisplay_Quick(asynchronous); }
+	void UpdateScreen_Quick(void) { UpdateDataBox(); UpdateMeshDisplay_Quick(); }
 
 	//update screen and set default view settings - animate view change from current to new settings
 	void UpdateScreen_AutoSet(void) { UpdateDataBox(); AutoSetMeshDisplay(); RefreshScreen(); }
@@ -862,15 +876,15 @@ private:
 	void AutoSetMeshDisplay_Sudden(void) {}
 
 	//update mesh viewer with physical quantity - do not call directly, call it through UpdateScreen(); Also refreshes screen, updating interactive objects
-	void UpdateMeshDisplay(bool asynchronous = false) {}
+	void UpdateMeshDisplay(void) {}
 	//update mesh viewer with physical quantity - do not call directly, call it through UpdateScreen_Quick(); Also refreshes screen, but does not update interactive objects, so slightly quicker than UpdateMeshDisplay
-	void UpdateMeshDisplay_Quick(bool asynchronous = false) {}
+	void UpdateMeshDisplay_Quick(void) {}
 
 	//-------------------------------------Display update methods
 
 	//refresh screen (so similar to RefreshScreen();) but also update displayed quantites. 
-	void UpdateScreen(bool asynchronous = false) {}
-	void UpdateScreen_Quick(bool asynchronous = false) {}
+	void UpdateScreen(void) {}
+	void UpdateScreen_Quick(void) {}
 
 	//update screen and set default view settings - animate view change from current to new settings
 	void UpdateScreen_AutoSet(void) {}

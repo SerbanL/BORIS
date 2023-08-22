@@ -593,7 +593,7 @@ __host__ bool cuVEC<VType>::copy_to_cpuvec(cpuVEC& vec)
 
 template <typename VType>
 template <typename SType>
-__host__ bool cuVEC<VType>::copy_from_vector(std::vector<SType>& vec)
+__host__ bool cuVEC<VType>::copy_from_vector(std::vector<SType> vec)
 {
 	if (vec.size() != get_gpu_value(n).dim()) return false;
 

@@ -182,7 +182,7 @@ void ODECommon_Base::Reset(void)
 	calculate_dmdt = true;
 
 	moving_mesh_dwshift = 0.0;
-
+	
 #if COMPILECUDA == 1
 	if (podeSolver->pODECUDA) podeSolver->pODECUDA->SyncODEValues();
 	if (patom_odeSolver->pODECUDA) patom_odeSolver->pODECUDA->SyncODEValues();

@@ -281,15 +281,97 @@ __host__ void cuVEC_VC<VType>::set_ngbrFlags(void)
 	//halo flags will be cleared from ngbrFlags2, so also clear the halo vectors
 	clear_halo_flags();
 
-	//1. Count all the neighbors
+	//1a. Count all the neighbors
 	set_gpu_value(nonempty_cells, (int)0);
 	set_ngbrFlags_kernel <<< (get_ngbrFlags_size() + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (cuVEC<VType>::n, ngbrFlags, cuVEC<VType>::quantity, nonempty_cells);
+
+	//1b. calculate faces and edges if required (can only be done once all neighbor flags have been calculated)
+	if (get_gpu_value(calculate_faces_and_edges)) set_faces_and_edges_flags();
 
 	//2. set Robin flags depending on set conditions
 	set_robin_flags();
 
 	//3. set pbc flags depending on set conditions and currently calculated flags
 	set_pbc_flags();
+}
+
+template <typename VType>
+__global__ void set_faces_and_edges_flags_kernel(const cuSZ3& n, int*& ngbrFlags, bool& using_extended_flags, int*& ngbrFlags2)
+{
+	int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+	cuINT3 ijk = cuINT3(idx % n.x, (idx / n.x) % n.y, idx / (n.x * n.y));
+
+	if (idx < n.dim()) {
+
+		//clear face flags
+		ngbrFlags[idx] &= ~(NF_FACEX + NF_FACEY + NF_FACEZ);
+
+		//now set them
+
+		//x face
+		if ((ngbrFlags[idx] & NF_NOTEMPTY) || 
+			(ijk.i > 0 && (ngbrFlags[idx - 1] & NF_NOTEMPTY)) ||
+			(ijk.i == 0 && (using_extended_flags && (ngbrFlags2[idx] & NF2_HALONX)))) ngbrFlags[idx] |= NF_FACEX;
+		
+		//y face
+		if ((ngbrFlags[idx] & NF_NOTEMPTY) || 
+			(ijk.j > 0 && (ngbrFlags[idx - n.x] & NF_NOTEMPTY)) ||
+			(ijk.j == 0 && (using_extended_flags && (ngbrFlags2[idx] & NF2_HALONY)))) ngbrFlags[idx] |= NF_FACEY;
+		
+		//z face
+		if ((ngbrFlags[idx] & NF_NOTEMPTY) || 
+			(ijk.k > 0 && (ngbrFlags[idx - n.x * n.y] & NF_NOTEMPTY)) ||
+			(ijk.k == 0 && (using_extended_flags && (ngbrFlags2[idx] & NF2_HALONZ)))) ngbrFlags[idx] |= NF_FACEZ;
+
+		//clear edge flags
+		ngbrFlags[idx] &= ~(NF_EDGEX + NF_EDGEY + NF_EDGEZ);
+
+		//now set them
+
+		//x edge
+		if ((ngbrFlags[idx] & NF_NOTEMPTY) ||
+			(ijk.k > 0 && (ngbrFlags[idx - n.x * n.y] & NF_NOTEMPTY)) ||
+			(ijk.k == 0 && (using_extended_flags && (ngbrFlags2[idx] & NF2_HALONZ))) ||
+			(ijk.j > 0 && (ngbrFlags[idx - n.x] & NF_NOTEMPTY)) ||
+			(ijk.j == 0 && (using_extended_flags && (ngbrFlags2[idx] & NF2_HALONY))) ||
+			(ijk.j > 0 && ijk.k > 0 && (ngbrFlags[idx - n.x * n.y - n.x] & NF_NOTEMPTY)) ||
+			(ijk.j == 0 && ijk.k > 0 && (using_extended_flags && (ngbrFlags2[idx - n.x * n.y] & NF2_HALONY))) ||
+			(ijk.j > 0 && ijk.k == 0 && (using_extended_flags && (ngbrFlags2[idx - n.x] & NF2_HALONZ)))) ngbrFlags[idx] |= NF_EDGEX;
+
+		//y edge
+		if ((ngbrFlags[idx] & NF_NOTEMPTY) ||
+			(ijk.k > 0 && (ngbrFlags[idx - n.x * n.y] & NF_NOTEMPTY)) ||
+			(ijk.k == 0 && (using_extended_flags && (ngbrFlags2[idx] & NF2_HALONZ))) ||
+			(ijk.i > 0 && (ngbrFlags[idx - 1] & NF_NOTEMPTY)) ||
+			(ijk.i == 0 && (using_extended_flags && (ngbrFlags2[idx] & NF2_HALONX))) ||
+			(ijk.i > 0 && ijk.k > 0 && (ngbrFlags[idx - n.x * n.y - 1] & NF_NOTEMPTY)) ||
+			(ijk.i == 0 && ijk.k > 0 && (using_extended_flags && (ngbrFlags2[idx - n.x * n.y] & NF2_HALONX))) ||
+			(ijk.i > 0 && ijk.k == 0 && (using_extended_flags && (ngbrFlags2[idx - 1] & NF2_HALONZ)))) ngbrFlags[idx] |= NF_EDGEY;
+
+		//z edge
+		if ((ngbrFlags[idx] & NF_NOTEMPTY) ||
+			(ijk.j > 0 && (ngbrFlags[idx - n.x] & NF_NOTEMPTY)) ||
+			(ijk.j == 0 && (using_extended_flags && (ngbrFlags2[idx] & NF2_HALONY))) ||
+			(ijk.i > 0 && (ngbrFlags[idx - 1] & NF_NOTEMPTY)) ||
+			(ijk.i == 0 && (using_extended_flags && (ngbrFlags2[idx] & NF2_HALONX))) ||
+			(ijk.i > 0 && ijk.j > 0 && (ngbrFlags[idx - n.x - 1] & NF_NOTEMPTY)) ||
+			(ijk.i == 0 && ijk.j > 0 && (using_extended_flags && (ngbrFlags2[idx - n.x] & NF2_HALONX))) ||
+			(ijk.i > 0 && ijk.j == 0 && (using_extended_flags && (ngbrFlags2[idx - 1] & NF2_HALONY)))) ngbrFlags[idx] |= NF_EDGEZ;
+	}
+}
+
+template void cuVEC_VC<float>::set_faces_and_edges_flags(void);
+template void cuVEC_VC<double>::set_faces_and_edges_flags(void);
+
+template void cuVEC_VC<cuFLT3>::set_faces_and_edges_flags(void);
+template void cuVEC_VC<cuDBL3>::set_faces_and_edges_flags(void);
+
+//calculate faces and edges flags - called by set_ngbrFlags if calculate_faces_and_edges is true
+template <typename VType>
+__host__ void cuVEC_VC<VType>::set_faces_and_edges_flags(void)
+{
+	set_faces_and_edges_flags_kernel<VType> <<< (get_ngbrFlags_size() + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (cuVEC<VType>::n, ngbrFlags, using_extended_flags, ngbrFlags2);
 }
 
 //------------------------------------------------------------------- SET NGBRFLAGS linked cuVEC
@@ -699,6 +781,9 @@ __host__ bool cuVEC_VC<VType>::set_halo_conditions(cu_arr<int>& halo_ngbrFlags, 
 			
 		//setting halo flags might need robin flag recalculation - only if void robin cells are required
 		if (cuIsNZ(get_gpu_value(robin_v).i)) set_robin_flags();
+
+		//setting halo flags also needs faces and edges flag recalculation if required
+		if (get_gpu_value(calculate_faces_and_edges)) set_faces_and_edges_flags();
 	}
 
 	return true;

@@ -58,6 +58,8 @@ private:
 	//pairs of windows with linked sides : these sides have coordinates which are maintained during resizing. The order of winIds in the pair is important.
 	std::vector<PAIR> winLinkages_RightLeft, winLinkages_BottomTop;
 
+public:
+
 	//need thread-safe access to BorisDisplay - guard all external points of access (public methods)
 	std::mutex displayMutex;
 
@@ -163,22 +165,12 @@ public:
 	void AutoSetMeshDisplaySettings_Sudden(std::vector<PhysQ> physQ) { displayMutex.lock(); pbMeshWin->AutoSetMeshDisplaySettings(physQ); displayMutex.unlock(); }
 
 	//Calculate graphical representation of given physical quantity and refresh screen
-	//only update if std::mutex can be locked right away, as this is used in performance-critical parts
-	void UpdateMeshDisplay_Auxiliary(std::vector<PhysQ> physQ) { if (displayMutex.try_lock()) { pbMeshWin->UpdatePhysQRep(physQ); Refresh(); displayMutex.unlock(); } }
-	void UpdateMeshDisplay(std::vector<PhysQ> physQ, bool asynchronous)
-	{ 
-		if (asynchronous) single_call_launch<std::vector<PhysQ>>(&BorisDisplay::UpdateMeshDisplay_Auxiliary, physQ, THREAD_DISPLAY);
-		else UpdateMeshDisplay_Auxiliary(physQ);
-	}
+	//requires displayMutex be locked before calling this
+	void UpdateMeshDisplay(std::vector<PhysQ> physQ) { pbMeshWin->UpdatePhysQRep(physQ); Refresh(); }
 
 	//Calculate graphical representation of given physical quantity and draw screen (so doesn't update interactive objects, just draws)
-	//only update if std::mutex can be locked right away, as this is used in performance-critical parts
-	void UpdateMeshDisplay_Quick_Auxiliary(std::vector<PhysQ> physQ) { if (displayMutex.try_lock()) { pbMeshWin->UpdatePhysQRep(physQ); Draw(); displayMutex.unlock(); } }
-	void UpdateMeshDisplay_Quick(std::vector<PhysQ> physQ, bool asynchronous) 
-	{ 
-		if (asynchronous) single_call_launch<std::vector<PhysQ>>(&BorisDisplay::UpdateMeshDisplay_Quick_Auxiliary, physQ, THREAD_DISPLAY);
-		else UpdateMeshDisplay_Quick_Auxiliary(physQ);
-	}
+	//requires displayMutex be locked before calling this
+	void UpdateMeshDisplay_Quick(std::vector<PhysQ> physQ) { pbMeshWin->UpdatePhysQRep(physQ); Draw(); }
 
 	//image_cropping specify normalized cropping within the mesh image, as left, bottom, right, top : 0, 0 point is left, bottom of screen as far as user is concerned.
 	bool SaveMeshImage(std::string fileName, DBL4 image_cropping = DBL4(0, 0, 1, 1)) { displayMutex.lock(); bool success = pbMeshWin->SaveMeshImage(fileName, image_cropping); displayMutex.unlock(); return success; }

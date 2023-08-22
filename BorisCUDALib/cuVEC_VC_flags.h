@@ -12,7 +12,17 @@ __host__ bool cuVEC_VC<VType>::use_extended_flags(void)
 
 	//ROBIN
 	//DIRICHLET
+	//CMBND
 	//HALO
+
+	bool using_robin = (
+		get_gpu_value(robin_px) != cuReal2()
+		|| get_gpu_value(robin_nx) != cuReal2()
+		|| get_gpu_value(robin_py) != cuReal2()
+		|| get_gpu_value(robin_ny) != cuReal2()
+		|| get_gpu_value(robin_pz) != cuReal2()
+		|| get_gpu_value(robin_nz) != cuReal2()
+		|| get_gpu_value(robin_v) != cuReal2());
 
 	bool using_dirichlet = (
 		get_dirichlet_size(NF2_DIRICHLETNX) 
@@ -22,18 +32,11 @@ __host__ bool cuVEC_VC<VType>::use_extended_flags(void)
 		|| get_dirichlet_size(NF2_DIRICHLETNZ) 
 		|| get_dirichlet_size(NF2_DIRICHLETPZ));
 
+	bool using_cmbnd = get_gpu_value(cmbnd_conditions_set);
+
 	bool using_halo = get_gpu_value(halo_size);
 
-	bool using_robin = (
-		get_gpu_value(robin_px) != cuReal2() 
-		|| get_gpu_value(robin_nx) != cuReal2()
-		|| get_gpu_value(robin_py) != cuReal2()
-		|| get_gpu_value(robin_ny) != cuReal2()
-		|| get_gpu_value(robin_pz) != cuReal2()
-		|| get_gpu_value(robin_nz) != cuReal2()
-		|| get_gpu_value(robin_v) != cuReal2());
-
-	bool using_extended_flags_cpu = (using_dirichlet || using_robin || using_halo);
+	bool using_extended_flags_cpu = (using_robin || using_dirichlet || using_cmbnd || using_halo);
 
 	//make sure ngbrFlags2 has the correct memory allocated only if currently empty
 	if (using_extended_flags_cpu && isnullgpuptr(ngbrFlags2)) {
@@ -214,7 +217,8 @@ __host__ void cuVEC_VC<VType>::set_pbc(int pbc_x_, int pbc_y_, int pbc_z_)
 template <typename VType>
 __host__ void cuVEC_VC<VType>::clear_cmbnd_flags(void)
 {
-	gpu_and_managed(ngbrFlags, ~NF_CMBND, get_ngbrFlags_size());
+	if (get_ngbrFlags2_size()) gpu_and_managed(ngbrFlags2, ~NF2_CMBND, get_ngbrFlags2_size());
+	set_gpu_value(cmbnd_conditions_set, false);
 }
 
 //clear all skip cell flags

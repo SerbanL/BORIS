@@ -169,7 +169,7 @@ ActionOutcome BorisMeshWindow::NewMessage(AC_ aCode, INT2 mouse, std::string dat
 				DBL3 newMeshPosition;
 				std::string unit;
 				double meshValue;
-
+				
 				if (physQRep.GetMouseInfo(INT2(mouse.x, mouse.y), &meshName, &typeName, &newMeshPosition, &meshValue, &unit)) {
 
 					displayMeshInfo = true;
@@ -185,7 +185,7 @@ ActionOutcome BorisMeshWindow::NewMessage(AC_ aCode, INT2 mouse, std::string dat
 					}
 				}
 				else {
-
+				
 					if (displayMeshInfo) actionResult.AddCode(winId, mouse, AO_REFRESH);
 					displayMeshInfo = false;
 				}

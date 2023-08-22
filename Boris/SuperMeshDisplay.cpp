@@ -10,7 +10,7 @@ std::vector<PhysQ> SuperMesh::FetchOnScreenPhysicalQuantity(double detail_level)
 	bool cudaSupermesh = false;
 
 #if COMPILECUDA == 1
-
+	
 	//Commands are executed on newly spawned threads, so if cuda is on and we are not using device 0 (default device) we must switch to required device, otherwise 0 will be used
 	if (cudaEnabled && cudaDeviceSelect != 0) {
 
@@ -18,7 +18,7 @@ std::vector<PhysQ> SuperMesh::FetchOnScreenPhysicalQuantity(double detail_level)
 		cudaGetDevice(&device);
 		if (device != cudaDeviceSelect) cudaSetDevice(cudaDeviceSelect);
 	}
-
+	
 	if (pSMeshCUDA) {
 
 		//if super-mesh display quantities are set with CUDA enabled then get them from PSMeshCUDA

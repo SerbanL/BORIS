@@ -97,7 +97,7 @@ BError STransport::UpdateConfiguration(UPDATECONFIG_ cfgMessage)
 		UPDATECONFIG_ODE_SOLVER)) {
 		
 		////////////////////////////////////////////////////////////////////////////
-		//check meshes to set transport boundary flags (NF_CMBND flags for V)
+		//check meshes to set transport boundary flags (NF2_CMBND flags for V)
 		////////////////////////////////////////////////////////////////////////////
 
 		//clear everything then rebuild

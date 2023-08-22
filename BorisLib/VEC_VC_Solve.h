@@ -40,7 +40,7 @@ DBL2 VEC_VC<VType>::IterateLaplace_SOR(double relaxation_param)
 				int idx = i + j * VEC<VType>::n.x + k * VEC<VType>::n.x*VEC<VType>::n.y;
 
 				//calculate new value only in non-empty; also skip if indicated as a composite media boundary condition cell
-				if ((ngbrFlags[idx] & NF_CMBND) || !(ngbrFlags[idx] & NF_NOTEMPTY)) continue;
+				if ((using_extended_flags && (ngbrFlags2[idx] & NF2_CMBND)) || !(ngbrFlags[idx] & NF_NOTEMPTY)) continue;
 
 				VType weighted_sum = VType();
 				double total_weight = 0;
@@ -181,7 +181,7 @@ DBL2 VEC_VC<VType>::IteratePoisson_SOR(std::function<VType(const Owner&, int)> P
 				int idx = i + j * VEC<VType>::n.x + k * VEC<VType>::n.x*VEC<VType>::n.y;
 
 				//calculate new value only in non-empty cells with non-fixed values; also skip if indicated as a composite media boundary condition cell
-				if ((ngbrFlags[idx] & NF_CMBND) || !(ngbrFlags[idx] & NF_NOTEMPTY)) continue;
+				if ((using_extended_flags && (ngbrFlags2[idx] & NF2_CMBND)) || !(ngbrFlags[idx] & NF_NOTEMPTY)) continue;
 
 				VType weighted_sum = VType(0);
 				double total_weight = 0;
@@ -325,7 +325,7 @@ DBL2 VEC_VC<VType>::IteratePoisson_SOR(std::function<VType(const Owner&, int)> P
 				int idx = i + j * VEC<VType>::n.x + k * VEC<VType>::n.x*VEC<VType>::n.y;
 
 				//calculate new value only in non-empty cells with non-fixed values; also skip if indicated as a composite media boundary condition cell
-				if ((ngbrFlags[idx] & NF_CMBND) || !(ngbrFlags[idx] & NF_NOTEMPTY)) continue;
+				if ((using_extended_flags && (ngbrFlags2[idx] & NF2_CMBND)) || !(ngbrFlags[idx] & NF_NOTEMPTY)) continue;
 
 				VType weighted_sum = VType(0);
 				double total_weight = 0;
@@ -468,7 +468,7 @@ DBL2 VEC_VC<VType>::IteratePoisson_SOR(std::function<VType(const Owner&, int)> P
 				int idx = i + j * VEC<VType>::n.x + k * VEC<VType>::n.x*VEC<VType>::n.y;
 
 				//calculate new value only in non-empty cells with non-fixed values; also skip if indicated as a composite media boundary condition cell
-				if ((ngbrFlags[idx] & NF_CMBND) || !(ngbrFlags[idx] & NF_NOTEMPTY)) continue;
+				if ((using_extended_flags && (ngbrFlags2[idx] & NF2_CMBND)) || !(ngbrFlags[idx] & NF_NOTEMPTY)) continue;
 
 				VType weighted_sum = VType(0);
 				double total_weight = 0;
@@ -611,7 +611,7 @@ DBL2 VEC_VC<VType>::IteratePoisson_SOR(std::function<VType(const Owner&, int)> P
 				int idx = i + j * VEC<VType>::n.x + k * VEC<VType>::n.x*VEC<VType>::n.y;
 
 				//calculate new value only in non-empty cells with non-fixed values; also skip if indicated as a composite media boundary condition cell
-				if ((ngbrFlags[idx] & NF_CMBND) || !(ngbrFlags[idx] & NF_NOTEMPTY)) continue;
+				if ((using_extended_flags && (ngbrFlags2[idx] & NF2_CMBND)) || !(ngbrFlags[idx] & NF_NOTEMPTY)) continue;
 
 				VType weighted_sum = VType(0);
 				double total_weight = 0;

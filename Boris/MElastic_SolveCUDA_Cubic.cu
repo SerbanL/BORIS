@@ -8,11 +8,11 @@
 
 #include "MeshDefs.h"
 
-#include "ManagedDiffEqFMCUDA.h"
-#include "ManagedDiffEqAFMCUDA.h"
+#include "ManagedDiffEqPolicyFMCUDA.h"
+#include "ManagedDiffEqPolicyAFMCUDA.h"
 #include "MeshParamsControlCUDA.h"
 
-#include "MElastic_BoundariesCUDA.h"
+#include "MElastic_PolicyBoundariesCUDA.h"
 
 //----------------------- Calculate_MElastic_Field KERNELS
 
@@ -173,11 +173,19 @@ void MElasticCUDA::Calculate_MElastic_Field_Cubic(void)
 
 		if (pMeshCUDA->CurrentTimeStepSolved()) {
 
-			MElasticCUDA_Cubic_UpdateField_AFM <<< (pMeshCUDA->n.dim() + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (pMeshCUDA->cuMesh, cuModule, true);
+			for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
+
+				MElasticCUDA_Cubic_UpdateField_AFM <<< (pMeshCUDA->M.device_size(mGPU) + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> 
+					(pMeshCUDA->cuMesh.get_deviceobject(mGPU), cuModule.get_deviceobject(mGPU), true);
+			}
 		}
 		else {
 
-			MElasticCUDA_Cubic_UpdateField_AFM <<< (pMeshCUDA->n.dim() + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (pMeshCUDA->cuMesh, cuModule, false);
+			for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
+
+				MElasticCUDA_Cubic_UpdateField_AFM <<< (pMeshCUDA->M.device_size(mGPU) + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
+					(pMeshCUDA->cuMesh.get_deviceobject(mGPU), cuModule.get_deviceobject(mGPU), false);
+			}
 		}
 	}
 	else if (pMeshCUDA->GetMeshType() == MESH_FERROMAGNETIC) {
@@ -186,11 +194,19 @@ void MElasticCUDA::Calculate_MElastic_Field_Cubic(void)
 
 		if (pMeshCUDA->CurrentTimeStepSolved()) {
 
-			MElasticCUDA_Cubic_UpdateField_FM <<< (pMeshCUDA->n.dim() + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (pMeshCUDA->cuMesh, cuModule, true);
+			for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
+
+				MElasticCUDA_Cubic_UpdateField_FM <<< (pMeshCUDA->M.device_size(mGPU) + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> 
+					(pMeshCUDA->cuMesh.get_deviceobject(mGPU), cuModule.get_deviceobject(mGPU), true);
+			}
 		}
 		else {
 
-			MElasticCUDA_Cubic_UpdateField_FM <<< (pMeshCUDA->n.dim() + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (pMeshCUDA->cuMesh, cuModule, false);
+			for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
+
+				MElasticCUDA_Cubic_UpdateField_FM <<< (pMeshCUDA->M.device_size(mGPU) + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> 
+					(pMeshCUDA->cuMesh.get_deviceobject(mGPU), cuModule.get_deviceobject(mGPU), false);
+			}
 		}
 	}
 }
@@ -201,11 +217,11 @@ __device__ void Iterate_Elastic_Solver_Stress_Cubic_CUDA(
 	cuINT3 ijk, cuINT3 ijk_u, int idx_u,
 	ManagedMeshCUDA& cuMesh,
 	MElastic_BoundaryCUDA* external_stress_surfaces, size_t num_surfaces,
-	cuVEC<cuBReal>& vx, cuVEC<cuBReal>& vy, cuVEC<cuBReal>& vz,
-	cuVEC<cuReal3>& sdd, cuVEC<cuBReal>& sxy, cuVEC<cuBReal>& sxz, cuVEC<cuBReal>& syz,
+	cuVEC_VC<cuBReal>& vx, cuVEC_VC<cuBReal>& vy, cuVEC_VC<cuBReal>& vz,
+	cuVEC_VC<cuReal3>& sdd, cuVEC_VC<cuBReal>& sxy, cuVEC_VC<cuBReal>& sxz, cuVEC_VC<cuBReal>& syz,
 	cuBReal time, cuBReal dT,
 	bool thermoelasticity_enabled,
-	cuBReal* Temp_previous, cuBReal magnetic_dT,
+	cuVEC<cuBReal>& Temp_previous, cuBReal magnetic_dT,
 	cuReal3 dsdd_dt_ms, cuBReal dsxy_dt_ms, cuBReal dsxz_dt_ms, cuBReal dsyz_dt_ms)
 {
 	cuVEC_VC<cuReal3>& u_disp = *cuMesh.pu_disp;
@@ -288,66 +304,35 @@ __device__ void Iterate_Elastic_Solver_Stress_Cubic_CUDA(
 	int nkend = (ijk.k < n_m.k);
 
 	//check if required edges are present
-	bool xedge_u =
-		ijk.i < n_m.i &&
-		(u_disp.is_not_empty(idx_u) ||
-		(ijk.k > 0 && u_disp.is_not_empty(idx_u - nkend * n_m.x*n_m.y)) ||
-			(ijk.j > 0 && u_disp.is_not_empty(idx_u - njend * n_m.x)) ||
-			(ijk.j > 0 && ijk.k > 0 && u_disp.is_not_empty(idx_u - nkend * n_m.x*n_m.y - njend * n_m.x)));
-
-	bool xedge_l =
-		ijk.i > 0 &&
-		(u_disp.is_not_empty(idx_u - niend) ||
-		(ijk.k > 0 && u_disp.is_not_empty(idx_u - nkend * n_m.x*n_m.y - niend)) ||
-			(ijk.j > 0 && u_disp.is_not_empty(idx_u - njend * n_m.x - niend)) ||
-			(ijk.j > 0 && ijk.k > 0 && u_disp.is_not_empty(idx_u - nkend * n_m.x*n_m.y - njend * n_m.x - niend)));
-
-	bool yedge_u =
-		ijk.j < n_m.j &&
-		(u_disp.is_not_empty(idx_u) ||
-		(ijk.k > 0 && u_disp.is_not_empty(idx_u - nkend * n_m.x*n_m.y)) ||
-			(ijk.i > 0 && u_disp.is_not_empty(idx_u - niend)) ||
-			(ijk.i > 0 && ijk.k > 0 && u_disp.is_not_empty(idx_u - nkend * n_m.x*n_m.y - niend)));
-
-	bool yedge_l =
-		ijk.j > 0 &&
-		(u_disp.is_not_empty(idx_u - njend * n_m.x) ||
-		(ijk.k > 0 && u_disp.is_not_empty(idx_u - nkend * n_m.x*n_m.y - njend * n_m.x)) ||
-			(ijk.i > 0 && u_disp.is_not_empty(idx_u - niend - njend * n_m.x)) ||
-			(ijk.i > 0 && ijk.k > 0 && u_disp.is_not_empty(idx_u - nkend * n_m.x*n_m.y - niend - njend * n_m.x)));
-
-	bool zedge_u =
-		ijk.k < n_m.k &&
-		(u_disp.is_not_empty(idx_u) ||
-		(ijk.j > 0 && u_disp.is_not_empty(idx_u - njend * n_m.x)) ||
-			(ijk.i > 0 && u_disp.is_not_empty(idx_u - niend)) ||
-			(ijk.i > 0 && ijk.j > 0 && u_disp.is_not_empty(idx_u - njend * n_m.x - niend)));
-
-	bool zedge_l =
-		ijk.k > 0 &&
-		(u_disp.is_not_empty(idx_u - nkend * n_m.x*n_m.y) ||
-		(ijk.j > 0 && u_disp.is_not_empty(idx_u - njend * n_m.x - nkend * n_m.x*n_m.y)) ||
-			(ijk.i > 0 && u_disp.is_not_empty(idx_u - niend - nkend * n_m.x*n_m.y)) ||
-			(ijk.i > 0 && ijk.j > 0 && u_disp.is_not_empty(idx_u - njend * n_m.x - niend - nkend * n_m.x*n_m.y)));
+	bool xedge_u = ijk.i < n_m.i && u_disp.is_edge_x(idx_u);
+	bool xedge_l = 
+		(ijk.i > 0 && u_disp.is_edge_x(idx_u - niend)) ||
+		(ijk.i == 0 &&
+		(u_disp.is_halo_nx(idx_u) ||
+		(ijk.k > 0 && u_disp.is_halo_nx(idx_u - nkend * n_m.x * n_m.y)) ||
+		(ijk.j > 0 && u_disp.is_halo_nx(idx_u - njend * n_m.x)) ||
+		(ijk.j > 0 && ijk.k > 0 && u_disp.is_halo_nx(idx_u - nkend * n_m.x * n_m.y - njend * n_m.x))));
+	bool yedge_u = ijk.j < n_m.j && u_disp.is_edge_y(idx_u);
+	bool yedge_l = ijk.j > 0 && u_disp.is_edge_y(idx_u - njend * n_m.x);
+	bool zedge_u = ijk.k < n_m.k && u_disp.is_edge_z(idx_u);
+	bool zedge_l = ijk.k > 0 && u_disp.is_edge_z(idx_u - nkend * n_m.x * n_m.y);
 
 	//check for fixed faces at ends
 	bool xfixed_l = (ijk.i == 0 && u_disp.is_dirichlet_px(idx_u));
 	bool xfixed_u = (ijk.i == n_m.i && u_disp.is_dirichlet_nx(idx_u));
-
 	bool yfixed_l = (ijk.j == 0 && u_disp.is_dirichlet_py(idx_u));
 	bool yfixed_u = (ijk.j == n_m.j && u_disp.is_dirichlet_ny(idx_u));
-
 	bool zfixed_l = (ijk.k == 0 && u_disp.is_dirichlet_pz(idx_u));
 	bool zfixed_u = (ijk.k == n_m.k && u_disp.is_dirichlet_nz(idx_u));
 
 	cuBReal dvx_dx = 0.0;
 
 	//interior
-	if (xedge_u && xedge_l) dvx_dx = (vx[ijk] - vx[cuINT3(ijk.i - 1, ijk.j, ijk.k)]) / h_m.x;
+	if (xedge_u && xedge_l) dvx_dx = (vx[ijk] - vx(cuINT3(ijk.i - 1, ijk.j, ijk.k))) / h_m.x;
 	//fixed face : Dirichlet value of zero for velocity derivative
 	else if (xedge_l && xfixed_u) {
 
-		dvx_dx = -vx[cuINT3(ijk.i - 1, ijk.j, ijk.k)] / (h_m.x / 2);
+		dvx_dx = -vx(cuINT3(ijk.i - 1, ijk.j, ijk.k)) / (h_m.x / 2);
 	}
 	else if (xedge_u && xfixed_l) {
 
@@ -359,19 +344,19 @@ __device__ void Iterate_Elastic_Solver_Stress_Cubic_CUDA(
 		//both side derivatives
 		if (yedge_l && yedge_u && zedge_l && zedge_u) {
 
-			dvx_dx = -cr * ((vy[ijk] - vy[cuINT3(ijk.i, ijk.j - 1, ijk.k)]) / h_m.y + (vz[ijk] - vz[cuINT3(ijk.i, ijk.j, ijk.k - 1)]) / h_m.z) + adT - dms.x + dFx;
+			dvx_dx = -cr * ((vy[ijk] - vy(cuINT3(ijk.i, ijk.j - 1, ijk.k))) / h_m.y + (vz[ijk] - vz(cuINT3(ijk.i, ijk.j, ijk.k - 1))) / h_m.z) + adT - dms.x + dFx;
 		}
 		//only z derivative
 		else if (zedge_l && zedge_u) {
 
 			//dvx = (dFx - cr*dFy - dmsx + cr*dmsy) / (1 - cr^2) + (adT - cr*dvz) / (1 + cr)
-			dvx_dx = (adT - cr * (vz[ijk] - vz[cuINT3(ijk.i, ijk.j, ijk.k - 1)]) / h_m.z) / (1 + cr) + (-dms.x + cr * dms.y + dFx - cr * dFy) / (1 - cr * cr);
+			dvx_dx = (adT - cr * (vz[ijk] - vz(cuINT3(ijk.i, ijk.j, ijk.k - 1))) / h_m.z) / (1 + cr) + (-dms.x + cr * dms.y + dFx - cr * dFy) / (1 - cr * cr);
 		}
 		//only y derivative
 		else if (yedge_l && yedge_u) {
 
 			//dvx = (dFx - cr*dFz - dmsx + cr*dmsz) / (1 - cr^2) + (adT - cr*dvy) / (1 + cr)
-			dvx_dx = (adT - cr * (vy[ijk] - vy[cuINT3(ijk.i, ijk.j - 1, ijk.k)]) / h_m.y) / (1 + cr) + (-dms.x + cr * dms.z + dFx - cr * dFz) / (1 - cr * cr);
+			dvx_dx = (adT - cr * (vy[ijk] - vy(cuINT3(ijk.i, ijk.j - 1, ijk.k))) / h_m.y) / (1 + cr) + (-dms.x + cr * dms.z + dFx - cr * dFz) / (1 - cr * cr);
 		}
 		//no side derivatives : corner point. In this case all diagonal stress components set from external conditions, so derivatives not needed (set zero)
 		else dvx_dx = 0.0;
@@ -380,11 +365,11 @@ __device__ void Iterate_Elastic_Solver_Stress_Cubic_CUDA(
 	cuBReal dvy_dy = 0.0;
 
 	//interior
-	if (yedge_u && yedge_l) dvy_dy = (vy[ijk] - vy[cuINT3(ijk.i, ijk.j - 1, ijk.k)]) / h_m.y;
+	if (yedge_u && yedge_l) dvy_dy = (vy[ijk] - vy(cuINT3(ijk.i, ijk.j - 1, ijk.k))) / h_m.y;
 	//fixed face : Dirichlet value of zero for velocity derivative
 	else if (yedge_l && yfixed_u) {
 
-		dvy_dy = -vy[cuINT3(ijk.i, ijk.j - 1, ijk.k)] / (h_m.y / 2);
+		dvy_dy = -vy(cuINT3(ijk.i, ijk.j - 1, ijk.k)) / (h_m.y / 2);
 	}
 	else if (yedge_u && yfixed_l) {
 
@@ -396,19 +381,19 @@ __device__ void Iterate_Elastic_Solver_Stress_Cubic_CUDA(
 		//both side derivatives
 		if (xedge_l && xedge_u && zedge_l && zedge_u) {
 
-			dvy_dy = -cr * ((vx[ijk] - vx[cuINT3(ijk.i - 1, ijk.j, ijk.k)]) / h_m.x + (vz[ijk] - vz[cuINT3(ijk.i, ijk.j, ijk.k - 1)]) / h_m.z) + adT - dms.y + dFy;
+			dvy_dy = -cr * ((vx[ijk] - vx(cuINT3(ijk.i - 1, ijk.j, ijk.k))) / h_m.x + (vz[ijk] - vz(cuINT3(ijk.i, ijk.j, ijk.k - 1))) / h_m.z) + adT - dms.y + dFy;
 		}
 		//only z derivative
 		else if (zedge_l && zedge_u) {
 
 			//dvy = (dFy - cr*dFx - dmsy + cr*dmsx) / (1 - cr^2) + (adT - cr*dvz) / (1 + cr)
-			dvy_dy = (adT - cr * (vz[ijk] - vz[cuINT3(ijk.i, ijk.j, ijk.k - 1)]) / h_m.z) / (1 + cr) + (-dms.y + cr * dms.x + dFy - cr * dFx) / (1 - cr * cr);
+			dvy_dy = (adT - cr * (vz[ijk] - vz(cuINT3(ijk.i, ijk.j, ijk.k - 1))) / h_m.z) / (1 + cr) + (-dms.y + cr * dms.x + dFy - cr * dFx) / (1 - cr * cr);
 		}
 		//only x derivative
 		else if (xedge_l && xedge_u) {
 
 			//dvy = (dFy - cr*dFz - dmsy + cr*dmsz) / (1 - cr^2) + (adT - cr*dvx) / (1 + cr)
-			dvy_dy = (adT - cr * (vx[ijk] - vx[cuINT3(ijk.i - 1, ijk.j, ijk.k)]) / h_m.x) / (1 + cr) + (-dms.y + cr * dms.z + dFy - cr * dFz) / (1 - cr * cr);
+			dvy_dy = (adT - cr * (vx[ijk] - vx(cuINT3(ijk.i - 1, ijk.j, ijk.k))) / h_m.x) / (1 + cr) + (-dms.y + cr * dms.z + dFy - cr * dFz) / (1 - cr * cr);
 		}
 		//no side derivatives : corner point. In this case all diagonal stress components set from external conditions, so derivatives not needed (set zero)
 		else dvy_dy = 0.0;
@@ -417,11 +402,11 @@ __device__ void Iterate_Elastic_Solver_Stress_Cubic_CUDA(
 	cuBReal dvz_dz = 0.0;
 
 	//interior
-	if (zedge_u && zedge_l) dvz_dz = (vz[ijk] - vz[cuINT3(ijk.i, ijk.j, ijk.k - 1)]) / h_m.z;
+	if (zedge_u && zedge_l) dvz_dz = (vz[ijk] - vz(cuINT3(ijk.i, ijk.j, ijk.k - 1))) / h_m.z;
 	//fixed face : Dirichlet value of zero for velocity derivative
 	else if (zedge_l && zfixed_u) {
 
-		dvz_dz = -vz[cuINT3(ijk.i, ijk.j, ijk.k - 1)] / (h_m.z / 2);
+		dvz_dz = -vz(cuINT3(ijk.i, ijk.j, ijk.k - 1)) / (h_m.z / 2);
 	}
 	//fixed face : Dirichlet value of zero for velocity derivative
 	else if (zedge_u && zfixed_l) {
@@ -434,19 +419,19 @@ __device__ void Iterate_Elastic_Solver_Stress_Cubic_CUDA(
 		//both side derivatives
 		if (xedge_l && xedge_u && yedge_l && yedge_u) {
 
-			dvz_dz = -cr * ((vx[ijk] - vx[cuINT3(ijk.i - 1, ijk.j, ijk.k)]) / h_m.x + (vy[ijk] - vy[cuINT3(ijk.i, ijk.j - 1, ijk.k)]) / h_m.y) + adT - dms.z + dFz;
+			dvz_dz = -cr * ((vx[ijk] - vx(cuINT3(ijk.i - 1, ijk.j, ijk.k))) / h_m.x + (vy[ijk] - vy(cuINT3(ijk.i, ijk.j - 1, ijk.k))) / h_m.y) + adT - dms.z + dFz;
 		}
 		//only y derivative
 		else if (yedge_l && yedge_u) {
 
 			//dvz = (dFz - cr*dFx - dmsz + cr*dmsx) / (1 - cr^2) + (adT - cr*dvy) / (1 + cr)
-			dvz_dz = (adT - cr * (vy[ijk] - vy[cuINT3(ijk.i, ijk.j - 1, ijk.k)]) / h_m.y) / (1 + cr) + (-dms.z + cr * dms.x + dFz - cr * dFx) / (1 - cr * cr);
+			dvz_dz = (adT - cr * (vy[ijk] - vy(cuINT3(ijk.i, ijk.j - 1, ijk.k))) / h_m.y) / (1 + cr) + (-dms.z + cr * dms.x + dFz - cr * dFx) / (1 - cr * cr);
 		}
 		//only x derivative
 		else if (xedge_l && xedge_u) {
 
 			//dvz = (dFz - cr*dFy - dmsz + cr*dmsy) / (1 - cr^2) + (adT - cr*dvx) / (1 + cr)
-			dvz_dz = (adT - cr * (vx[ijk] - vx[cuINT3(ijk.i - 1, ijk.j, ijk.k)]) / h_m.x) / (1 + cr) + (-dms.z + cr * dms.y + dFz - cr * dFy) / (1 - cr * cr);
+			dvz_dz = (adT - cr * (vx[ijk] - vx(cuINT3(ijk.i - 1, ijk.j, ijk.k))) / h_m.x) / (1 + cr) + (-dms.z + cr * dms.y + dFz - cr * dFy) / (1 - cr * cr);
 		}
 		//no side derivatives : corner point. In this case all diagonal stress components set from external conditions, so derivatives not needed (set zero)
 		else dvz_dz = 0.0;
@@ -469,14 +454,12 @@ __device__ void Iterate_Elastic_Solver_Stress_Cubic_CUDA(
 	//update sxy
 	if (ijk.i < n_m.i && ijk.j < n_m.j) {
 
-		bool zface =
-			(u_disp.is_not_empty(idx_u) ||
-			(ijk.k > 0 && u_disp.is_not_empty(idx_u - nkend * n_m.x*n_m.y)));
+		bool zface = u_disp.is_face_z(idx_u);
 
 		if (zface) {
 
-			cuBReal dvx_dy = (vx[cuINT3(ijk.i, ijk.j + 1, ijk.k)] - vx[ijk]) / h_m.y;
-			cuBReal dvy_dx = (vy[cuINT3(ijk.i + 1, ijk.j, ijk.k)] - vy[ijk]) / h_m.x;
+			cuBReal dvx_dy = (vx(cuINT3(ijk.i, ijk.j + 1, ijk.k)) - vx[ijk]) / h_m.y;
+			cuBReal dvy_dx = (vy(cuINT3(ijk.i + 1, ijk.j, ijk.k)) - vy[ijk]) / h_m.x;
 
 			sxy[ijk] += dT * (cC.k * (dvx_dy + dvy_dx) + dsxy_dt_ms);
 		}
@@ -486,14 +469,12 @@ __device__ void Iterate_Elastic_Solver_Stress_Cubic_CUDA(
 	//update sxz
 	if (ijk.i < n_m.i && ijk.k < n_m.k) {
 
-		bool yface =
-			(u_disp.is_not_empty(idx_u) ||
-			(ijk.j > 0 && u_disp.is_not_empty(idx_u - njend * n_m.x)));
+		bool yface = u_disp.is_face_y(idx_u);
 
 		if (yface) {
 
-			cuBReal dvx_dz = (vx[cuINT3(ijk.i, ijk.j, ijk.k + 1)] - vx[ijk]) / h_m.z;
-			cuBReal dvz_dx = (vz[cuINT3(ijk.i + 1, ijk.j, ijk.k)] - vz[ijk]) / h_m.x;
+			cuBReal dvx_dz = (vx(cuINT3(ijk.i, ijk.j, ijk.k + 1)) - vx[ijk]) / h_m.z;
+			cuBReal dvz_dx = (vz(cuINT3(ijk.i + 1, ijk.j, ijk.k)) - vz[ijk]) / h_m.x;
 
 			sxz[ijk] += dT * (cC.k * (dvx_dz + dvz_dx) + dsxz_dt_ms);
 		}
@@ -503,14 +484,12 @@ __device__ void Iterate_Elastic_Solver_Stress_Cubic_CUDA(
 	//update syz
 	if (ijk.j < n_m.j && ijk.k < n_m.k) {
 
-		bool xface =
-			(u_disp.is_not_empty(idx_u) ||
-			(ijk.i > 0 && u_disp.is_not_empty(idx_u - niend)));
+		bool xface = u_disp.is_face_x(idx_u);
 
 		if (xface) {
 
-			cuBReal dvy_dz = (vy[cuINT3(ijk.i, ijk.j, ijk.k + 1)] - vy[ijk]) / h_m.z;
-			cuBReal dvz_dy = (vz[cuINT3(ijk.i, ijk.j + 1, ijk.k)] - vz[ijk]) / h_m.y;
+			cuBReal dvy_dz = (vy(cuINT3(ijk.i, ijk.j, ijk.k + 1)) - vy[ijk]) / h_m.z;
+			cuBReal dvz_dy = (vz(cuINT3(ijk.i, ijk.j + 1, ijk.k)) - vz[ijk]) / h_m.y;
 
 			syz[ijk] += dT * (cC.k * (dvy_dz + dvz_dy) + dsyz_dt_ms);
 		}
@@ -523,9 +502,9 @@ __device__ void Iterate_Elastic_Solver_Stress_Cubic_CUDA(
 		if (u_disp.is_not_empty(idx_u)) {
 
 			//find velocity values cell-centred
-			cuBReal vx_cc = (vx[ijk] + vx[ijk + cuINT3(0, 1, 0)] + vx[ijk + cuINT3(0, 0, 1)] + vx[ijk + cuINT3(0, 1, 1)]) / 4;
-			cuBReal vy_cc = (vy[ijk] + vy[ijk + cuINT3(1, 0, 0)] + vy[ijk + cuINT3(0, 0, 1)] + vy[ijk + cuINT3(1, 0, 1)]) / 4;
-			cuBReal vz_cc = (vz[ijk] + vz[ijk + cuINT3(1, 0, 0)] + vz[ijk + cuINT3(0, 1, 0)] + vz[ijk + cuINT3(1, 1, 0)]) / 4;
+			cuBReal vx_cc = (vx[ijk] + vx(ijk + cuINT3(0, 1, 0)) + vx(ijk + cuINT3(0, 0, 1)) + vx(ijk + cuINT3(0, 1, 1))) / 4;
+			cuBReal vy_cc = (vy[ijk] + vy(ijk + cuINT3(1, 0, 0)) + vy(ijk + cuINT3(0, 0, 1)) + vy(ijk + cuINT3(1, 0, 1))) / 4;
+			cuBReal vz_cc = (vz[ijk] + vz(ijk + cuINT3(1, 0, 0)) + vz(ijk + cuINT3(0, 1, 0)) + vz(ijk + cuINT3(1, 1, 0))) / 4;
 
 			u_disp[idx_u] += dT * cuReal3(vx_cc, vy_cc, vz_cc);
 		}
@@ -536,25 +515,27 @@ __device__ void Iterate_Elastic_Solver_Stress_Cubic_CUDA(
 __global__ void Iterate_Elastic_Solver_Stress_FM_Cubic_Kernel(
 	ManagedMeshCUDA& cuMesh,
 	MElastic_BoundaryCUDA* external_stress_surfaces, size_t num_surfaces,
-	cuVEC<cuBReal>& vx, cuVEC<cuBReal>& vy, cuVEC<cuBReal>& vz,
-	cuVEC<cuReal3>& sdd, cuVEC<cuBReal>& sxy, cuVEC<cuBReal>& sxz, cuVEC<cuBReal>& syz,
+	cuVEC_VC<cuBReal>& vx, cuVEC_VC<cuBReal>& vy, cuVEC_VC<cuBReal>& vz,
+	cuVEC_VC<cuReal3>& sdd, cuVEC_VC<cuBReal>& sxy, cuVEC_VC<cuBReal>& sxz, cuVEC_VC<cuBReal>& syz,
 	cuBReal time, cuBReal dT,
 	bool magnetostriction_enabled, bool thermoelasticity_enabled,
-	cuBReal* Temp_previous, cuBReal magnetic_dT,
+	cuVEC<cuBReal>& Temp_previous, cuBReal magnetic_dT,
 	ManagedDiffEqFMCUDA& cuDiffEq_FM)
 {
 	cuVEC_VC<cuReal3>& u_disp = *cuMesh.pu_disp;
 
 	cuSZ3& n_m = u_disp.n;
 
-	//kernel launch with size (n_m.i + 1) * (n_m.j + 1) * (n_m.k + 1) 
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
-	int i = idx % (n_m.i + 1);
-	int j = (idx / (n_m.i + 1)) % (n_m.j + 1);
-	int k = idx / ((n_m.i + 1)*(n_m.j + 1));
+	//kernel launched with size sdd.device_size(mGPU). For a single GPU this has (n_m.i + 1) * (n_m.j + 1) * (n_m.k + 1) cells.
+	//for multiple GPUs only last one has an extra cell along partition dimension, the other ones have same dimension as u_disp along partition dimension
+	//this means the ijk index can always be used for reading and writing, but with +/-1 along partition direction need to use the () operator to read values
+	int i = idx % sdd.n.i;
+	int j = (idx / sdd.n.i) % sdd.n.j;
+	int k = idx / (sdd.n.i * sdd.n.j);
 
-	if (idx < (n_m.i + 1) * (n_m.j + 1) * (n_m.k + 1)) {
+	if (idx < sdd.n.dim()) {
 
 		cuINT3 ijk = cuINT3(i, j, k);
 
@@ -613,25 +594,27 @@ __global__ void Iterate_Elastic_Solver_Stress_FM_Cubic_Kernel(
 __global__ void Iterate_Elastic_Solver_Stress_AFM_Cubic_Kernel(
 	ManagedMeshCUDA& cuMesh,
 	MElastic_BoundaryCUDA* external_stress_surfaces, size_t num_surfaces,
-	cuVEC<cuBReal>& vx, cuVEC<cuBReal>& vy, cuVEC<cuBReal>& vz,
-	cuVEC<cuReal3>& sdd, cuVEC<cuBReal>& sxy, cuVEC<cuBReal>& sxz, cuVEC<cuBReal>& syz,
+	cuVEC_VC<cuBReal>& vx, cuVEC_VC<cuBReal>& vy, cuVEC_VC<cuBReal>& vz,
+	cuVEC_VC<cuReal3>& sdd, cuVEC_VC<cuBReal>& sxy, cuVEC_VC<cuBReal>& sxz, cuVEC_VC<cuBReal>& syz,
 	cuBReal time, cuBReal dT,
 	bool magnetostriction_enabled, bool thermoelasticity_enabled,
-	cuBReal* Temp_previous, cuBReal magnetic_dT,
+	cuVEC<cuBReal>& Temp_previous, cuBReal magnetic_dT,
 	ManagedDiffEqAFMCUDA& cuDiffEq_AFM)
 {
 	cuVEC_VC<cuReal3>& u_disp = *cuMesh.pu_disp;
 
 	cuSZ3& n_m = u_disp.n;
 
-	//kernel launch with size (n_m.i + 1) * (n_m.j + 1) * (n_m.k + 1) 
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
-	int i = idx % (n_m.i + 1);
-	int j = (idx / (n_m.i + 1)) % (n_m.j + 1);
-	int k = idx / ((n_m.i + 1)*(n_m.j + 1));
+	//kernel launched with size sdd.device_size(mGPU). For a single GPU this has (n_m.i + 1) * (n_m.j + 1) * (n_m.k + 1) cells.
+	//for multiple GPUs only last one has an extra cell along partition dimension, the other ones have same dimension as u_disp along partition dimension
+	//this means the ijk index can always be used for reading and writing, but with +/-1 along partition direction need to use the () operator to read values
+	int i = idx % sdd.n.i;
+	int j = (idx / sdd.n.i) % sdd.n.j;
+	int k = idx / (sdd.n.i * sdd.n.j);
 
-	if (idx < (n_m.i + 1) * (n_m.j + 1) * (n_m.k + 1)) {
+	if (idx < sdd.n.dim()) {
 
 		cuINT3 ijk = cuINT3(i, j, k);
 
@@ -694,24 +677,26 @@ __global__ void Iterate_Elastic_Solver_Stress_AFM_Cubic_Kernel(
 __global__ void Iterate_Elastic_Solver_Stress_NoMS_Cubic_Kernel(
 	ManagedMeshCUDA& cuMesh,
 	MElastic_BoundaryCUDA* external_stress_surfaces, size_t num_surfaces,
-	cuVEC<cuBReal>& vx, cuVEC<cuBReal>& vy, cuVEC<cuBReal>& vz,
-	cuVEC<cuReal3>& sdd, cuVEC<cuBReal>& sxy, cuVEC<cuBReal>& sxz, cuVEC<cuBReal>& syz,
+	cuVEC_VC<cuBReal>& vx, cuVEC_VC<cuBReal>& vy, cuVEC_VC<cuBReal>& vz,
+	cuVEC_VC<cuReal3>& sdd, cuVEC_VC<cuBReal>& sxy, cuVEC_VC<cuBReal>& sxz, cuVEC_VC<cuBReal>& syz,
 	cuBReal time, cuBReal dT,
 	bool thermoelasticity_enabled,
-	cuBReal* Temp_previous, cuBReal magnetic_dT)
+	cuVEC<cuBReal>& Temp_previous, cuBReal magnetic_dT)
 {
 	cuVEC_VC<cuReal3>& u_disp = *cuMesh.pu_disp;
 
 	cuSZ3& n_m = u_disp.n;
 
-	//kernel launch with size (n_m.i + 1) * (n_m.j + 1) * (n_m.k + 1) 
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
-	int i = idx % (n_m.i + 1);
-	int j = (idx / (n_m.i + 1)) % (n_m.j + 1);
-	int k = idx / ((n_m.i + 1)*(n_m.j + 1));
+	//kernel launched with size sdd.device_size(mGPU). For a single GPU this has (n_m.i + 1) * (n_m.j + 1) * (n_m.k + 1) cells.
+	//for multiple GPUs only last one has an extra cell along partition dimension, the other ones have same dimension as u_disp along partition dimension
+	//this means the ijk index can always be used for reading and writing, but with +/-1 along partition direction need to use the () operator to read values
+	int i = idx % sdd.n.i;
+	int j = (idx / sdd.n.i) % sdd.n.j;
+	int k = idx / (sdd.n.i * sdd.n.j);
 
-	if (idx < (n_m.i + 1) * (n_m.j + 1) * (n_m.k + 1)) {
+	if (idx < sdd.n.dim()) {
 
 		cuINT3 ijk = cuINT3(i, j, k);
 
@@ -738,40 +723,59 @@ __global__ void Iterate_Elastic_Solver_Stress_NoMS_Cubic_Kernel(
 //update stress for dT time increment
 void MElasticCUDA::Iterate_Elastic_Solver_Stress_Cubic(double dT, double magnetic_dT)
 {
-	size_t size = (pMeshCUDA->n_m.i + 1) * (pMeshCUDA->n_m.j + 1) * (pMeshCUDA->n_m.k + 1);
+	//use sdd device dimensions, since this has total size (pMeshCUDA->n_m.i + 1) * (pMeshCUDA->n_m.j + 1) * (pMeshCUDA->n_m.k + 1)
+
+	vx.exchange_halos();
+	vy.exchange_halos();
+	vz.exchange_halos();
 
 	//1b. Update stress
 	if (magnetostriction_enabled) {
 
 		if (pMeshCUDA->GetMeshType() == MESH_ANTIFERROMAGNETIC) {
 
-			Iterate_Elastic_Solver_Stress_AFM_Cubic_Kernel <<< (size + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
-				(pMeshCUDA->cuMesh, external_stress_surfaces_arr, external_stress_surfaces.size(),
-					vx, vy, vz, sdd, sxy, sxz, syz,
+			for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
+
+				Iterate_Elastic_Solver_Stress_AFM_Cubic_Kernel <<< (sdd.device_size(mGPU) + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
+					(pMeshCUDA->cuMesh.get_deviceobject(mGPU), 
+					external_stress_surfaces_arr(mGPU), external_stress_surfaces.size(),
+					vx.get_deviceobject(mGPU), vy.get_deviceobject(mGPU), vz.get_deviceobject(mGPU), 
+					sdd.get_deviceobject(mGPU), sxy.get_deviceobject(mGPU), sxz.get_deviceobject(mGPU), syz.get_deviceobject(mGPU),
 					pMeshCUDA->GetStageTime(), dT,
 					magnetostriction_enabled, thermoelasticity_enabled,
-					Temp_previous, magnetic_dT,
-					reinterpret_cast<AFMeshCUDA*>(pMeshCUDA)->Get_ManagedDiffEqCUDA());
+					Temp_previous.get_deviceobject(mGPU), magnetic_dT,
+					reinterpret_cast<AFMeshCUDA*>(pMeshCUDA)->Get_ManagedDiffEqCUDA().get_deviceobject(mGPU));
+			}
 		}
 		else if (pMeshCUDA->GetMeshType() == MESH_FERROMAGNETIC) {
 
-			Iterate_Elastic_Solver_Stress_FM_Cubic_Kernel <<< (size + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
-				(pMeshCUDA->cuMesh, external_stress_surfaces_arr, external_stress_surfaces.size(),
-					vx, vy, vz, sdd, sxy, sxz, syz,
+			for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
+
+				Iterate_Elastic_Solver_Stress_FM_Cubic_Kernel <<< (sdd.device_size(mGPU) + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
+					(pMeshCUDA->cuMesh.get_deviceobject(mGPU), 
+					external_stress_surfaces_arr(mGPU), external_stress_surfaces.size(),
+					vx.get_deviceobject(mGPU), vy.get_deviceobject(mGPU), vz.get_deviceobject(mGPU),
+					sdd.get_deviceobject(mGPU), sxy.get_deviceobject(mGPU), sxz.get_deviceobject(mGPU), syz.get_deviceobject(mGPU),
 					pMeshCUDA->GetStageTime(), dT,
 					magnetostriction_enabled, thermoelasticity_enabled,
-					Temp_previous, magnetic_dT,
-					reinterpret_cast<FMeshCUDA*>(pMeshCUDA)->Get_ManagedDiffEqCUDA());
+					Temp_previous.get_deviceobject(mGPU), magnetic_dT,
+					reinterpret_cast<FMeshCUDA*>(pMeshCUDA)->Get_ManagedDiffEqCUDA().get_deviceobject(mGPU));
+			}
 		}
 	}
 	else {
 
-		Iterate_Elastic_Solver_Stress_NoMS_Cubic_Kernel <<< (size + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
-			(pMeshCUDA->cuMesh, external_stress_surfaces_arr, external_stress_surfaces.size(),
-				vx, vy, vz, sdd, sxy, sxz, syz,
+		for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
+
+			Iterate_Elastic_Solver_Stress_NoMS_Cubic_Kernel <<< (sdd.device_size(mGPU) + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
+				(pMeshCUDA->cuMesh.get_deviceobject(mGPU), 
+				external_stress_surfaces_arr(mGPU), external_stress_surfaces.size(),
+				vx.get_deviceobject(mGPU), vy.get_deviceobject(mGPU), vz.get_deviceobject(mGPU),
+				sdd.get_deviceobject(mGPU), sxy.get_deviceobject(mGPU), sxz.get_deviceobject(mGPU), syz.get_deviceobject(mGPU),
 				pMeshCUDA->GetStageTime(), dT,
 				thermoelasticity_enabled,
-				Temp_previous, magnetic_dT);
+				Temp_previous.get_deviceobject(mGPU), magnetic_dT);
+		}
 	}
 }
 
@@ -779,8 +783,8 @@ void MElasticCUDA::Iterate_Elastic_Solver_Stress_Cubic(double dT, double magneti
 
 __global__ void Set_Initial_Stress_Cubic_Kernel(
 	ManagedMeshCUDA& cuMesh,
-	cuVEC<cuReal3>& sdd,
-	cuVEC<cuBReal>& sxy, cuVEC<cuBReal>& sxz, cuVEC<cuBReal>& syz,
+	cuVEC_VC<cuReal3>& sdd,
+	cuVEC_VC<cuBReal>& sxy, cuVEC_VC<cuBReal>& sxz, cuVEC_VC<cuBReal>& syz,
 	bool magnetostriction_enabled, bool thermoelasticity_enabled, cuBReal& T_ambient)
 {
 	cuVEC_VC<cuReal3>& u_disp = *cuMesh.pu_disp;
@@ -790,14 +794,16 @@ __global__ void Set_Initial_Stress_Cubic_Kernel(
 	cuReal3& h_m = u_disp.h;
 	cuSZ3& n_m = u_disp.n;
 
-	//kernel launch with size (n_m.i + 1) * (n_m.j + 1) * (n_m.k + 1) 
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
-	int i = idx % (n_m.i + 1);
-	int j = (idx / (n_m.i + 1)) % (n_m.j + 1);
-	int k = idx / ((n_m.i + 1)*(n_m.j + 1));
+	//kernel launched with size sdd.device_size(mGPU). For a single GPU this has (n_m.i + 1) * (n_m.j + 1) * (n_m.k + 1) cells.
+	//for multiple GPUs only last one has an extra cell along partition dimension, the other ones have same dimension as u_disp along partition dimension
+	//this means the ijk index can always be used for reading and writing, but when adding +1 along partition direction need to use the () operator to read values
+	int i = idx % sdd.n.i;
+	int j = (idx / sdd.n.i) % sdd.n.j;
+	int k = idx / (sdd.n.i * sdd.n.j);
 
-	if (idx < (n_m.i + 1) * (n_m.j + 1) * (n_m.k + 1)) {
+	if (idx < sdd.n.dim()) {
 
 		//convert vertex index to cell-center index by capping maximum index size (use this to index u_disp)
 		cuINT3 ijk_u = cuINT3(i < n_m.i ? i : n_m.i - 1, j < n_m.j ? j : n_m.j - 1, k < n_m.k ? k : n_m.k - 1);
@@ -811,47 +817,26 @@ __global__ void Set_Initial_Stress_Cubic_Kernel(
 		int nkend = (ijk.k < n_m.k);
 
 		//check if required edges are present
-		bool xedge_u =
-			ijk.i < n_m.i &&
-			(u_disp.is_not_empty(idx_u) ||
-			(ijk.k > 0 && u_disp.is_not_empty(idx_u - nkend * n_m.x*n_m.y)) ||
-				(ijk.j > 0 && u_disp.is_not_empty(idx_u - njend * n_m.x)) ||
-				(ijk.j > 0 && ijk.k > 0 && u_disp.is_not_empty(idx_u - nkend * n_m.x*n_m.y - njend * n_m.x)));
-
+		bool xedge_u = ijk.i < n_m.i && u_disp.is_edge_x(idx_u);
 		bool xedge_l =
-			ijk.i > 0 &&
-			(u_disp.is_not_empty(idx_u - niend) ||
-			(ijk.k > 0 && u_disp.is_not_empty(idx_u - nkend * n_m.x*n_m.y - niend)) ||
-				(ijk.j > 0 && u_disp.is_not_empty(idx_u - njend * n_m.x - niend)) ||
-				(ijk.j > 0 && ijk.k > 0 && u_disp.is_not_empty(idx_u - nkend * n_m.x*n_m.y - njend * n_m.x - niend)));
+			(ijk.i > 0 && u_disp.is_edge_x(idx_u - niend)) ||
+			(ijk.i == 0 &&
+			(u_disp.is_halo_nx(idx_u) ||
+			(ijk.k > 0 && u_disp.is_halo_nx(idx_u - nkend * n_m.x * n_m.y)) ||
+			(ijk.j > 0 && u_disp.is_halo_nx(idx_u - njend * n_m.x)) ||
+			(ijk.j > 0 && ijk.k > 0 && u_disp.is_halo_nx(idx_u - nkend * n_m.x * n_m.y - njend * n_m.x))));
+		bool yedge_u = ijk.j < n_m.j && u_disp.is_edge_y(idx_u);
+		bool yedge_l = ijk.j > 0 && u_disp.is_edge_y(idx_u - njend * n_m.x);
+		bool zedge_u = ijk.k < n_m.k && u_disp.is_edge_z(idx_u);
+		bool zedge_l = ijk.k > 0 && u_disp.is_edge_z(idx_u - nkend * n_m.x * n_m.y);
 
-		bool yedge_u =
-			ijk.j < n_m.j &&
-			(u_disp.is_not_empty(idx_u) ||
-			(ijk.k > 0 && u_disp.is_not_empty(idx_u - nkend * n_m.x*n_m.y)) ||
-				(ijk.i > 0 && u_disp.is_not_empty(idx_u - niend)) ||
-				(ijk.i > 0 && ijk.k > 0 && u_disp.is_not_empty(idx_u - nkend * n_m.x*n_m.y - niend)));
-
-		bool yedge_l =
-			ijk.j > 0 &&
-			(u_disp.is_not_empty(idx_u - njend * n_m.x) ||
-			(ijk.k > 0 && u_disp.is_not_empty(idx_u - nkend * n_m.x*n_m.y - njend * n_m.x)) ||
-				(ijk.i > 0 && u_disp.is_not_empty(idx_u - niend - njend * n_m.x)) ||
-				(ijk.i > 0 && ijk.k > 0 && u_disp.is_not_empty(idx_u - nkend * n_m.x*n_m.y - niend - njend * n_m.x)));
-
-		bool zedge_u =
-			ijk.k < n_m.k &&
-			(u_disp.is_not_empty(idx_u) ||
-			(ijk.j > 0 && u_disp.is_not_empty(idx_u - njend * n_m.x)) ||
-				(ijk.i > 0 && u_disp.is_not_empty(idx_u - niend)) ||
-				(ijk.i > 0 && ijk.j > 0 && u_disp.is_not_empty(idx_u - njend * n_m.x - niend)));
-
-		bool zedge_l =
-			ijk.k > 0 &&
-			(u_disp.is_not_empty(idx_u - nkend * n_m.x*n_m.y) ||
-			(ijk.j > 0 && u_disp.is_not_empty(idx_u - njend * n_m.x - nkend * n_m.x*n_m.y)) ||
-				(ijk.i > 0 && u_disp.is_not_empty(idx_u - niend - nkend * n_m.x*n_m.y)) ||
-				(ijk.i > 0 && ijk.j > 0 && u_disp.is_not_empty(idx_u - njend * n_m.x - niend - nkend * n_m.x*n_m.y)));
+		//check for fixed faces at ends
+		bool xfixed_l = (ijk.i == 0 && u_disp.is_dirichlet_px(idx_u));
+		bool xfixed_u = (ijk.i == n_m.i && u_disp.is_dirichlet_nx(idx_u));
+		bool yfixed_l = (ijk.j == 0 && u_disp.is_dirichlet_py(idx_u));
+		bool yfixed_u = (ijk.j == n_m.j && u_disp.is_dirichlet_ny(idx_u));
+		bool zfixed_l = (ijk.k == 0 && u_disp.is_dirichlet_pz(idx_u));
+		bool zfixed_u = (ijk.k == n_m.k && u_disp.is_dirichlet_nz(idx_u));
 
 		cuReal3 Stress_MS_dd = cuReal3();
 		cuBReal Stress_MS_xy = 0.0, Stress_MS_xz = 0.0, Stress_MS_yz = 0.0;
@@ -945,9 +930,7 @@ __global__ void Set_Initial_Stress_Cubic_Kernel(
 		//update sxy
 		if (ijk.i < n_m.i && ijk.j < n_m.j) {
 
-			bool zface =
-				(u_disp.is_not_empty(idx_u) ||
-				(ijk.k > 0 && u_disp.is_not_empty(idx_u - nkend * n_m.x*n_m.y)));
+			bool zface = u_disp.is_face_z(idx_u);
 
 			if (zface) {
 
@@ -959,9 +942,7 @@ __global__ void Set_Initial_Stress_Cubic_Kernel(
 		//update sxz
 		if (ijk.i < n_m.i && ijk.k < n_m.k) {
 
-			bool yface =
-				(u_disp.is_not_empty(idx_u) ||
-				(ijk.j > 0 && u_disp.is_not_empty(idx_u - njend * n_m.x)));
+			bool yface = u_disp.is_face_y(idx_u);
 
 			if (yface) {
 
@@ -973,9 +954,7 @@ __global__ void Set_Initial_Stress_Cubic_Kernel(
 		//update syz
 		if (ijk.j < n_m.j && ijk.k < n_m.k) {
 
-			bool xface =
-				(u_disp.is_not_empty(idx_u) ||
-				(ijk.i > 0 && u_disp.is_not_empty(idx_u - niend)));
+			bool xface = u_disp.is_face_x(idx_u);
 
 			if (xface) {
 
@@ -991,8 +970,8 @@ void MElasticCUDA::Set_Initial_Stress_Cubic(void)
 {
 	if (!magnetostriction_enabled && !thermoelasticity_enabled) {
 
-		sdd()->set(cuReal3());
-		sxy()->set(0.0); sxz()->set(0.0); syz()->set(0.0);
+		sdd.set(cuReal3());
+		sxy.set(0.0); sxz.set(0.0); syz.set(0.0);
 	}
 	else {
 
@@ -1005,10 +984,15 @@ void MElasticCUDA::Set_Initial_Stress_Cubic(void)
 		//reset for dm / dt computation
 		if (magnetostriction_enabled) pMeshCUDA->SaveMagnetization();
 
-		size_t size = (pMeshCUDA->n_m.i + 1) * (pMeshCUDA->n_m.j + 1) * (pMeshCUDA->n_m.k + 1);
+		//use sdd device dimensions, since this has total size (pMeshCUDA->n_m.i + 1) * (pMeshCUDA->n_m.j + 1) * (pMeshCUDA->n_m.k + 1)
 
-		Set_Initial_Stress_Cubic_Kernel <<< (size + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
-			(pMeshCUDA->cuMesh, sdd, sxy, sxz, syz, magnetostriction_enabled, thermoelasticity_enabled, T_ambient);
+		for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
+
+			Set_Initial_Stress_Cubic_Kernel <<< (sdd.device_size(mGPU) + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
+				(pMeshCUDA->cuMesh.get_deviceobject(mGPU), 
+				sdd.get_deviceobject(mGPU), sxy.get_deviceobject(mGPU), sxz.get_deviceobject(mGPU), syz.get_deviceobject(mGPU), 
+				magnetostriction_enabled, thermoelasticity_enabled, T_ambient(mGPU));
+		}
 	}
 }
 

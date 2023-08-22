@@ -37,7 +37,7 @@ std::vector<CMBNDInfo> VEC_VC<VType>::set_cmbnd_flags(int primary_mesh_idx, std:
 
 	CMBNDInfo contact;
 
-	//first clear all NF_CMBND flags before recounting them
+	//first clear all NF2_CMBND flags before recounting them
 	clear_cmbnd_flags();
 
 	//check each mesh against this
@@ -50,7 +50,7 @@ std::vector<CMBNDInfo> VEC_VC<VType>::set_cmbnd_flags(int primary_mesh_idx, std:
 		//intersection must be exactly a plane
 		if (mesh_intersection.IsPlane()) {
 
-			int flag_value;
+			int flag_value = 0;
 
 			//store contacting meshes indexes in pVECs
 			contact.mesh_idx = INT2(check_mesh, primary_mesh_idx);
@@ -61,7 +61,7 @@ std::vector<CMBNDInfo> VEC_VC<VType>::set_cmbnd_flags(int primary_mesh_idx, std:
 				//is the selected mesh on the positive or negative side of the boundary? Set flag to use. Also adjust mesh_intersection so it contains all the cells to set flags for.
 				if (IsZ(VEC<VType>::rect.s.x - mesh_intersection.s.x)) {
 
-					flag_value = NF_CMBNDPX;
+					flag_value = NF2_CMBNDPX;
 					mesh_intersection.e.x += VEC<VType>::h.x;
 					contact.hshift_primary = DBL3(-VEC<VType>::h.x, 0, 0);
 					contact.hshift_secondary = DBL3(-pVECs[check_mesh]->h.x, 0, 0);
@@ -69,7 +69,7 @@ std::vector<CMBNDInfo> VEC_VC<VType>::set_cmbnd_flags(int primary_mesh_idx, std:
 				}
 				else {
 
-					flag_value = NF_CMBNDNX;
+					flag_value = NF2_CMBNDNX;
 					mesh_intersection.s.x -= VEC<VType>::h.x;
 					contact.hshift_primary = DBL3(+VEC<VType>::h.x, 0, 0);
 					contact.hshift_secondary = DBL3(+pVECs[check_mesh]->h.x, 0, 0);
@@ -85,7 +85,7 @@ std::vector<CMBNDInfo> VEC_VC<VType>::set_cmbnd_flags(int primary_mesh_idx, std:
 				//is the selected mesh on the positive or negative side of the boundary? Set flag to use. Also adjust mesh_intersection so it contains all the cells to set flags for.
 				if (IsZ(VEC<VType>::rect.s.y - mesh_intersection.s.y)) {
 
-					flag_value = NF_CMBNDPY;
+					flag_value = NF2_CMBNDPY;
 					mesh_intersection.e.y += VEC<VType>::h.y;
 					contact.hshift_primary = DBL3(0, -VEC<VType>::h.y, 0);
 					contact.hshift_secondary = DBL3(0, -pVECs[check_mesh]->h.y, 0);
@@ -93,7 +93,7 @@ std::vector<CMBNDInfo> VEC_VC<VType>::set_cmbnd_flags(int primary_mesh_idx, std:
 				}
 				else {
 
-					flag_value = NF_CMBNDNY;
+					flag_value = NF2_CMBNDNY;
 					mesh_intersection.s.y -= VEC<VType>::h.y;
 					contact.hshift_primary = DBL3(0, +VEC<VType>::h.y, 0);
 					contact.hshift_secondary = DBL3(0, +pVECs[check_mesh]->h.y, 0);
@@ -109,7 +109,7 @@ std::vector<CMBNDInfo> VEC_VC<VType>::set_cmbnd_flags(int primary_mesh_idx, std:
 				//is the selected mesh on the positive or negative side of the boundary? Set flag to use. Also adjust mesh_intersection so it contains all the cells to set flags for.
 				if (IsZ(VEC<VType>::rect.s.z - mesh_intersection.s.z)) {
 
-					flag_value = NF_CMBNDPZ;
+					flag_value = NF2_CMBNDPZ;
 					mesh_intersection.e.z += VEC<VType>::h.z;
 					contact.hshift_primary = DBL3(0, 0, -VEC<VType>::h.z);
 					contact.hshift_secondary = DBL3(0, 0, -pVECs[check_mesh]->h.z);
@@ -117,7 +117,7 @@ std::vector<CMBNDInfo> VEC_VC<VType>::set_cmbnd_flags(int primary_mesh_idx, std:
 				}
 				else {
 
-					flag_value = NF_CMBNDNZ;
+					flag_value = NF2_CMBNDNZ;
 					mesh_intersection.s.z -= VEC<VType>::h.z;
 					contact.hshift_primary = DBL3(0, 0, +VEC<VType>::h.z);
 					contact.hshift_secondary = DBL3(0, 0, +pVECs[check_mesh]->h.z);
@@ -143,6 +143,13 @@ std::vector<CMBNDInfo> VEC_VC<VType>::set_cmbnd_flags(int primary_mesh_idx, std:
 			//now set flags
 			INT3 ijk_start = contact.cells_box.s;
 			INT3 ijk_end = contact.cells_box.e;
+
+			//before setting cmbnd flags in ngbrFlags2, make sure it has memory allocated
+			if (!cmbnd_conditions_set || !ngbrFlags2.size()) {
+
+				cmbnd_conditions_set = true;
+				use_extended_flags();
+			}
 
 			for (int i = ijk_start.i; i < ijk_end.i; i++) {
 				for (int j = ijk_start.j; j < ijk_end.j; j++) {
@@ -175,7 +182,7 @@ std::vector<CMBNDInfo> VEC_VC<VType>::set_cmbnd_flags(int primary_mesh_idx, std:
 							if (!pVECs[check_mesh]->rect.contains(abscellRect) || !(pVECs[check_mesh]->is_not_empty(abscellRect))) continue;
 						}
 
-						ngbrFlags[idx] |= flag_value;
+						ngbrFlags2[idx] |= flag_value;
 					}
 				}
 			}

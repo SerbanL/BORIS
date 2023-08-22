@@ -187,6 +187,7 @@ BError MElastic::UpdateConfiguration(UPDATECONFIG_ cfgMessage)
 
 				success = pMesh->u_disp.assign(pMesh->h_m, pMesh->meshRect, DBL3(), pMesh->M);
 			}
+			pMesh->u_disp.set_calculate_faces_and_edges(true);
 		}
 		else {
 

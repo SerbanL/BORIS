@@ -73,8 +73,8 @@
 //
 //cu_arr<cuVEC<float>> vec_arr;
 //
-//vec_arr.push_back(M.get_managed_object();
-//vec_arr.push_back(M2.get_managed_object();
+//vec_arr.push_back(M.get_managed_object());
+//vec_arr.push_back(M2.get_managed_object());
 //
 
 //EXAMPLE USAGE 5 : cu_arr stores pointers to arrays in gpu memory (WORKS).
@@ -93,6 +93,23 @@
 //
 //inside the kernel you can now access arr1 elements as arr_col[0][idx], and arr2 elements as arr_col[1][idx]
 //you might also need to pass info to the kernel about the number of stored arrays and dimensions of each array, etc.
+
+//EXAMPLE USAGE 6 : cu_arr stores cu_obj managed objects (WORKS).
+//
+//cu_obj<cuObj> cuObj1;
+//cu_obj<cuObj> cuObj2;
+//
+//Here cuObj is cu_obj managed class defined by user
+//
+//cu_arr<cuObj> cuObj_arr;
+//cuObj_arr.push_back(cuObj1.get_managed_object());
+//cuObj_arr.push_back(cuObj2.get_managed_object());
+//
+//If we have __global__ void cuda_kernel(cuObj* pcuObj_arr, size_t arr_size);
+//Then pass it into the kernel as cuda_kernel(cuObj_arr, cuObj_arr.size())
+//
+//Inside the kernel index as usual to get the respective cuObj objects
+
 
 template <typename VType>
 class cu_arr

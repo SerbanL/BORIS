@@ -473,8 +473,7 @@ void SurfExchangeCUDA::UpdateField(void)
 
 			for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
-				cuSZ3& dn = pMeshCUDA->M.device_n(mGPU);
-
+				cuSZ3 dn = pMeshCUDA->M.device_n(mGPU);
 				SurfExchangeCUDA_TopFM_UpdateField <<< (dn.x * dn.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
 					(pMeshCUDA->cuMesh.get_deviceobject(mGPU), pMeshFM_Top.get_array(mGPU), pMeshFM_Top.size(mGPU), cuModule.get_deviceobject(mGPU), true);
 			}
@@ -485,8 +484,7 @@ void SurfExchangeCUDA::UpdateField(void)
 
 			for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
-				cuSZ3& dn = pMeshCUDA->M.device_n(mGPU);
-
+				cuSZ3 dn = pMeshCUDA->M.device_n(mGPU);
 				SurfExchangeCUDA_BotFM_UpdateField <<< (dn.x * dn.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
 					(pMeshCUDA->cuMesh.get_deviceobject(mGPU), pMeshFM_Bot.get_array(mGPU), pMeshFM_Bot.size(mGPU), cuModule.get_deviceobject(mGPU), true);
 			}
@@ -499,8 +497,7 @@ void SurfExchangeCUDA::UpdateField(void)
 
 			for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
-				cuSZ3& dn = pMeshCUDA->M.device_n(mGPU);
-
+				cuSZ3 dn = pMeshCUDA->M.device_n(mGPU);
 				SurfExchangeCUDA_TopAFM_UpdateField <<< (dn.x * dn.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
 					(pMeshCUDA->cuMesh.get_deviceobject(mGPU), pMeshAFM_Top.get_array(mGPU), pMeshAFM_Top.size(mGPU), cuModule.get_deviceobject(mGPU), true);
 			}
@@ -511,8 +508,7 @@ void SurfExchangeCUDA::UpdateField(void)
 
 			for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
-				cuSZ3& dn = pMeshCUDA->M.device_n(mGPU);
-
+				cuSZ3 dn = pMeshCUDA->M.device_n(mGPU);
 				SurfExchangeCUDA_BotAFM_UpdateField <<< (dn.x * dn.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
 					(pMeshCUDA->cuMesh.get_deviceobject(mGPU), pMeshAFM_Bot.get_array(mGPU), pMeshAFM_Bot.size(mGPU), cuModule.get_deviceobject(mGPU), true);
 			}
@@ -525,8 +521,7 @@ void SurfExchangeCUDA::UpdateField(void)
 
 			for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
-				cuSZ3& dn = pMeshCUDA->M.device_n(mGPU);
-
+				cuSZ3 dn = pMeshCUDA->M.device_n(mGPU);
 				SurfExchangeCUDA_TopAtom_UpdateField <<< (dn.x * dn.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
 					(pMeshCUDA->cuMesh.get_deviceobject(mGPU), pMeshAtom_Top.get_array(mGPU), pMeshAtom_Top.size(mGPU), cuModule.get_deviceobject(mGPU), true);
 			}
@@ -537,8 +532,7 @@ void SurfExchangeCUDA::UpdateField(void)
 
 			for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
-				cuSZ3& dn = pMeshCUDA->M.device_n(mGPU);
-
+				cuSZ3 dn = pMeshCUDA->M.device_n(mGPU);
 				SurfExchangeCUDA_BotAtom_UpdateField <<< (dn.x * dn.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
 					(pMeshCUDA->cuMesh.get_deviceobject(mGPU), pMeshAtom_Bot.get_array(mGPU), pMeshAtom_Bot.size(mGPU), cuModule.get_deviceobject(mGPU), true);
 			}
@@ -546,15 +540,14 @@ void SurfExchangeCUDA::UpdateField(void)
 	}
 	else {
 
-		//Coupling from ferromagnetic
+		//Coupling from ferromagnetic meshes
 
 		//Top
 		if (pMeshFM_Top.size()) {
 
 			for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
-				cuSZ3& dn = pMeshCUDA->M.device_n(mGPU);
-
+				cuSZ3 dn = pMeshCUDA->M.device_n(mGPU);
 				SurfExchangeCUDA_TopFM_UpdateField <<< (dn.x * dn.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
 					(pMeshCUDA->cuMesh.get_deviceobject(mGPU), pMeshFM_Top.get_array(mGPU), pMeshFM_Top.size(mGPU), cuModule.get_deviceobject(mGPU), false);
 			}
@@ -565,22 +558,20 @@ void SurfExchangeCUDA::UpdateField(void)
 
 			for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
-				cuSZ3& dn = pMeshCUDA->M.device_n(mGPU);
-
+				cuSZ3 dn = pMeshCUDA->M.device_n(mGPU);
 				SurfExchangeCUDA_BotFM_UpdateField <<< (dn.x * dn.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
 					(pMeshCUDA->cuMesh.get_deviceobject(mGPU), pMeshFM_Bot.get_array(mGPU), pMeshFM_Bot.size(mGPU), cuModule.get_deviceobject(mGPU), false);
 			}
 		}
 
-		//Coupling from antiferromagnetic
+		//Coupling from antiferromagnetic meshes
 
 		//Top
 		if (pMeshAFM_Top.size()) {
 
 			for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
-				cuSZ3& dn = pMeshCUDA->M.device_n(mGPU);
-
+				cuSZ3 dn = pMeshCUDA->M.device_n(mGPU);
 				SurfExchangeCUDA_TopAFM_UpdateField <<< (dn.x * dn.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
 					(pMeshCUDA->cuMesh.get_deviceobject(mGPU), pMeshAFM_Top.get_array(mGPU), pMeshAFM_Top.size(mGPU), cuModule.get_deviceobject(mGPU), false);
 			}
@@ -591,8 +582,7 @@ void SurfExchangeCUDA::UpdateField(void)
 
 			for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
-				cuSZ3& dn = pMeshCUDA->M.device_n(mGPU);
-
+				cuSZ3 dn = pMeshCUDA->M.device_n(mGPU);
 				SurfExchangeCUDA_BotAFM_UpdateField <<< (dn.x * dn.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
 					(pMeshCUDA->cuMesh.get_deviceobject(mGPU), pMeshAFM_Bot.get_array(mGPU), pMeshAFM_Bot.size(mGPU), cuModule.get_deviceobject(mGPU), false);
 			}
@@ -605,8 +595,7 @@ void SurfExchangeCUDA::UpdateField(void)
 
 			for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
-				cuSZ3& dn = pMeshCUDA->M.device_n(mGPU);
-
+				cuSZ3 dn = pMeshCUDA->M.device_n(mGPU);
 				SurfExchangeCUDA_TopAtom_UpdateField <<< (dn.x * dn.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
 					(pMeshCUDA->cuMesh.get_deviceobject(mGPU), pMeshAtom_Top.get_array(mGPU), pMeshAtom_Top.size(mGPU), cuModule.get_deviceobject(mGPU), false);
 			}
@@ -617,8 +606,7 @@ void SurfExchangeCUDA::UpdateField(void)
 
 			for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
-				cuSZ3& dn = pMeshCUDA->M.device_n(mGPU);
-
+				cuSZ3 dn = pMeshCUDA->M.device_n(mGPU);
 				SurfExchangeCUDA_BotAtom_UpdateField <<< (dn.x * dn.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
 					(pMeshCUDA->cuMesh.get_deviceobject(mGPU), pMeshAtom_Bot.get_array(mGPU), pMeshAtom_Bot.size(mGPU), cuModule.get_deviceobject(mGPU), false);
 			}

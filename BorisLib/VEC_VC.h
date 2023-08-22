@@ -19,7 +19,7 @@ class VEC_VC :
 	public ProgramState<VEC_VC<VType>, 
 	std::tuple<SZ3, DBL3, Rect, std::vector<VType>, std::vector<int>, std::vector<int>, int,
 	std::vector<VType>, std::vector<VType>, std::vector<VType>, std::vector<VType>, std::vector<VType>, std::vector<VType>,
-	DBL2, DBL2, DBL2, DBL2, DBL2, DBL2, DBL2, DBL3, int, int, int>,
+	DBL2, DBL2, DBL2, DBL2, DBL2, DBL2, DBL2, DBL3, int, int, int, bool, bool>,
 	std::tuple<>>
 {
 
@@ -64,26 +64,22 @@ class VEC_VC :
 //this is not necessarily an empty cell, but mark them to be skipped during computations for some algorithms (e.g. moving mesh algorithm where the ends of the magnetic mesh must not be updated by the ODE solver) : bit 10
 #define NF_SKIPCELL	1024
 
-//composite media boundary cells (used to flag cells where boundary conditions must be applied). These flags are not set using set_ngbrFlags, but must be externally set
-//cell on positive x side of boundary : bit 11
-#define NF_CMBNDPX	2048
-//cell on negative x side of boundary : bit 12
-#define NF_CMBNDNX	4096
-//cell on positive y side of boundary : bit 13
-#define NF_CMBNDPY	8192
-//cell on negative y side of boundary : bit 14
-#define NF_CMBNDNY	16384
-//cell on positive z side of boundary : bit 15
-#define NF_CMBNDPZ	32768
-//cell on negative z side of boundary : bit 16
-#define NF_CMBNDNZ	65536
+//NOTE for faces : only presence of lower faces is marked, i.e. those which contain the cube origin
+//If next cell cannot be checked because
+//lower face with x surface normal (yz face) present, i.e. there is a non-empty cell which contains it : bit 11
+#define NF_FACEX	2048
+//lower face with y surface normal (xz face) present, i.e. there is a non-empty cell which contains it : bit 12
+#define NF_FACEY	4096
+//lower face with z surface normal (xy face) present, i.e. there is a non-empty cell which contains it : bit 13
+#define NF_FACEZ	8192
 
-//mask for all cmbnd flags
-#define NF_CMBND	(NF_CMBNDPX + NF_CMBNDNX + NF_CMBNDPY + NF_CMBNDNY + NF_CMBNDPZ + NF_CMBNDNZ)
-//masks for cmbnd flags along the x, y, or z axes
-#define NF_CMBNDX	(NF_CMBNDPX + NF_CMBNDNX)
-#define NF_CMBNDY	(NF_CMBNDPY + NF_CMBNDNY)
-#define NF_CMBNDZ	(NF_CMBNDPZ + NF_CMBNDNZ)
+//NOTE for edges : only presence of lower edges is marked, i.e. those which contain the cube origin
+//lower x edge present : bit 14
+#define NF_EDGEX	16384
+//lower y edge present : bit 15
+#define NF_EDGEY	32768
+//lower z edge present : bit 16
+#define NF_EDGEZ	65536
 
 //off-axis neighbor at +x, +y, 0z (xy differentials) : bit 17
 #define NF_XY_PXPY	131072
@@ -170,20 +166,52 @@ class VEC_VC :
 #define NF2_DIRICHLETZ (NF2_DIRICHLETPZ + NF2_DIRICHLETNZ)
 #define NF2_DIRICHLET (NF2_DIRICHLETX + NF2_DIRICHLETY + NF2_DIRICHLETZ)
 
+//BITS 13 to 18 inclusive are used for halo flags in CUDA version. These are not needed here.
+
+//composite media boundary cells (used to flag cells where boundary conditions must be applied). These flags are not set using set_ngbrFlags, but must be externally set
+//cell on positive x side of boundary : bit 19
+#define NF2_CMBNDPX	524288
+//cell on negative x side of boundary : bit 20
+#define NF2_CMBNDNX	1048576
+//cell on positive y side of boundary : bit 21
+#define NF2_CMBNDPY	2097152
+//cell on negative y side of boundary : bit 22
+#define NF2_CMBNDNY	4194304
+//cell on positive z side of boundary : bit 23
+#define NF2_CMBNDPZ	8388608
+//cell on negative z side of boundary : bit 24
+#define NF2_CMBNDNZ	16777216
+
+//mask for all cmbnd flags
+#define NF2_CMBND	(NF2_CMBNDPX + NF2_CMBNDNX + NF2_CMBNDPY + NF2_CMBNDNY + NF2_CMBNDPZ + NF2_CMBNDNZ)
+//masks for cmbnd flags along the x, y, or z axes
+#define NF2_CMBNDX	(NF2_CMBNDPX + NF2_CMBNDNX)
+#define NF2_CMBNDY	(NF2_CMBNDPY + NF2_CMBNDNY)
+#define NF2_CMBNDZ	(NF2_CMBNDPZ + NF2_CMBNDNZ)
+
 //Halo bits 13 - 18 not used with VEC_VC, only with cuVEC_VC.
 //If adding new bits, then add them from bit 19 onwards.
 
 private:
 
+	//NEIGHBORS
+
 	//mark cells with various flags to indicate properties of neighboring cells
 	//ngbrFlags2 defines additional flags. Only allocate memory if these additional flags are enabled - this is more memory efficient + I need to do it this way to keep older save files backward compatible.
 	std::vector<int> ngbrFlags, ngbrFlags2;
 
+	//if true then faces and edges flags in ngbrFlags are also calculated. turn on only if needed.
+	bool calculate_faces_and_edges = false;
+
 	int nonempty_cells = 0;
+
+	//DIRICHLET
 
 	//store dirichlet boundary conditions at mesh sides - only allocate memory as required
 	//these vectors are of sizes equal to 1 cell deep at each respective side. dirichlet_nx are the dirichlet values at the -x side of the mesh, etc.
 	std::vector<VType> dirichlet_nx, dirichlet_px, dirichlet_ny, dirichlet_py, dirichlet_nz, dirichlet_pz;
+
+	//ROBIN
 
 	//Robin boundary conditions values : diff_norm(u) = alpha * (u - VEC<VType>::h), where diff_norm means differential along surface normal (e.g. positive sign at +x boundary, negative sign at -x boundary).
 	//alpha is a positive constant : robins_nx.i. Note, if this is zero then homogeneous Neumann boundary condition results.
@@ -194,6 +222,13 @@ private:
 	DBL2 robin_pz, robin_nz;
 	//robin_v applies for boundary conditions at void cells - more precisely for cells next to a void cell. Use this when flagged with NF2_ROBINNX etc. and also flagged with NF2_ROBINV
 	DBL2 robin_v;
+
+	//CMBND
+
+	//when cmbnd flags set (with set_cmbnd_flags), set this to true (clear_cmbnd_flags will set it to false). This is checked by use_extended_flags as cmbnd flags are set in ngbrFlags2.
+	bool cmbnd_conditions_set = false;
+
+	//PBC AND AUXILIARY
 
 	//when used with moving mesh algorithms calls to shift... functions may be used. If the shift requested is smaller than the cellsize then we cannot perform the shift. 
 	//Add it to shift_debt and on next shift call we might be able to shift the mesh values.
@@ -218,6 +253,9 @@ private:
 
 	//initialization method for neighbor flags : set flags at size VEC<VType>::n, counting neighbors etc. Use current shape in ngbrFlags
 	void set_ngbrFlags(void);
+
+	//calculate faces and edges flags - called by set_ngbrFlags if calculate_faces_and_edges is true
+	void set_faces_and_edges_flags(void);
 
 	//from NF2_DIRICHLET type flag and cell_idx return boundary value from one of the dirichlet vectors
 	VType get_dirichlet_value(int dirichlet_flag, int cell_idx) const;
@@ -294,6 +332,10 @@ public:
 
 	DBL3& shift_debt_ref(void) { return shift_debt; }
 
+	bool& cmbnd_conditions_set_ref(void) { return cmbnd_conditions_set; }
+
+	bool& calculate_faces_and_edges_ref(void) { return calculate_faces_and_edges; }
+
 	int& pbc_x_ref(void) { return pbc_x; }
 	int& pbc_y_ref(void) { return pbc_y; }
 	int& pbc_z_ref(void) { return pbc_z; }
@@ -359,24 +401,24 @@ public:
 	//check if all cells intersecting the rectangle (absolute coordinates) are not empty
 	bool is_not_empty(const Rect& rectangle) const;
 
-	bool is_not_cmbnd(int index) const { return !(ngbrFlags[index] & NF_CMBND); }
-	bool is_not_cmbnd(const DBL3& rel_pos) const { return !(ngbrFlags[int(rel_pos.x / VEC<VType>::h.x) + int(rel_pos.y / VEC<VType>::h.y) * VEC<VType>::n.x + int(rel_pos.z / VEC<VType>::h.z) * VEC<VType>::n.x * VEC<VType>::n.y] & NF_CMBND); }
-	bool is_not_cmbnd(const INT3& ijk) const { return !(ngbrFlags[ijk.i + ijk.j*VEC<VType>::n.x + ijk.k*VEC<VType>::n.x*VEC<VType>::n.y] & NF_CMBND); }
+	bool is_not_cmbnd(int index) const { return !(ngbrFlags2.size() && (ngbrFlags2[index] & NF2_CMBND)); }
+	bool is_not_cmbnd(const DBL3& rel_pos) const { return !(ngbrFlags2.size() && (ngbrFlags2[int(rel_pos.x / VEC<VType>::h.x) + int(rel_pos.y / VEC<VType>::h.y) * VEC<VType>::n.x + int(rel_pos.z / VEC<VType>::h.z) * VEC<VType>::n.x * VEC<VType>::n.y] & NF2_CMBND)); }
+	bool is_not_cmbnd(const INT3& ijk) const { return !(ngbrFlags2.size() && (ngbrFlags2[ijk.i + ijk.j*VEC<VType>::n.x + ijk.k*VEC<VType>::n.x*VEC<VType>::n.y] & NF2_CMBND)); }
 
-	bool is_cmbnd(int index) const { return (ngbrFlags[index] & NF_CMBND); }
-	bool is_cmbnd(const DBL3& rel_pos) const { return (ngbrFlags[int(rel_pos.x / VEC<VType>::h.x) + int(rel_pos.y / VEC<VType>::h.y) * VEC<VType>::n.x + int(rel_pos.z / VEC<VType>::h.z) * VEC<VType>::n.x * VEC<VType>::n.y] & NF_CMBND); }
-	bool is_cmbnd(const INT3& ijk) const { return (ngbrFlags[ijk.i + ijk.j*VEC<VType>::n.x + ijk.k*VEC<VType>::n.x*VEC<VType>::n.y] & NF_CMBND); }
+	bool is_cmbnd(int index) const { return (ngbrFlags2.size() && (ngbrFlags2[index] & NF2_CMBND)); }
+	bool is_cmbnd(const DBL3& rel_pos) const { return (ngbrFlags2.size() && (ngbrFlags2[int(rel_pos.x / VEC<VType>::h.x) + int(rel_pos.y / VEC<VType>::h.y) * VEC<VType>::n.x + int(rel_pos.z / VEC<VType>::h.z) * VEC<VType>::n.x * VEC<VType>::n.y] & NF2_CMBND)); }
+	bool is_cmbnd(const INT3& ijk) const { return (ngbrFlags2.size() && (ngbrFlags2[ijk.i + ijk.j*VEC<VType>::n.x + ijk.k*VEC<VType>::n.x*VEC<VType>::n.y] & NF2_CMBND)); }
 
-	bool is_cmbnd_px(int index) const { return (ngbrFlags[index] & NF_CMBNDPX); }
-	bool is_cmbnd_nx(int index) const { return (ngbrFlags[index] & NF_CMBNDNX); }
-	bool is_cmbnd_py(int index) const { return (ngbrFlags[index] & NF_CMBNDPY); }
-	bool is_cmbnd_ny(int index) const { return (ngbrFlags[index] & NF_CMBNDNY); }
-	bool is_cmbnd_pz(int index) const { return (ngbrFlags[index] & NF_CMBNDPZ); }
-	bool is_cmbnd_nz(int index) const { return (ngbrFlags[index] & NF_CMBNDNZ); }
+	bool is_cmbnd_px(int index) const { return (ngbrFlags2.size() && (ngbrFlags2[index] & NF2_CMBNDPX)); }
+	bool is_cmbnd_nx(int index) const { return (ngbrFlags2.size() && (ngbrFlags2[index] & NF2_CMBNDNX)); }
+	bool is_cmbnd_py(int index) const { return (ngbrFlags2.size() && (ngbrFlags2[index] & NF2_CMBNDPY)); }
+	bool is_cmbnd_ny(int index) const { return (ngbrFlags2.size() && (ngbrFlags2[index] & NF2_CMBNDNY)); }
+	bool is_cmbnd_pz(int index) const { return (ngbrFlags2.size() && (ngbrFlags2[index] & NF2_CMBNDPZ)); }
+	bool is_cmbnd_nz(int index) const { return (ngbrFlags2.size() && (ngbrFlags2[index] & NF2_CMBNDNZ)); }
 
-	bool is_cmbnd_x(int index) const { return (ngbrFlags[index] & NF_CMBNDX); }
-	bool is_cmbnd_y(int index) const { return (ngbrFlags[index] & NF_CMBNDY); }
-	bool is_cmbnd_z(int index) const { return (ngbrFlags[index] & NF_CMBNDZ); }
+	bool is_cmbnd_x(int index) const { return (ngbrFlags2.size() && (ngbrFlags2[index] & NF2_CMBNDX)); }
+	bool is_cmbnd_y(int index) const { return (ngbrFlags2.size() && (ngbrFlags2[index] & NF2_CMBNDY)); }
+	bool is_cmbnd_z(int index) const { return (ngbrFlags2.size() && (ngbrFlags2[index] & NF2_CMBNDZ)); }
 
 	bool is_skipcell(int index) const { return (ngbrFlags[index] & NF_SKIPCELL); }
 	bool is_skipcell(const DBL3& rel_pos) const { return (ngbrFlags[int(rel_pos.x / VEC<VType>::h.x) + int(rel_pos.y / VEC<VType>::h.y) * VEC<VType>::n.x + int(rel_pos.z / VEC<VType>::h.z) * VEC<VType>::n.x * VEC<VType>::n.y] & NF_SKIPCELL); }
@@ -443,6 +485,10 @@ public:
 
 	//similar to set_ngbrFlags, but do not reset externally set flags, usable at runtime if shape changes
 	void set_ngbrFlags_shapeonly(void) { set_ngbrFlags(false); }
+
+	//when enabled then set_faces_and_edges_flags method will be called by set_ngbrFlags every time it is executed
+	//if false then faces and edges flags not calculated to avoid extra unnecessary initialization work
+	void set_calculate_faces_and_edges(bool status) { calculate_faces_and_edges = status; if (calculate_faces_and_edges) set_faces_and_edges_flags(); }
 
 	//--------------------------------------------CALCULATE COMPOSITE MEDIA BOUNDARY VALUES : VEC_VC_cmbnd.h
 

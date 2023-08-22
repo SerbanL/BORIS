@@ -21,6 +21,10 @@ __host__ void cuVEC_VC<VType>::alloc_initialize_data(void)
 	nullgpuptr(dirichlet_pz);
 	nullgpuptr(dirichlet_nz);
 
+	set_gpu_value(cmbnd_conditions_set, false);
+
+	set_gpu_value(calculate_faces_and_edges, false);
+
 	nullgpuptr(halo_p);
 	nullgpuptr(halo_n);
 	nullgpuptr(halotemp_p);
@@ -428,6 +432,11 @@ __host__ void cuVEC_VC<VType>::assign_cu_obj(const cuVEC_VC<VType>& copyThis)
 	//copy shift debt
 	gpu_to_gpu(shift_debt, copyThis.shift_debt);
 
+	//copy cmbnd setting
+	gpu_to_gpu(cmbnd_conditions_set, copyThis.cmbnd_conditions_set);
+
+	gpu_to_gpu(calculate_faces_and_edges, copyThis.calculate_faces_and_edges);
+
 	//copy dirichlet values arrays
 	size_t size;
 	
@@ -546,8 +555,10 @@ __host__ bool cuVEC_VC<VType>::set_from_cpuvec(cpuVEC_VC&& vec_vc)
 	//ngbrFlags (and set ngbrFlags_size)
 	//nonempty_cells
 	//dirichlet vectors (and set sizes)
+	//cmbnd
 	//robin values
 	//shift debt
+	//pbc
 
 	//-----------
 
@@ -712,6 +723,15 @@ __host__ bool cuVEC_VC<VType>::set_from_cpuvec(cpuVEC_VC&& vec_vc)
 	
 	//-----------
 
+	//copy cmbnd setting
+	set_gpu_value(cmbnd_conditions_set, (bool)vec_vc.cmbnd_conditions_set_ref());
+
+	//-----------
+
+	set_gpu_value(calculate_faces_and_edges, (bool)vec_vc.calculate_faces_and_edges_ref());
+
+	//-----------
+
 	//halo not defined for VEC_VC
 	//don't do anything about halos here, these would be managed at policy class level for multi-device management
 
@@ -726,13 +746,19 @@ __host__ bool cuVEC_VC<VType>::set_from_cpuvec(cpuVEC_VC&& vec_vc)
 	set_gpu_value(robin_nz, (cuReal2)vec_vc.robin_nz_ref());
 	set_gpu_value(robin_v, (cuReal2)vec_vc.robin_v_ref());
 
+	//-----------
+
 	//copy shift debt
 	set_gpu_value(shift_debt, (cuReal3)vec_vc.shift_debt_ref());
+
+	//-----------
 
 	//copy pbc parameters
 	set_gpu_value(pbc_x, (int)vec_vc.pbc_x_ref());
 	set_gpu_value(pbc_y, (int)vec_vc.pbc_y_ref());
 	set_gpu_value(pbc_z, (int)vec_vc.pbc_z_ref());
+
+	//-----------
 
 	set_ngbrFlags();
 
@@ -752,8 +778,10 @@ __host__ bool cuVEC_VC<VType>::set_cpuvec(cpuVEC_VC& vec_vc)
 	//ngbrFlags
 	//nonempty_cells
 	//dirichlet vectors
+	//cmbnd
 	//robin values
 	//shift debt
+	//pbc
 
 	//----------- copy to VEC part (n, h, rect, quantity)
 
@@ -854,6 +882,15 @@ __host__ bool cuVEC_VC<VType>::set_cpuvec(cpuVEC_VC& vec_vc)
 
 	//-----------
 
+	//copy cmbnd setting
+	vec_vc.cmbnd_conditions_set_ref() = get_gpu_value(cmbnd_conditions_set);
+
+	//-----------
+
+	vec_vc.calculate_faces_and_edges_ref() = get_gpu_value(calculate_faces_and_edges);
+
+	//-----------
+
 	//halo not defined for VEC_VC
 
 	//-----------
@@ -867,8 +904,12 @@ __host__ bool cuVEC_VC<VType>::set_cpuvec(cpuVEC_VC& vec_vc)
 	vec_vc.robin_nz_ref() = get_gpu_value(robin_nz);
 	vec_vc.robin_v_ref() = get_gpu_value(robin_v);
 	
+	//-----------
+
 	//copy shift debt
 	vec_vc.shift_debt_ref() = get_gpu_value(shift_debt);
+
+	//-----------
 
 	//copy pbc parameters
 	vec_vc.pbc_x_ref() = get_gpu_value(pbc_x);
@@ -889,10 +930,24 @@ __host__ bool cuVEC_VC<VType>::copy_from_cpuvec(cpuVEC_VC&& vec_vc)
 	//copy shift debt
 	set_gpu_value(shift_debt, (cuReal3)vec_vc.shift_debt_ref());
 
+	//copy cmbnd setting
+	set_gpu_value(cmbnd_conditions_set, (bool)vec_vc.cmbnd_conditions_set_ref());
+
+	set_gpu_value(calculate_faces_and_edges, (bool)vec_vc.calculate_faces_and_edges_ref());
+
 	//copy pbc parameters
 	set_gpu_value(pbc_x, (int)vec_vc.pbc_x_ref());
 	set_gpu_value(pbc_y, (int)vec_vc.pbc_y_ref());
 	set_gpu_value(pbc_z, (int)vec_vc.pbc_z_ref());
+
+	//copy robin values
+	set_gpu_value(robin_px, (cuReal2)vec_vc.robin_px_ref());
+	set_gpu_value(robin_nx, (cuReal2)vec_vc.robin_nx_ref());
+	set_gpu_value(robin_py, (cuReal2)vec_vc.robin_py_ref());
+	set_gpu_value(robin_ny, (cuReal2)vec_vc.robin_ny_ref());
+	set_gpu_value(robin_pz, (cuReal2)vec_vc.robin_pz_ref());
+	set_gpu_value(robin_nz, (cuReal2)vec_vc.robin_nz_ref());
+	set_gpu_value(robin_v, (cuReal2)vec_vc.robin_v_ref());
 
 	std::vector<int>& ngbrFlags_cpu = vec_vc.ngbrFlags_ref();
 	std::vector<int>& ngbrFlags2_cpu = vec_vc.ngbrFlags2_ref();
@@ -939,6 +994,11 @@ __host__ bool cuVEC_VC<VType>::copy_to_cpuvec(cpuVEC_VC& vec_vc)
 	//copy quantity
 	if (!cuVEC<VType>::copy_to_cpuvec(vec_vc)) return false;
 
+	//copy cmbnd setting
+	vec_vc.cmbnd_conditions_set_ref() = get_gpu_value(cmbnd_conditions_set);
+
+	vec_vc.calculate_faces_and_edges_ref() = get_gpu_value(calculate_faces_and_edges);
+
 	//copy shift debt
 	vec_vc.shift_debt_ref() = get_gpu_value(shift_debt);
 
@@ -946,6 +1006,15 @@ __host__ bool cuVEC_VC<VType>::copy_to_cpuvec(cpuVEC_VC& vec_vc)
 	vec_vc.pbc_x_ref() = get_gpu_value(pbc_x);
 	vec_vc.pbc_y_ref() = get_gpu_value(pbc_y);
 	vec_vc.pbc_z_ref() = get_gpu_value(pbc_z);
+
+	//copy robin values
+	vec_vc.robin_px_ref() = get_gpu_value(robin_px);
+	vec_vc.robin_nx_ref() = get_gpu_value(robin_nx);
+	vec_vc.robin_py_ref() = get_gpu_value(robin_py);
+	vec_vc.robin_ny_ref() = get_gpu_value(robin_ny);
+	vec_vc.robin_pz_ref() = get_gpu_value(robin_pz);
+	vec_vc.robin_nz_ref() = get_gpu_value(robin_nz);
+	vec_vc.robin_v_ref() = get_gpu_value(robin_v);
 
 	//now copy ngbrFlags
 	cudaError_t error = gpu_to_cpu_managed(vec_vc.ngbrFlags_ref().data(), ngbrFlags, vec_vc.linear_size());
@@ -975,10 +1044,24 @@ template <typename VType>
 template <typename cpuVEC_VC>
 __host__ bool cuVEC_VC<VType>::copyflags_from_cpuvec(cpuVEC_VC&& vec_vc)
 {
+	//copy cmbnd setting
+	set_gpu_value(cmbnd_conditions_set, (bool)vec_vc.cmbnd_conditions_set_ref());
+
+	set_gpu_value(calculate_faces_and_edges, (bool)vec_vc.calculate_faces_and_edges_ref());
+
 	//copy pbc parameters : need to copy these since they are associated with setting flags
 	set_gpu_value(pbc_x, (int)vec_vc.pbc_x_ref());
 	set_gpu_value(pbc_y, (int)vec_vc.pbc_y_ref());
 	set_gpu_value(pbc_z, (int)vec_vc.pbc_z_ref());
+
+	//copy robin values
+	set_gpu_value(robin_px, (cuReal2)vec_vc.robin_px_ref());
+	set_gpu_value(robin_nx, (cuReal2)vec_vc.robin_nx_ref());
+	set_gpu_value(robin_py, (cuReal2)vec_vc.robin_py_ref());
+	set_gpu_value(robin_ny, (cuReal2)vec_vc.robin_ny_ref());
+	set_gpu_value(robin_pz, (cuReal2)vec_vc.robin_pz_ref());
+	set_gpu_value(robin_nz, (cuReal2)vec_vc.robin_nz_ref());
+	set_gpu_value(robin_v, (cuReal2)vec_vc.robin_v_ref());
 
 	std::vector<int>& ngbrFlags_cpu = vec_vc.ngbrFlags_ref();
 	std::vector<int>& ngbrFlags2_cpu = vec_vc.ngbrFlags2_ref();

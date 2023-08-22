@@ -59,7 +59,7 @@ bool MeshDisplayCUDA::prepare_display(SZ3 n_quantity, Rect meshRect, double deta
 {
 	//the cu_obj managed quantity cannot be empty
 	if (!cu_obj_quantity.size_cpu().dim()) return false;
-
+	
 	DBL3 hdisp(detail_level);
 	SZ3 ndisp = round(meshRect / hdisp);
 

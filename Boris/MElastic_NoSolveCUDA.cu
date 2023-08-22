@@ -102,25 +102,34 @@ void MElasticCUDA::Set_Strain_From_Formula(void)
 {
 	if (Sd_equation.is_set() && Sod_equation.is_set()) {
 
-		Set_Strain_From_Formula_Sd_Sod_Kernel <<< (pMeshCUDA->n_m.dim() + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
-			(pMeshCUDA->cuMesh,
-			Sd_equation.get_x(), Sd_equation.get_y(), Sd_equation.get_z(),
-			Sod_equation.get_x(), Sod_equation.get_y(), Sod_equation.get_z(),
-			pMeshCUDA->GetStageTime());
+		for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
+
+			Set_Strain_From_Formula_Sd_Sod_Kernel <<< (pMeshCUDA->u_disp.device_size(mGPU) + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
+				(pMeshCUDA->cuMesh.get_deviceobject(mGPU),
+				Sd_equation.get_x(mGPU), Sd_equation.get_y(mGPU), Sd_equation.get_z(mGPU),
+				Sod_equation.get_x(mGPU), Sod_equation.get_y(mGPU), Sod_equation.get_z(mGPU),
+				pMeshCUDA->GetStageTime());
+		}
 	}
 	else if (Sd_equation.is_set()) {
 
-		Set_Strain_From_Formula_Sd_Kernel <<< (pMeshCUDA->n_m.dim() + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
-			(pMeshCUDA->cuMesh,
-			Sd_equation.get_x(), Sd_equation.get_y(), Sd_equation.get_z(),
-			pMeshCUDA->GetStageTime());
+		for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
+
+			Set_Strain_From_Formula_Sd_Kernel <<< (pMeshCUDA->u_disp.device_size(mGPU) + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
+				(pMeshCUDA->cuMesh.get_deviceobject(mGPU),
+				Sd_equation.get_x(mGPU), Sd_equation.get_y(mGPU), Sd_equation.get_z(mGPU),
+				pMeshCUDA->GetStageTime());
+		}
 	}
 	else if (Sod_equation.is_set()) {
 
-		Set_Strain_From_Formula_Sod_Kernel <<< (pMeshCUDA->n_m.dim() + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
-			(pMeshCUDA->cuMesh,
-			Sod_equation.get_x(), Sod_equation.get_y(), Sod_equation.get_z(),
-			pMeshCUDA->GetStageTime());
+		for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
+
+			Set_Strain_From_Formula_Sod_Kernel <<< (pMeshCUDA->u_disp.device_size(mGPU) + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
+				(pMeshCUDA->cuMesh.get_deviceobject(mGPU),
+				Sod_equation.get_x(mGPU), Sod_equation.get_y(mGPU), Sod_equation.get_z(mGPU),
+				pMeshCUDA->GetStageTime());
+		}
 	}
 }
 
@@ -128,7 +137,7 @@ void MElasticCUDA::Set_Strain_From_Formula(void)
 
 void MElasticCUDA::UpdateField(void)
 {
-	if (Sd_equation.is_set_vector() || Sod_equation.is_set_vector()) {
+	if (Sd_equation.is_set() || Sod_equation.is_set()) {
 
 		//strain specified using a formula
 		Set_Strain_From_Formula();
@@ -139,8 +148,8 @@ void MElasticCUDA::UpdateField(void)
 
 __global__ void Calculate_Strain_Kernel(
 	ManagedMeshCUDA& cuMesh,
-	cuVEC<cuReal3>& sdd,
-	cuVEC<cuBReal>& sxy, cuVEC<cuBReal>& sxz, cuVEC<cuBReal>& syz)
+	cuVEC_VC<cuReal3>& sdd,
+	cuVEC_VC<cuBReal>& sxy, cuVEC_VC<cuBReal>& sxz, cuVEC_VC<cuBReal>& syz)
 {
 	cuVEC_VC<cuReal3>& u_disp = *cuMesh.pu_disp;
 	cuVEC_VC<cuReal3>& strain_diag = *cuMesh.pstrain_diag;
@@ -175,8 +184,11 @@ __global__ void Calculate_Strain_Kernel(
 
 void MElasticCUDA::Calculate_Strain(void)
 {
-	Calculate_Strain_Kernel <<< (pMeshCUDA->n_m.dim() + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
-		(pMeshCUDA->cuMesh, sdd, sxy, sxz, syz);
+	for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
+
+		Calculate_Strain_Kernel <<< (pMeshCUDA->u_disp.device_size(mGPU) + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
+			(pMeshCUDA->cuMesh.get_deviceobject(mGPU), sdd.get_deviceobject(mGPU), sxy.get_deviceobject(mGPU), sxz.get_deviceobject(mGPU), syz.get_deviceobject(mGPU));
+	}
 }
 
 #endif

@@ -12,12 +12,16 @@ bool VEC_VC<VType>::use_extended_flags(void)
 
 	//ROBIN
 	//DIRICHLET
-
-	bool using_dirichlet = (dirichlet_nx.size() || dirichlet_px.size() || dirichlet_ny.size() || dirichlet_py.size() || dirichlet_nz.size() || dirichlet_pz.size());
+	//CMBND
+	//HALO not needed here
 
 	bool using_robin = (robin_px != DBL2() || robin_nx != DBL2() || robin_py != DBL2() || robin_ny != DBL2() || robin_pz != DBL2() || robin_nz != DBL2() || robin_v != DBL2());
 
-	bool using_extended_flags = (using_dirichlet || using_robin);
+	bool using_dirichlet = (dirichlet_nx.size() || dirichlet_px.size() || dirichlet_ny.size() || dirichlet_py.size() || dirichlet_nz.size() || dirichlet_pz.size());
+
+	bool using_cmbnd = cmbnd_conditions_set;
+
+	bool using_extended_flags = (using_robin || using_dirichlet || using_cmbnd);
 
 	//make sure ngbrFlags2 has the correct memory allocated only if currently empty
 	if (using_extended_flags && !ngbrFlags2.size()) {
@@ -98,7 +102,7 @@ void VEC_VC<VType>::set_ngbrFlags(void)
 	//also count non-empty points
 	int cellsCount = 0;
 
-	//1. Count all the neighbors
+	//1a. Count all the neighbors
 
 #pragma omp parallel for reduction(+:cellsCount)
 	for (int j = 0; j < VEC<VType>::n.y; j++) {
@@ -248,6 +252,9 @@ void VEC_VC<VType>::set_ngbrFlags(void)
 		}
 	}
 
+	//1b. calculate faces and edges if required (can only be done once all neighbor flags have been calculated)
+	if (calculate_faces_and_edges) set_faces_and_edges_flags();
+
 	//2. set Robin flags depending on set conditions
 	set_robin_flags();
 
@@ -257,6 +264,54 @@ void VEC_VC<VType>::set_ngbrFlags(void)
 	nonempty_cells = cellsCount;
 }
 
+//calculate faces and edges flags - called by set_ngbrFlags if calculate_faces_and_edges is true
+template <typename VType>
+void VEC_VC<VType>::set_faces_and_edges_flags(void)
+{
+	for (int j = 0; j < VEC<VType>::n.y; j++) {
+		for (int k = 0; k < VEC<VType>::n.z; k++) {
+			for (int i = 0; i < VEC<VType>::n.x; i++) {
+
+				int idx = i + j * VEC<VType>::n.x + k * VEC<VType>::n.x * VEC<VType>::n.y;
+
+				//clear face flags
+				ngbrFlags[idx] &= ~(NF_FACEX + NF_FACEY + NF_FACEZ);
+
+				//now set them
+
+				//x face
+				if (is_not_empty(idx) || (i > 0 && is_not_empty(idx - 1))) ngbrFlags[idx] |= NF_FACEX;
+				//y face
+				if (is_not_empty(idx) || (j > 0 && is_not_empty(idx - VEC<VType>::n.x))) ngbrFlags[idx] |= NF_FACEY;
+				//z face
+				if (is_not_empty(idx) || (k > 0 && is_not_empty(idx - VEC<VType>::n.x * VEC<VType>::n.y))) ngbrFlags[idx] |= NF_FACEZ;
+
+				//clear edge flags
+				ngbrFlags[idx] &= ~(NF_EDGEX + NF_EDGEY + NF_EDGEZ);
+
+				//now set them
+
+				//x edge
+				if (is_not_empty(idx) ||
+					(k > 0 && is_not_empty(idx - VEC<VType>::n.x * VEC<VType>::n.y)) ||
+					(j > 0 && is_not_empty(idx - VEC<VType>::n.x)) ||
+					(j > 0 && k > 0 && is_not_empty(idx - VEC<VType>::n.x * VEC<VType>::n.y - VEC<VType>::n.x))) ngbrFlags[idx] |= NF_EDGEX;
+
+				//y edge
+				if (is_not_empty(idx) ||
+					(k > 0 && is_not_empty(idx - VEC<VType>::n.x * VEC<VType>::n.y)) ||
+					(i > 0 && is_not_empty(idx - 1)) ||
+					(i > 0 && k > 0 && is_not_empty(idx - VEC<VType>::n.x * VEC<VType>::n.y - 1))) ngbrFlags[idx] |= NF_EDGEY;
+
+				//z edge
+				if (is_not_empty(idx) ||
+					(j > 0 && is_not_empty(idx - VEC<VType>::n.x)) ||
+					(i > 0 && is_not_empty(idx - 1)) ||
+					(i > 0 && j > 0 && is_not_empty(idx - VEC<VType>::n.x - 1))) ngbrFlags[idx] |= NF_EDGEZ;
+			}
+		}
+	}
+}
 
 //initialization method for neighbor flags : set flags at size VEC<VType>::n, counting neighbors etc.
 //Set empty cell values using information in linked_vec (keep same shape) - this must have same rectangle
@@ -699,8 +754,10 @@ template <typename VType>
 void VEC_VC<VType>::clear_cmbnd_flags(void)
 {
 #pragma omp parallel for
-	for (int idx = 0; idx < (int)ngbrFlags.size(); idx++)
-		ngbrFlags[idx] &= ~NF_CMBND;
+	for (int idx = 0; idx < (int)ngbrFlags2.size(); idx++)
+		ngbrFlags2[idx] &= ~NF2_CMBND;
+
+	cmbnd_conditions_set = false;
 }
 
 //mark cells included in this rectangle (absolute coordinates) to be skipped during some computations

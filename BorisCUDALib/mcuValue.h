@@ -3,7 +3,7 @@
 #include "cuObject.h"
 #include "mGPU.h"
 
-//mcu_val is used to simple types, and is just a container of cu_obj, one for each configured device
+//mcu_val is used to manage simple types, and is just a container of cu_obj, one for each configured device
 
 template <typename VType>
 class mcu_val

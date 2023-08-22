@@ -44,7 +44,7 @@ __device__ cuBReal cuVEC_VC<VType>::div_neu(int idx) const
 		}
 	}
 	//Is it a CMBND boundary? - if not then use homogeneous Neumann condition (differential zero at the boundary)
-	else if (ngbrFlags[idx] & NF_CMBNDX) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDX)) {
 
 		if (ngbrFlags[idx] & NF_NPX) div += (cuVEC<VType>::quantity[idx + 1].x - cuVEC<VType>::quantity[idx].x) / cuVEC<VType>::h.x;
 		if (ngbrFlags[idx] & NF_NNX) div += (cuVEC<VType>::quantity[idx].x - cuVEC<VType>::quantity[idx - 1].x) / cuVEC<VType>::h.x;
@@ -103,7 +103,7 @@ __device__ cuBReal cuVEC_VC<VType>::div_neu(int idx) const
 			else div += (cuVEC<VType>::quantity[idx].y - halo_val.y) / (2 * cuVEC<VType>::h.y);
 		}
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDY) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDY)) {
 
 		if (ngbrFlags[idx] & NF_NPY) div += (cuVEC<VType>::quantity[idx + cuVEC<VType>::n.x].y - cuVEC<VType>::quantity[idx].y) / cuVEC<VType>::h.y;
 		if (ngbrFlags[idx] & NF_NNY) div += (cuVEC<VType>::quantity[idx].y - cuVEC<VType>::quantity[idx - cuVEC<VType>::n.x].y) / cuVEC<VType>::h.y;
@@ -162,7 +162,7 @@ __device__ cuBReal cuVEC_VC<VType>::div_neu(int idx) const
 			else div += (cuVEC<VType>::quantity[idx].z - halo_val.z) / (2 * cuVEC<VType>::h.z);
 		}
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDZ) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDZ)) {
 
 		if (ngbrFlags[idx] & NF_NPZ) div += (cuVEC<VType>::quantity[idx + cuVEC<VType>::n.x*cuVEC<VType>::n.y].z - cuVEC<VType>::quantity[idx].z) / cuVEC<VType>::h.z;
 		if (ngbrFlags[idx] & NF_NNZ) div += (cuVEC<VType>::quantity[idx].z - cuVEC<VType>::quantity[idx - cuVEC<VType>::n.x*cuVEC<VType>::n.y].z) / cuVEC<VType>::h.z;
@@ -238,7 +238,7 @@ __device__ cuBReal cuVEC_VC<VType>::div_nneu(int idx, const Class_BDiff& bdiff_c
 		}
 	}
 	//Is it a CMBND boundary? - if not then use homogeneous Neumann condition (differential zero at the boundary)
-	else if (ngbrFlags[idx] & NF_CMBNDX) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDX)) {
 
 		if (ngbrFlags[idx] & NF_NPX) div += (cuVEC<VType>::quantity[idx + 1].x - cuVEC<VType>::quantity[idx].x) / cuVEC<VType>::h.x;
 		if (ngbrFlags[idx] & NF_NNX) div += (cuVEC<VType>::quantity[idx].x - cuVEC<VType>::quantity[idx - 1].x) / cuVEC<VType>::h.x;
@@ -299,7 +299,7 @@ __device__ cuBReal cuVEC_VC<VType>::div_nneu(int idx, const Class_BDiff& bdiff_c
 			else div += ((cuVEC<VType>::quantity[idx].y - halo_val.y) / cuVEC<VType>::h.y + bdiff_class.bdiff(idx).y.y) / 2;
 		}
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDY) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDY)) {
 
 		if (ngbrFlags[idx] & NF_NPY) div += (cuVEC<VType>::quantity[idx + cuVEC<VType>::n.x].y - cuVEC<VType>::quantity[idx].y) / cuVEC<VType>::h.y;
 		if (ngbrFlags[idx] & NF_NNY) div += (cuVEC<VType>::quantity[idx].y - cuVEC<VType>::quantity[idx - cuVEC<VType>::n.x].y) / cuVEC<VType>::h.y;
@@ -360,7 +360,7 @@ __device__ cuBReal cuVEC_VC<VType>::div_nneu(int idx, const Class_BDiff& bdiff_c
 			else div += ((cuVEC<VType>::quantity[idx].z - halo_val.z) / cuVEC<VType>::h.z + bdiff_class.bdiff(idx).z.z) / 2;
 		}
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDZ) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDZ)) {
 
 		if (ngbrFlags[idx] & NF_NPZ) div += (cuVEC<VType>::quantity[idx + cuVEC<VType>::n.x*cuVEC<VType>::n.y].z - cuVEC<VType>::quantity[idx].z) / cuVEC<VType>::h.z;
 		if (ngbrFlags[idx] & NF_NNZ) div += (cuVEC<VType>::quantity[idx].z - cuVEC<VType>::quantity[idx - cuVEC<VType>::n.x*cuVEC<VType>::n.y].z) / cuVEC<VType>::h.z;
@@ -434,7 +434,7 @@ __device__ cuBReal cuVEC_VC<VType>::div_nneu(int idx, const cuVAL3<VType>& bdiff
 		}
 	}
 	//Is it a CMBND boundary? - if not then use homogeneous Neumann condition (differential zero at the boundary)
-	else if (ngbrFlags[idx] & NF_CMBNDX) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDX)) {
 
 		if (ngbrFlags[idx] & NF_NPX) div += (cuVEC<VType>::quantity[idx + 1].x - cuVEC<VType>::quantity[idx].x) / cuVEC<VType>::h.x;
 		if (ngbrFlags[idx] & NF_NNX) div += (cuVEC<VType>::quantity[idx].x - cuVEC<VType>::quantity[idx - 1].x) / cuVEC<VType>::h.x;
@@ -493,7 +493,7 @@ __device__ cuBReal cuVEC_VC<VType>::div_nneu(int idx, const cuVAL3<VType>& bdiff
 			else div += ((cuVEC<VType>::quantity[idx].y - halo_val.y) / cuVEC<VType>::h.y + bdiff.y.y) / 2;
 		}
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDY) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDY)) {
 
 		if (ngbrFlags[idx] & NF_NPY) div += (cuVEC<VType>::quantity[idx + cuVEC<VType>::n.x].y - cuVEC<VType>::quantity[idx].y) / cuVEC<VType>::h.y;
 		if (ngbrFlags[idx] & NF_NNY) div += (cuVEC<VType>::quantity[idx].y - cuVEC<VType>::quantity[idx - cuVEC<VType>::n.x].y) / cuVEC<VType>::h.y;
@@ -552,7 +552,7 @@ __device__ cuBReal cuVEC_VC<VType>::div_nneu(int idx, const cuVAL3<VType>& bdiff
 			else div += ((cuVEC<VType>::quantity[idx].z - halo_val.z) / cuVEC<VType>::h.z + bdiff.z.z) / 2;
 		}
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDZ) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDZ)) {
 
 		if (ngbrFlags[idx] & NF_NPZ) div += (cuVEC<VType>::quantity[idx + cuVEC<VType>::n.x*cuVEC<VType>::n.y].z - cuVEC<VType>::quantity[idx].z) / cuVEC<VType>::h.z;
 		if (ngbrFlags[idx] & NF_NNZ) div += (cuVEC<VType>::quantity[idx].z - cuVEC<VType>::quantity[idx - cuVEC<VType>::n.x*cuVEC<VType>::n.y].z) / cuVEC<VType>::h.z;
@@ -634,7 +634,7 @@ __device__ cuBReal cuVEC_VC<VType>::div_diri(int idx) const
 		else								 div += (2 * get_dirichlet_value(NF2_DIRICHLETNX, idx).x - cuVEC<VType>::quantity[idx].x - cuVEC<VType>::quantity[idx - 1].x) / (2 * cuVEC<VType>::h.x);
 	}
 	//Not Dirichlet, is it a CMBND boundary? - if not this either then use homogeneous Neumann condition
-	else if (ngbrFlags[idx] & NF_CMBNDX) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDX)) {
 
 		if (ngbrFlags[idx] & NF_NPX) div += (cuVEC<VType>::quantity[idx + 1].x - cuVEC<VType>::quantity[idx].x) / cuVEC<VType>::h.x;
 		if (ngbrFlags[idx] & NF_NNX) div += (cuVEC<VType>::quantity[idx].x - cuVEC<VType>::quantity[idx - 1].x) / cuVEC<VType>::h.x;
@@ -698,7 +698,7 @@ __device__ cuBReal cuVEC_VC<VType>::div_diri(int idx) const
 		if (ngbrFlags2[idx] & NF2_DIRICHLETPY) div += (cuVEC<VType>::quantity[idx + cuVEC<VType>::n.x].y + cuVEC<VType>::quantity[idx].y - 2 * get_dirichlet_value(NF2_DIRICHLETPY, idx).y) / (2 * cuVEC<VType>::h.y);
 		else								 div += (2 * get_dirichlet_value(NF2_DIRICHLETNY, idx).y - cuVEC<VType>::quantity[idx].y - cuVEC<VType>::quantity[idx - cuVEC<VType>::n.x].y) / (2 * cuVEC<VType>::h.y);
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDY) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDY)) {
 
 		if (ngbrFlags[idx] & NF_NPY) div += (cuVEC<VType>::quantity[idx + cuVEC<VType>::n.x].y - cuVEC<VType>::quantity[idx].y) / cuVEC<VType>::h.y;
 		if (ngbrFlags[idx] & NF_NNY) div += (cuVEC<VType>::quantity[idx].y - cuVEC<VType>::quantity[idx - cuVEC<VType>::n.x].y) / cuVEC<VType>::h.y;
@@ -762,7 +762,7 @@ __device__ cuBReal cuVEC_VC<VType>::div_diri(int idx) const
 		if (ngbrFlags2[idx] & NF2_DIRICHLETPZ) div += (cuVEC<VType>::quantity[idx + cuVEC<VType>::n.x*cuVEC<VType>::n.y].z + cuVEC<VType>::quantity[idx].z - 2 * get_dirichlet_value(NF2_DIRICHLETPZ, idx).z) / (2 * cuVEC<VType>::h.z);
 		else								 div += (2 * get_dirichlet_value(NF2_DIRICHLETNZ, idx).z - cuVEC<VType>::quantity[idx].z - cuVEC<VType>::quantity[idx - cuVEC<VType>::n.x*cuVEC<VType>::n.y].z) / (2 * cuVEC<VType>::h.z);
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDZ) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDZ)) {
 
 		if (ngbrFlags[idx] & NF_NPZ) div += (cuVEC<VType>::quantity[idx + cuVEC<VType>::n.x*cuVEC<VType>::n.y].z - cuVEC<VType>::quantity[idx].z) / cuVEC<VType>::h.z;
 		if (ngbrFlags[idx] & NF_NNZ) div += (cuVEC<VType>::quantity[idx].z - cuVEC<VType>::quantity[idx - cuVEC<VType>::n.x*cuVEC<VType>::n.y].z) / cuVEC<VType>::h.z;
@@ -844,7 +844,7 @@ __device__ cuBReal cuVEC_VC<VType>::div_diri_nneu(int idx, const Class_BDiff& bd
 		else								 div += (2 * get_dirichlet_value(NF2_DIRICHLETNX, idx).x - cuVEC<VType>::quantity[idx].x - cuVEC<VType>::quantity[idx - 1].x) / (2 * cuVEC<VType>::h.x);
 	}
 	//Not Dirichlet, is it a CMBND boundary? - if not this either then use homogeneous Neumann condition
-	else if (ngbrFlags[idx] & NF_CMBNDX) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDX)) {
 
 		if (ngbrFlags[idx] & NF_NPX) div += (cuVEC<VType>::quantity[idx + 1].x - cuVEC<VType>::quantity[idx].x) / cuVEC<VType>::h.x;
 		if (ngbrFlags[idx] & NF_NNX) div += (cuVEC<VType>::quantity[idx].x - cuVEC<VType>::quantity[idx - 1].x) / cuVEC<VType>::h.x;
@@ -910,7 +910,7 @@ __device__ cuBReal cuVEC_VC<VType>::div_diri_nneu(int idx, const Class_BDiff& bd
 		if (ngbrFlags2[idx] & NF2_DIRICHLETPY) div += (cuVEC<VType>::quantity[idx + cuVEC<VType>::n.x].y + cuVEC<VType>::quantity[idx].y - 2 * get_dirichlet_value(NF2_DIRICHLETPY, idx).y) / (2 * cuVEC<VType>::h.y);
 		else								 div += (2 * get_dirichlet_value(NF2_DIRICHLETNY, idx).y - cuVEC<VType>::quantity[idx].y - cuVEC<VType>::quantity[idx - cuVEC<VType>::n.x].y) / (2 * cuVEC<VType>::h.y);
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDY) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDY)) {
 
 		if (ngbrFlags[idx] & NF_NPY) div += (cuVEC<VType>::quantity[idx + cuVEC<VType>::n.x].y - cuVEC<VType>::quantity[idx].y) / cuVEC<VType>::h.y;
 		if (ngbrFlags[idx] & NF_NNY) div += (cuVEC<VType>::quantity[idx].y - cuVEC<VType>::quantity[idx - cuVEC<VType>::n.x].y) / cuVEC<VType>::h.y;
@@ -976,7 +976,7 @@ __device__ cuBReal cuVEC_VC<VType>::div_diri_nneu(int idx, const Class_BDiff& bd
 		if (ngbrFlags2[idx] & NF2_DIRICHLETPZ) div += (cuVEC<VType>::quantity[idx + cuVEC<VType>::n.x*cuVEC<VType>::n.y].z + cuVEC<VType>::quantity[idx].z - 2 * get_dirichlet_value(NF2_DIRICHLETPZ, idx).z) / (2 * cuVEC<VType>::h.z);
 		else								 div += (2 * get_dirichlet_value(NF2_DIRICHLETNZ, idx).z - cuVEC<VType>::quantity[idx].z - cuVEC<VType>::quantity[idx - cuVEC<VType>::n.x*cuVEC<VType>::n.y].z) / (2 * cuVEC<VType>::h.z);
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDZ) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDZ)) {
 
 		if (ngbrFlags[idx] & NF_NPZ) div += (cuVEC<VType>::quantity[idx + cuVEC<VType>::n.x*cuVEC<VType>::n.y].z - cuVEC<VType>::quantity[idx].z) / cuVEC<VType>::h.z;
 		if (ngbrFlags[idx] & NF_NNZ) div += (cuVEC<VType>::quantity[idx].z - cuVEC<VType>::quantity[idx - cuVEC<VType>::n.x*cuVEC<VType>::n.y].z) / cuVEC<VType>::h.z;
@@ -1056,7 +1056,7 @@ __device__ cuBReal cuVEC_VC<VType>::div_diri_nneu(int idx, const cuVAL3<VType>& 
 		else								 div += (2 * get_dirichlet_value(NF2_DIRICHLETNX, idx).x - cuVEC<VType>::quantity[idx].x - cuVEC<VType>::quantity[idx - 1].x) / (2 * cuVEC<VType>::h.x);
 	}
 	//Not Dirichlet, is it a CMBND boundary? - if not this either then use homogeneous Neumann condition
-	else if (ngbrFlags[idx] & NF_CMBNDX) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDX)) {
 
 		if (ngbrFlags[idx] & NF_NPX) div += (cuVEC<VType>::quantity[idx + 1].x - cuVEC<VType>::quantity[idx].x) / cuVEC<VType>::h.x;
 		if (ngbrFlags[idx] & NF_NNX) div += (cuVEC<VType>::quantity[idx].x - cuVEC<VType>::quantity[idx - 1].x) / cuVEC<VType>::h.x;
@@ -1120,7 +1120,7 @@ __device__ cuBReal cuVEC_VC<VType>::div_diri_nneu(int idx, const cuVAL3<VType>& 
 		if (ngbrFlags2[idx] & NF2_DIRICHLETPY) div += (cuVEC<VType>::quantity[idx + cuVEC<VType>::n.x].y + cuVEC<VType>::quantity[idx].y - 2 * get_dirichlet_value(NF2_DIRICHLETPY, idx).y) / (2 * cuVEC<VType>::h.y);
 		else								 div += (2 * get_dirichlet_value(NF2_DIRICHLETNY, idx).y - cuVEC<VType>::quantity[idx].y - cuVEC<VType>::quantity[idx - cuVEC<VType>::n.x].y) / (2 * cuVEC<VType>::h.y);
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDY) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDY)) {
 
 		if (ngbrFlags[idx] & NF_NPY) div += (cuVEC<VType>::quantity[idx + cuVEC<VType>::n.x].y - cuVEC<VType>::quantity[idx].y) / cuVEC<VType>::h.y;
 		if (ngbrFlags[idx] & NF_NNY) div += (cuVEC<VType>::quantity[idx].y - cuVEC<VType>::quantity[idx - cuVEC<VType>::n.x].y) / cuVEC<VType>::h.y;
@@ -1184,7 +1184,7 @@ __device__ cuBReal cuVEC_VC<VType>::div_diri_nneu(int idx, const cuVAL3<VType>& 
 		if (ngbrFlags2[idx] & NF2_DIRICHLETPZ) div += (cuVEC<VType>::quantity[idx + cuVEC<VType>::n.x*cuVEC<VType>::n.y].z + cuVEC<VType>::quantity[idx].z - 2 * get_dirichlet_value(NF2_DIRICHLETPZ, idx).z) / (2 * cuVEC<VType>::h.z);
 		else								 div += (2 * get_dirichlet_value(NF2_DIRICHLETNZ, idx).z - cuVEC<VType>::quantity[idx].z - cuVEC<VType>::quantity[idx - cuVEC<VType>::n.x*cuVEC<VType>::n.y].z) / (2 * cuVEC<VType>::h.z);
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDZ) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDZ)) {
 
 		if (ngbrFlags[idx] & NF_NPZ) div += (cuVEC<VType>::quantity[idx + cuVEC<VType>::n.x*cuVEC<VType>::n.y].z - cuVEC<VType>::quantity[idx].z) / cuVEC<VType>::h.z;
 		if (ngbrFlags[idx] & NF_NNZ) div += (cuVEC<VType>::quantity[idx].z - cuVEC<VType>::quantity[idx - cuVEC<VType>::n.x*cuVEC<VType>::n.y].z) / cuVEC<VType>::h.z;
@@ -1443,7 +1443,7 @@ __device__ VType cuVEC_VC<VType>::diveps3_neu(int idx) const
 		}
 	}
 	//Is it a CMBND boundary? - if not then use homogeneous Neumann condition (differential zero at the boundary)
-	else if (ngbrFlags[idx] & NF_CMBNDX) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDX)) {
 
 		if (ngbrFlags[idx] & NF_NPX) diffx = (cuVEC<VType>::quantity[idx + 1] - cuVEC<VType>::quantity[idx]) / cuVEC<VType>::h.x;
 		if (ngbrFlags[idx] & NF_NNX) diffx = (cuVEC<VType>::quantity[idx] - cuVEC<VType>::quantity[idx - 1]) / cuVEC<VType>::h.x;
@@ -1502,7 +1502,7 @@ __device__ VType cuVEC_VC<VType>::diveps3_neu(int idx) const
 			else diffy = (cuVEC<VType>::quantity[idx] - halo_val) / (2 * cuVEC<VType>::h.y);
 		}
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDY) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDY)) {
 
 		if (ngbrFlags[idx] & NF_NPY) diffy = (cuVEC<VType>::quantity[idx + cuVEC<VType>::n.x] - cuVEC<VType>::quantity[idx]) / cuVEC<VType>::h.y;
 		if (ngbrFlags[idx] & NF_NNY) diffy = (cuVEC<VType>::quantity[idx] - cuVEC<VType>::quantity[idx - cuVEC<VType>::n.x]) / cuVEC<VType>::h.y;
@@ -1561,7 +1561,7 @@ __device__ VType cuVEC_VC<VType>::diveps3_neu(int idx) const
 			else diffz = (cuVEC<VType>::quantity[idx] - halo_val) / (2 * cuVEC<VType>::h.z);
 		}
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDZ) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDZ)) {
 
 		if (ngbrFlags[idx] & NF_NPZ) diffz = (cuVEC<VType>::quantity[idx + cuVEC<VType>::n.x*cuVEC<VType>::n.y] - cuVEC<VType>::quantity[idx]) / cuVEC<VType>::h.z;
 		if (ngbrFlags[idx] & NF_NNZ) diffz = (cuVEC<VType>::quantity[idx] - cuVEC<VType>::quantity[idx - cuVEC<VType>::n.x*cuVEC<VType>::n.y]) / cuVEC<VType>::h.z;
@@ -1648,7 +1648,7 @@ __device__ VType cuVEC_VC<VType>::diveps3_diri(int idx) const
 		else								 diffx = (2 * get_dirichlet_value(NF2_DIRICHLETNX, idx) - cuVEC<VType>::quantity[idx] - cuVEC<VType>::quantity[idx - 1]) / (2 * cuVEC<VType>::h.x);
 	}
 	//Not Dirichlet, is it a CMBND boundary? - if not this either then use homogeneous Neumann condition
-	else if (ngbrFlags[idx] & NF_CMBNDX) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDX)) {
 
 		if (ngbrFlags[idx] & NF_NPX) diffx = (cuVEC<VType>::quantity[idx + 1] - cuVEC<VType>::quantity[idx]) / cuVEC<VType>::h.x;
 		if (ngbrFlags[idx] & NF_NNX) diffx = (cuVEC<VType>::quantity[idx] - cuVEC<VType>::quantity[idx - 1]) / cuVEC<VType>::h.x;
@@ -1712,7 +1712,7 @@ __device__ VType cuVEC_VC<VType>::diveps3_diri(int idx) const
 		if (ngbrFlags2[idx] & NF2_DIRICHLETPY) diffy = (cuVEC<VType>::quantity[idx + cuVEC<VType>::n.x] + cuVEC<VType>::quantity[idx] - 2 * get_dirichlet_value(NF2_DIRICHLETPY, idx)) / (2 * cuVEC<VType>::h.y);
 		else								 diffy = (2 * get_dirichlet_value(NF2_DIRICHLETNY, idx) - cuVEC<VType>::quantity[idx] - cuVEC<VType>::quantity[idx - cuVEC<VType>::n.x]) / (2 * cuVEC<VType>::h.y);
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDY) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDY)) {
 
 		if (ngbrFlags[idx] & NF_NPY) diffy = (cuVEC<VType>::quantity[idx + cuVEC<VType>::n.x] - cuVEC<VType>::quantity[idx]) / cuVEC<VType>::h.y;
 		if (ngbrFlags[idx] & NF_NNY) diffy = (cuVEC<VType>::quantity[idx] - cuVEC<VType>::quantity[idx - cuVEC<VType>::n.x]) / cuVEC<VType>::h.y;
@@ -1776,7 +1776,7 @@ __device__ VType cuVEC_VC<VType>::diveps3_diri(int idx) const
 		if (ngbrFlags2[idx] & NF2_DIRICHLETPZ) diffz = (cuVEC<VType>::quantity[idx + cuVEC<VType>::n.x*cuVEC<VType>::n.y] + cuVEC<VType>::quantity[idx] - 2 * get_dirichlet_value(NF2_DIRICHLETPZ, idx)) / (2 * cuVEC<VType>::h.z);
 		else								 diffz = (2 * get_dirichlet_value(NF2_DIRICHLETNZ, idx) - cuVEC<VType>::quantity[idx] - cuVEC<VType>::quantity[idx - cuVEC<VType>::n.x*cuVEC<VType>::n.y]) / (2 * cuVEC<VType>::h.z);
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDZ) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDZ)) {
 
 		if (ngbrFlags[idx] & NF_NPZ) diffz = (cuVEC<VType>::quantity[idx + cuVEC<VType>::n.x*cuVEC<VType>::n.y] - cuVEC<VType>::quantity[idx]) / cuVEC<VType>::h.z;
 		if (ngbrFlags[idx] & NF_NNZ) diffz = (cuVEC<VType>::quantity[idx] - cuVEC<VType>::quantity[idx - cuVEC<VType>::n.x*cuVEC<VType>::n.y]) / cuVEC<VType>::h.z;

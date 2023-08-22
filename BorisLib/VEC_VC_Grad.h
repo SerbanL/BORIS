@@ -20,7 +20,7 @@ VAL3<VType> VEC_VC<VType>::grad_neu(int idx) const
 		diff.x = (VEC<VType>::quantity[idx + 1] - VEC<VType>::quantity[idx - 1]) / (2 * VEC<VType>::h.x);
 	}
 	//Is it a CMBND boundary? - if not then use homogeneous Neumann condition (differential zero at the boundary)
-	else if (ngbrFlags[idx] & NF_CMBNDX) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDX)) {
 
 		if (ngbrFlags[idx] & NF_NPX) diff.x = (VEC<VType>::quantity[idx + 1] - VEC<VType>::quantity[idx]) / VEC<VType>::h.x;
 		else if (ngbrFlags[idx] & NF_NNX) diff.x = (VEC<VType>::quantity[idx] - VEC<VType>::quantity[idx - 1]) / VEC<VType>::h.x;
@@ -58,7 +58,7 @@ VAL3<VType> VEC_VC<VType>::grad_neu(int idx) const
 
 		diff.y = (VEC<VType>::quantity[idx + VEC<VType>::n.x] - VEC<VType>::quantity[idx - VEC<VType>::n.x]) / (2 * VEC<VType>::h.y);
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDY) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDY)) {
 
 		if (ngbrFlags[idx] & NF_NPY) diff.y = (VEC<VType>::quantity[idx + VEC<VType>::n.x] - VEC<VType>::quantity[idx]) / VEC<VType>::h.y;
 		else if (ngbrFlags[idx] & NF_NNY) diff.y = (VEC<VType>::quantity[idx] - VEC<VType>::quantity[idx - VEC<VType>::n.x]) / VEC<VType>::h.y;
@@ -96,7 +96,7 @@ VAL3<VType> VEC_VC<VType>::grad_neu(int idx) const
 
 		diff.z = (VEC<VType>::quantity[idx + VEC<VType>::n.x * VEC<VType>::n.y] - VEC<VType>::quantity[idx - VEC<VType>::n.x * VEC<VType>::n.y]) / (2 * VEC<VType>::h.z);
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDZ) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDZ)) {
 
 		if (ngbrFlags[idx] & NF_NPZ) diff.z = (VEC<VType>::quantity[idx + VEC<VType>::n.x * VEC<VType>::n.y] - VEC<VType>::quantity[idx]) / VEC<VType>::h.z;
 		else if (ngbrFlags[idx] & NF_NNZ) diff.z = (VEC<VType>::quantity[idx] - VEC<VType>::quantity[idx - VEC<VType>::n.x * VEC<VType>::n.y]) / VEC<VType>::h.z;
@@ -149,7 +149,7 @@ VAL3<VType> VEC_VC<VType>::grad_nneu(int idx, const VAL3<VType>& bdiff) const
 		diff.x = (VEC<VType>::quantity[idx + 1] - VEC<VType>::quantity[idx - 1]) / (2 * VEC<VType>::h.x);
 	}
 	//Is it a CMBND boundary? - if not then use non-homogeneous Neumann condition
-	else if (ngbrFlags[idx] & NF_CMBNDX) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDX)) {
 
 		if (ngbrFlags[idx] & NF_NPX) diff.x = (VEC<VType>::quantity[idx + 1] - VEC<VType>::quantity[idx]) / VEC<VType>::h.x;
 		else if (ngbrFlags[idx] & NF_NNX) diff.x = (VEC<VType>::quantity[idx] - VEC<VType>::quantity[idx - 1]) / VEC<VType>::h.x;
@@ -187,7 +187,7 @@ VAL3<VType> VEC_VC<VType>::grad_nneu(int idx, const VAL3<VType>& bdiff) const
 
 		diff.y = (VEC<VType>::quantity[idx + VEC<VType>::n.x] - VEC<VType>::quantity[idx - VEC<VType>::n.x]) / (2 * VEC<VType>::h.y);
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDY) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDY)) {
 
 		if (ngbrFlags[idx] & NF_NPY) diff.y = (VEC<VType>::quantity[idx + VEC<VType>::n.x] - VEC<VType>::quantity[idx]) / VEC<VType>::h.y;
 		else if (ngbrFlags[idx] & NF_NNY) diff.y = (VEC<VType>::quantity[idx] - VEC<VType>::quantity[idx - VEC<VType>::n.x]) / VEC<VType>::h.y;
@@ -225,7 +225,7 @@ VAL3<VType> VEC_VC<VType>::grad_nneu(int idx, const VAL3<VType>& bdiff) const
 
 		diff.z = (VEC<VType>::quantity[idx + VEC<VType>::n.x * VEC<VType>::n.y] - VEC<VType>::quantity[idx - VEC<VType>::n.x * VEC<VType>::n.y]) / (2 * VEC<VType>::h.z);
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDZ) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDZ)) {
 
 		if (ngbrFlags[idx] & NF_NPZ) diff.z = (VEC<VType>::quantity[idx + VEC<VType>::n.x * VEC<VType>::n.y] - VEC<VType>::quantity[idx]) / VEC<VType>::h.z;
 		else if (ngbrFlags[idx] & NF_NNZ) diff.z = (VEC<VType>::quantity[idx] - VEC<VType>::quantity[idx - VEC<VType>::n.x * VEC<VType>::n.y]) / VEC<VType>::h.z;
@@ -283,7 +283,7 @@ VAL3<VType> VEC_VC<VType>::grad_diri(int idx) const
 		else								   diff.x = (2 * get_dirichlet_value(NF2_DIRICHLETNX, idx) - VEC<VType>::quantity[idx] - VEC<VType>::quantity[idx - 1]) / (2 * VEC<VType>::h.x);
 	}
 	//Not Dirichlet, is it a CMBND boundary? - if not this either then use homogeneous Neumann condition
-	else if (ngbrFlags[idx] & NF_CMBNDX) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDX)) {
 
 		if (ngbrFlags[idx] & NF_NPX) diff.x = (VEC<VType>::quantity[idx + 1] - VEC<VType>::quantity[idx]) / VEC<VType>::h.x;
 		else if (ngbrFlags[idx] & NF_NNX) diff.x = (VEC<VType>::quantity[idx] - VEC<VType>::quantity[idx - 1]) / VEC<VType>::h.x;
@@ -326,7 +326,7 @@ VAL3<VType> VEC_VC<VType>::grad_diri(int idx) const
 		if (ngbrFlags2[idx] & NF2_DIRICHLETPY) diff.y = (VEC<VType>::quantity[idx + VEC<VType>::n.x] + VEC<VType>::quantity[idx] - 2 * get_dirichlet_value(NF2_DIRICHLETPY, idx)) / (2 * VEC<VType>::h.y);
 		else								 diff.y = (2 * get_dirichlet_value(NF2_DIRICHLETNY, idx) - VEC<VType>::quantity[idx] - VEC<VType>::quantity[idx - VEC<VType>::n.x]) / (2 * VEC<VType>::h.y);
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDY) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDY)) {
 
 		if (ngbrFlags[idx] & NF_NPY) diff.y = (VEC<VType>::quantity[idx + VEC<VType>::n.x] - VEC<VType>::quantity[idx]) / VEC<VType>::h.y;
 		else if (ngbrFlags[idx] & NF_NNY) diff.y = (VEC<VType>::quantity[idx] - VEC<VType>::quantity[idx - VEC<VType>::n.x]) / VEC<VType>::h.y;
@@ -369,7 +369,7 @@ VAL3<VType> VEC_VC<VType>::grad_diri(int idx) const
 		if (ngbrFlags2[idx] & NF2_DIRICHLETPZ) diff.z = (VEC<VType>::quantity[idx + VEC<VType>::n.x * VEC<VType>::n.y] + VEC<VType>::quantity[idx] - 2 * get_dirichlet_value(NF2_DIRICHLETPZ, idx)) / (2 * VEC<VType>::h.z);
 		else								 diff.z = (2 * get_dirichlet_value(NF2_DIRICHLETNZ, idx) - VEC<VType>::quantity[idx] - VEC<VType>::quantity[idx - VEC<VType>::n.x * VEC<VType>::n.y]) / (2 * VEC<VType>::h.z);
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDZ) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDZ)) {
 
 		if (ngbrFlags[idx] & NF_NPZ) diff.z = (VEC<VType>::quantity[idx + VEC<VType>::n.x * VEC<VType>::n.y] - VEC<VType>::quantity[idx]) / VEC<VType>::h.z;
 		else if (ngbrFlags[idx] & NF_NNZ) diff.z = (VEC<VType>::quantity[idx] - VEC<VType>::quantity[idx - VEC<VType>::n.x * VEC<VType>::n.y]) / VEC<VType>::h.z;
@@ -428,7 +428,7 @@ VAL3<VType> VEC_VC<VType>::grad_diri_nneu(int idx, const VAL3<VType>& bdiff) con
 		else								   diff.x = (2 * get_dirichlet_value(NF2_DIRICHLETNX, idx) - VEC<VType>::quantity[idx] - VEC<VType>::quantity[idx - 1]) / (2 * VEC<VType>::h.x);
 	}
 	//Not Dirichlet, is it a CMBND boundary? - if not this either then use homogeneous Neumann condition
-	else if (ngbrFlags[idx] & NF_CMBNDX) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDX)) {
 
 		if (ngbrFlags[idx] & NF_NPX) diff.x = (VEC<VType>::quantity[idx + 1] - VEC<VType>::quantity[idx]) / VEC<VType>::h.x;
 		else if (ngbrFlags[idx] & NF_NNX) diff.x = (VEC<VType>::quantity[idx] - VEC<VType>::quantity[idx - 1]) / VEC<VType>::h.x;
@@ -471,7 +471,7 @@ VAL3<VType> VEC_VC<VType>::grad_diri_nneu(int idx, const VAL3<VType>& bdiff) con
 		if (ngbrFlags2[idx] & NF2_DIRICHLETPY) diff.y = (VEC<VType>::quantity[idx + VEC<VType>::n.x] + VEC<VType>::quantity[idx] - 2 * get_dirichlet_value(NF2_DIRICHLETPY, idx)) / (2 * VEC<VType>::h.y);
 		else								 diff.y = (2 * get_dirichlet_value(NF2_DIRICHLETNY, idx) - VEC<VType>::quantity[idx] - VEC<VType>::quantity[idx - VEC<VType>::n.x]) / (2 * VEC<VType>::h.y);
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDY) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDY)) {
 
 		if (ngbrFlags[idx] & NF_NPY) diff.y = (VEC<VType>::quantity[idx + VEC<VType>::n.x] - VEC<VType>::quantity[idx]) / VEC<VType>::h.y;
 		else if (ngbrFlags[idx] & NF_NNY) diff.y = (VEC<VType>::quantity[idx] - VEC<VType>::quantity[idx - VEC<VType>::n.x]) / VEC<VType>::h.y;
@@ -514,7 +514,7 @@ VAL3<VType> VEC_VC<VType>::grad_diri_nneu(int idx, const VAL3<VType>& bdiff) con
 		if (ngbrFlags2[idx] & NF2_DIRICHLETPZ) diff.z = (VEC<VType>::quantity[idx + VEC<VType>::n.x * VEC<VType>::n.y] + VEC<VType>::quantity[idx] - 2 * get_dirichlet_value(NF2_DIRICHLETPZ, idx)) / (2 * VEC<VType>::h.z);
 		else								 diff.z = (2 * get_dirichlet_value(NF2_DIRICHLETNZ, idx) - VEC<VType>::quantity[idx] - VEC<VType>::quantity[idx - VEC<VType>::n.x * VEC<VType>::n.y]) / (2 * VEC<VType>::h.z);
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDZ) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDZ)) {
 
 		if (ngbrFlags[idx] & NF_NPZ) diff.z = (VEC<VType>::quantity[idx + VEC<VType>::n.x * VEC<VType>::n.y] - VEC<VType>::quantity[idx]) / VEC<VType>::h.z;
 		else if (ngbrFlags[idx] & NF_NNZ) diff.z = (VEC<VType>::quantity[idx] - VEC<VType>::quantity[idx - VEC<VType>::n.x * VEC<VType>::n.y]) / VEC<VType>::h.z;

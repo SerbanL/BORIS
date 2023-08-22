@@ -19,7 +19,7 @@ VType VEC_VC<VType>::delsq_neu(int idx) const
 		//both neighbors available so must be an inner point along this direction
 		diff_x = (VEC<VType>::quantity[idx + 1] + VEC<VType>::quantity[idx - 1] - 2 * VEC<VType>::quantity[idx]);
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDX) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDX)) {
 
 		diff_x = 0;
 	}
@@ -58,7 +58,7 @@ VType VEC_VC<VType>::delsq_neu(int idx) const
 
 		diff_y = (VEC<VType>::quantity[idx + VEC<VType>::n.x] + VEC<VType>::quantity[idx - VEC<VType>::n.x] - 2 * VEC<VType>::quantity[idx]);
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDY) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDY)) {
 
 		diff_y = 0;
 	}
@@ -97,7 +97,7 @@ VType VEC_VC<VType>::delsq_neu(int idx) const
 
 		diff_z = (VEC<VType>::quantity[idx + VEC<VType>::n.x*VEC<VType>::n.y] + VEC<VType>::quantity[idx - VEC<VType>::n.x*VEC<VType>::n.y] - 2 * VEC<VType>::quantity[idx]);
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDZ) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDZ)) {
 
 		diff_z = 0;
 	}
@@ -150,7 +150,7 @@ VType VEC_VC<VType>::delsq_nneu(int idx, const VAL3<VType>& bdiff) const
 		//both neighbors available so must be an inner point along this direction
 		diff_x = (VEC<VType>::quantity[idx + 1] + VEC<VType>::quantity[idx - 1] - 2 * VEC<VType>::quantity[idx]);
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDX) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDX)) {
 
 		diff_x = 0;
 	}
@@ -189,7 +189,7 @@ VType VEC_VC<VType>::delsq_nneu(int idx, const VAL3<VType>& bdiff) const
 
 		diff_y = (VEC<VType>::quantity[idx + VEC<VType>::n.x] + VEC<VType>::quantity[idx - VEC<VType>::n.x] - 2 * VEC<VType>::quantity[idx]);
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDY) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDY)) {
 
 		diff_y = 0;
 	}
@@ -228,7 +228,7 @@ VType VEC_VC<VType>::delsq_nneu(int idx, const VAL3<VType>& bdiff) const
 
 		diff_z = (VEC<VType>::quantity[idx + VEC<VType>::n.x*VEC<VType>::n.y] + VEC<VType>::quantity[idx - VEC<VType>::n.x*VEC<VType>::n.y] - 2 * VEC<VType>::quantity[idx]);
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDZ) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDZ)) {
 
 		diff_z = 0;
 	}
@@ -280,7 +280,7 @@ VType VEC_VC<VType>::delsq_diri(int idx) const
 		//both neighbors available so must be an inner point along this direction
 		diff_x = (VEC<VType>::quantity[idx + 1] + VEC<VType>::quantity[idx - 1] - 2 * VEC<VType>::quantity[idx]);
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDX) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDX)) {
 
 		diff_x = 0;
 	}
@@ -327,7 +327,7 @@ VType VEC_VC<VType>::delsq_diri(int idx) const
 
 		diff_y = (VEC<VType>::quantity[idx + VEC<VType>::n.x] + VEC<VType>::quantity[idx - VEC<VType>::n.x] - 2 * VEC<VType>::quantity[idx]);
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDY) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDY)) {
 
 		diff_y = 0;
 	}
@@ -371,7 +371,7 @@ VType VEC_VC<VType>::delsq_diri(int idx) const
 
 		diff_z = (VEC<VType>::quantity[idx + VEC<VType>::n.x*VEC<VType>::n.y] + VEC<VType>::quantity[idx - VEC<VType>::n.x*VEC<VType>::n.y] - 2 * VEC<VType>::quantity[idx]);
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDZ) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDZ)) {
 
 		diff_z = 0;
 	}
@@ -429,7 +429,7 @@ VType VEC_VC<VType>::delsq_diri_nneu(int idx, const VAL3<VType>& bdiff) const
 		//both neighbors available so must be an inner point along this direction
 		diff_x = (VEC<VType>::quantity[idx + 1] + VEC<VType>::quantity[idx - 1] - 2 * VEC<VType>::quantity[idx]);
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDX) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDX)) {
 
 		diff_x = 0;
 	}
@@ -475,7 +475,7 @@ VType VEC_VC<VType>::delsq_diri_nneu(int idx, const VAL3<VType>& bdiff) const
 
 		diff_y = (VEC<VType>::quantity[idx + VEC<VType>::n.x] + VEC<VType>::quantity[idx - VEC<VType>::n.x] - 2 * VEC<VType>::quantity[idx]);
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDY) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDY)) {
 
 		diff_y = 0;
 	}
@@ -519,7 +519,7 @@ VType VEC_VC<VType>::delsq_diri_nneu(int idx, const VAL3<VType>& bdiff) const
 
 		diff_z = (VEC<VType>::quantity[idx + VEC<VType>::n.x*VEC<VType>::n.y] + VEC<VType>::quantity[idx - VEC<VType>::n.x*VEC<VType>::n.y] - 2 * VEC<VType>::quantity[idx]);
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDZ) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDZ)) {
 
 		diff_z = 0;
 	}
@@ -575,7 +575,7 @@ VType VEC_VC<VType>::delsq_robin(int idx, double K) const
 		//both neighbors available so must be an inner point along this direction
 		diff_x = (VEC<VType>::quantity[idx + 1] + VEC<VType>::quantity[idx - 1] - 2 * VEC<VType>::quantity[idx]);
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDX) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDX)) {
 
 		diff_x = 0;
 	}
@@ -647,7 +647,7 @@ VType VEC_VC<VType>::delsq_robin(int idx, double K) const
 
 		diff_y = (VEC<VType>::quantity[idx + VEC<VType>::n.x] + VEC<VType>::quantity[idx - VEC<VType>::n.x] - 2 * VEC<VType>::quantity[idx]);
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDY) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDY)) {
 
 		diff_y = 0;
 	}
@@ -716,7 +716,7 @@ VType VEC_VC<VType>::delsq_robin(int idx, double K) const
 
 		diff_z = (VEC<VType>::quantity[idx + VEC<VType>::n.x*VEC<VType>::n.y] + VEC<VType>::quantity[idx - VEC<VType>::n.x*VEC<VType>::n.y] - 2 * VEC<VType>::quantity[idx]);
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDZ) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDZ)) {
 
 		diff_z = 0;
 	}

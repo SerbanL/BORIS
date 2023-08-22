@@ -74,11 +74,9 @@ public:
 	////////////////////////////////////// EQUATION STIMULUS
 
 	//from Fext_equation make the CUDA version
-	__host__ bool make_cuda_equation(TEquationCUDA<cuBReal, cuBReal, cuBReal>& Fext_equationCUDA, std::vector<std::vector< std::vector<EqComp::FSPEC> >> fspec)
+	__host__ void make_cuda_equation(TEquationCUDA<cuBReal, cuBReal, cuBReal>& Fext_equationCUDA)
 	{
-		bool success = Fext_equationCUDA.make_vector(fspec);
-
-		if (success) {
+		if (Fext_equationCUDA.is_set()) {
 
 			set_gpu_value(pFext_equation_x, Fext_equationCUDA.get_pcu_obj_x()->get_managed_object());
 			set_gpu_value(pFext_equation_y, Fext_equationCUDA.get_pcu_obj_y()->get_managed_object());
@@ -92,8 +90,6 @@ public:
 			nullgpuptr(pFext_equation_y);
 			nullgpuptr(pFext_equation_z);
 		}
-
-		return success;
 	}
 
 	////////////////////////////////////// FIXED STIMULUS

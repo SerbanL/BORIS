@@ -35,7 +35,7 @@ BError SHeat::Initialize(void)
 	//needed by global temperature shift algorithm
 	globalTemp_last_time = pSMesh->GetTime();
 
-	//check meshes to set heat boundary flags (NF_CMBND flags for Temp)
+	//check meshes to set heat boundary flags (NF2_CMBND flags for Temp)
 
 	//clear everything then rebuild
 	pHeat.clear();

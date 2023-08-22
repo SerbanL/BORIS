@@ -89,6 +89,42 @@ std::pair<cuSZ3, cuSZ3> mcuVEC<VType, MType>::get_devices_n_values(cuSZ3 new_n)
 	return std::pair<cuSZ3, cuSZ3>(nd, ndl);
 }
 
+//same as above, but instead of calculating device dimensions, used the device_dimension passed in
+//this is used for special resizing mode where device dimensions are specified externally
+//note, the last device can differ in dimension as usual to make up any existing difference, thus device_dimension is set for all but possibly last one
+template <typename VType, typename MType>
+std::pair<cuSZ3, cuSZ3> mcuVEC<VType, MType>::get_devices_n_values(cuSZ3 new_n, cuSZ3 device_dimension)
+{
+	cuSZ3 nd, ndl;
+
+	//break up space along largest dimension, with z dimension as default
+	//the exception is if the mcuVEC is required to hold only one cell. This is a special case use where all devices will be assigned same point.
+	if (new_n == cuSZ3(1)) return std::pair<cuSZ3, cuSZ3>(cuSZ3(1), cuSZ3(1));
+
+	//along x
+	if (mGPU.get_subvec_axis() == 0 || (mGPU.get_subvec_axis() == -1 && new_n.x > new_n.y && new_n.x > new_n.z)) {
+
+		nd = cuSZ3(device_dimension.x, new_n.y, new_n.z);
+		if (new_n.x > nd.x * (mGPU.get_num_devices() - 1)) ndl = cuSZ3(new_n.x - nd.x * (mGPU.get_num_devices() - 1), new_n.y, new_n.z);
+	}
+
+	//along y
+	else if (mGPU.get_subvec_axis() == 1 || (mGPU.get_subvec_axis() == -1 && new_n.y > new_n.z)) {
+
+		nd = cuSZ3(new_n.x, device_dimension.y, new_n.z);
+		if (new_n.y - nd.y * (mGPU.get_num_devices() - 1)) ndl = cuSZ3(new_n.x, new_n.y - nd.y * (mGPU.get_num_devices() - 1), new_n.z);
+	}
+
+	//along z
+	else {
+
+		nd = cuSZ3(new_n.x, new_n.y, device_dimension.z);
+		if (new_n.z - nd.z * (mGPU.get_num_devices() - 1)) ndl = cuSZ3(new_n.x, new_n.y, new_n.z - nd.z * (mGPU.get_num_devices() - 1));
+	}
+
+	return std::pair<cuSZ3, cuSZ3>(nd, ndl);
+}
+
 //set origin value as rect.s in managed cuVECs - must be called whenever rect is changed
 template <typename VType, typename MType>
 void mcuVEC<VType, MType>::set_collection_origin(void)

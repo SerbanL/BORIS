@@ -41,6 +41,8 @@ BError STransportCUDA::Initialize(void)
 	//re-set cmbnd flags (also building contacts), as TMR initialization could have changed available cells in insulator meshes
 	for (int idx = 0; idx < (int)pSTrans->pTransport.size(); idx++) {
 		
+		//1. CMBND conditions
+
 		//build CMBND contacts and set flags for V
 		pSTrans->pV[idx]->set_cmbnd_flags(idx, pSTrans->pV);
 		if (!(*pV[idx]).copyflags_from_cpuvec(*pSTrans->pV[idx])) error(BERROR_GPUERROR_CRIT);
@@ -50,6 +52,17 @@ BError STransportCUDA::Initialize(void)
 
 			pSTrans->pS[idx]->set_cmbnd_flags(idx, pSTrans->pS);
 			if (!(*pS[idx]).copyflags_from_cpuvec(*pSTrans->pS[idx])) error(BERROR_GPUERROR_CRIT);
+		}
+
+		//2. Dirichlet conditions
+		//the above will have erased Dirichlet conditions, so need to set them
+		
+		//make sure all fixed potential cells are marked with dirichlet boundary conditions - clear first
+		pTransport[idx]->ClearFixedPotentialCells();
+
+		for (int el_idx = 0; el_idx < pSTrans->electrode_rects.size(); el_idx++) {
+
+			if (!pTransport[idx]->SetFixedPotentialCells(pSTrans->electrode_rects[el_idx], pSTrans->electrode_potentials[el_idx])) return error(BERROR_OUTOFGPUMEMORY_NCRIT);
 		}
 	}
 
@@ -100,7 +113,7 @@ BError STransportCUDA::UpdateConfiguration(UPDATECONFIG_ cfgMessage)
 		UPDATECONFIG_ODE_SOLVER)) {
 		
 		////////////////////////////////////////////////////////////////////////////
-		//check meshes to set transport boundary flags (NF_CMBND flags for V)
+		//check meshes to set transport boundary flags (NF2_CMBND flags for V)
 		////////////////////////////////////////////////////////////////////////////
 		
 		//clear everything then rebuild

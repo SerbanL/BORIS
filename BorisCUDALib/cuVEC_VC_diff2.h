@@ -45,7 +45,7 @@ __device__ VType cuVEC_VC<VType>::dxx_neu(int idx) const
 			else diff = (halo_val - cuVEC<VType>::quantity[idx]) / hsq;
 		}
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDX) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDX)) {
 
 		diff = 0;
 	}
@@ -115,7 +115,7 @@ __device__ VType cuVEC_VC<VType>::dyy_neu(int idx) const
 			else diff = (halo_val - cuVEC<VType>::quantity[idx]) / hsq;
 		}
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDY) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDY)) {
 
 		diff = 0;
 	}
@@ -185,7 +185,7 @@ __device__ VType cuVEC_VC<VType>::dzz_neu(int idx) const
 			else diff = (halo_val - cuVEC<VType>::quantity[idx]) / hsq;
 		}
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDZ) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDZ)) {
 
 		diff = 0;
 	}
@@ -262,7 +262,7 @@ __device__ VType cuVEC_VC<VType>::dxx_nneu(int idx, const Class_BDiff& bdiff_cla
 			else diff = ((halo_val - cuVEC<VType>::quantity[idx]) + bdiff_class.bdiff(idx).x * cuVEC<VType>::h.x) / hsq;
 		}
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDX) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDX)) {
 
 		diff = 0;
 	}
@@ -333,7 +333,7 @@ __device__ VType cuVEC_VC<VType>::dyy_nneu(int idx, const Class_BDiff& bdiff_cla
 			else diff = ((halo_val - cuVEC<VType>::quantity[idx]) + bdiff_class.bdiff(idx).y * cuVEC<VType>::h.y) / hsq;
 		}
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDY) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDY)) {
 
 		diff = 0;
 	}
@@ -404,7 +404,7 @@ __device__ VType cuVEC_VC<VType>::dzz_nneu(int idx, const Class_BDiff& bdiff_cla
 			else diff = ((halo_val - cuVEC<VType>::quantity[idx]) + bdiff_class.bdiff(idx).z * cuVEC<VType>::h.z) / hsq;
 		}
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDZ) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDZ)) {
 
 		diff = 0;
 	}
@@ -475,7 +475,7 @@ __device__ VType cuVEC_VC<VType>::dxx_nneu(int idx, const cuVAL3<VType>& bdiff) 
 			else diff = ((halo_val - cuVEC<VType>::quantity[idx]) + bdiff.x * cuVEC<VType>::h.x) / hsq;
 		}
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDX) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDX)) {
 
 		diff = 0;
 	}
@@ -545,7 +545,7 @@ __device__ VType cuVEC_VC<VType>::dyy_nneu(int idx, const cuVAL3<VType>& bdiff) 
 			else diff = ((halo_val - cuVEC<VType>::quantity[idx]) + bdiff.y * cuVEC<VType>::h.y) / hsq;
 		}
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDY) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDY)) {
 
 		diff = 0;
 	}
@@ -615,7 +615,7 @@ __device__ VType cuVEC_VC<VType>::dzz_nneu(int idx, const cuVAL3<VType>& bdiff) 
 			else diff = ((halo_val - cuVEC<VType>::quantity[idx]) + bdiff.z * cuVEC<VType>::h.z) / hsq;
 		}
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDZ) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDZ)) {
 
 		diff = 0;
 	}
@@ -690,7 +690,7 @@ __device__ VType cuVEC_VC<VType>::dxx_diri(int idx) const
 			else diff = (halo_val - cuVEC<VType>::quantity[idx]) / hsq;
 		}
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDX) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDX)) {
 
 		diff = 0;
 	}
@@ -768,7 +768,7 @@ __device__ VType cuVEC_VC<VType>::dyy_diri(int idx) const
 			else diff = (halo_val - cuVEC<VType>::quantity[idx]) / hsq;
 		}
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDY) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDY)) {
 
 		diff = 0;
 	}
@@ -843,7 +843,7 @@ __device__ VType cuVEC_VC<VType>::dzz_diri(int idx) const
 			else diff = (halo_val - cuVEC<VType>::quantity[idx]) / hsq;
 		}
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDZ) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDZ)) {
 
 		diff = 0;
 	}
@@ -925,7 +925,7 @@ __device__ VType cuVEC_VC<VType>::dxx_diri_nneu(int idx, const Class_BDiff& bdif
 			else ((halo_val - cuVEC<VType>::quantity[idx]) + bdiff_class.bdiff(idx).x * cuVEC<VType>::h.x) / hsq;
 		}
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDX) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDX)) {
 
 		diff = 0;
 	}
@@ -1002,7 +1002,7 @@ __device__ VType cuVEC_VC<VType>::dyy_diri_nneu(int idx, const Class_BDiff& bdif
 			else diff = ((halo_val - cuVEC<VType>::quantity[idx]) + bdiff_class.bdiff(idx).y * cuVEC<VType>::h.y) / hsq;
 		}
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDY) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDY)) {
 
 		diff = 0;
 	}
@@ -1078,7 +1078,7 @@ __device__ VType cuVEC_VC<VType>::dzz_diri_nneu(int idx, const Class_BDiff& bdif
 			else diff = ((halo_val - cuVEC<VType>::quantity[idx]) + bdiff_class.bdiff(idx).z * cuVEC<VType>::h.z) / hsq;
 		}
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDZ) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDZ)) {
 
 		diff = 0;
 	}
@@ -1154,7 +1154,7 @@ __device__ VType cuVEC_VC<VType>::dxx_diri_nneu(int idx, const cuVAL3<VType>& bd
 			else diff = ((halo_val - cuVEC<VType>::quantity[idx]) + bdiff.x * cuVEC<VType>::h.x) / hsq;
 		}
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDX) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDX)) {
 
 		diff = 0;
 	}
@@ -1230,7 +1230,7 @@ __device__ VType cuVEC_VC<VType>::dyy_diri_nneu(int idx, const cuVAL3<VType>& bd
 			else diff = ((halo_val - cuVEC<VType>::quantity[idx]) + bdiff.y * cuVEC<VType>::h.y) / hsq;
 		}
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDY) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDY)) {
 
 		diff = 0;
 	}
@@ -1305,7 +1305,7 @@ __device__ VType cuVEC_VC<VType>::dzz_diri_nneu(int idx, const cuVAL3<VType>& bd
 			else diff = ((halo_val - cuVEC<VType>::quantity[idx]) + bdiff.z * cuVEC<VType>::h.z) / hsq;
 		}
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDZ) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDZ)) {
 
 		diff = 0;
 	}
@@ -1401,7 +1401,7 @@ __device__ VType cuVEC_VC<VType>::dxx_robin(int idx, cuBReal K) const
 			}
 		}
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDX) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDX)) {
 
 		diff = 0;
 	}
@@ -1519,7 +1519,7 @@ __device__ VType cuVEC_VC<VType>::dyy_robin(int idx, cuBReal K) const
 			}
 		}
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDY) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDY)) {
 
 		diff = 0;
 	}
@@ -1635,7 +1635,7 @@ __device__ VType cuVEC_VC<VType>::dzz_robin(int idx, cuBReal K) const
 			}
 		}
 	}
-	else if (ngbrFlags[idx] & NF_CMBNDZ) {
+	else if (using_extended_flags && (ngbrFlags2[idx] & NF2_CMBNDZ)) {
 
 		diff = 0;
 	}

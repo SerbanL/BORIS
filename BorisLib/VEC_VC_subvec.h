@@ -13,6 +13,33 @@ VEC_VC<VType> VEC_VC<VType>::subvec(Box box)
 	//make appropriately sized new VEC_VC
 	VEC_VC<VType> newvec(VEC<VType>::h, newvec_rect);
 
+	//dirichlet vectors not copied - these should be set externally if needed
+
+	//copy robin values
+	newvec.robin_px = robin_px;
+	newvec.robin_nx = robin_nx;
+	newvec.robin_py = robin_py;
+	newvec.robin_ny = robin_ny;
+	newvec.robin_pz = robin_pz;
+	newvec.robin_nz = robin_nz;
+	newvec.robin_v = robin_v;
+
+	//cmbnd setting
+	newvec.cmbnd_conditions_set = cmbnd_conditions_set;
+
+	newvec.calculate_faces_and_edges = calculate_faces_and_edges;
+
+	//copy shift debt
+	newvec.shift_debt = shift_debt;
+
+	//copy pbc parameters
+	newvec.pbc_x = pbc_x;
+	newvec.pbc_y = pbc_y;
+	newvec.pbc_z = pbc_z;
+
+	//memory for extended flags if needed
+	newvec.use_extended_flags();
+
 	//copy data to subvec (values and flags)
 	for (int k = box.s.k; k < box.e.k; k++) {
 #pragma omp parallel for
@@ -29,29 +56,14 @@ VEC_VC<VType> VEC_VC<VType>::subvec(Box box)
 				//copy flags in full (will not be consistent for subvec, but set_ngbrFLags called below)
 				newvec.ngbrFlags_ref()[sidx] = ngbrFlags[idx];
 
-				//extended flags not copied here, but set after
+				//copy extended flags value if possible, but excluding dirichlet values. these require dirichlet vectors to be set, and if needed will be done externally.
+				if (newvec.ngbrFlags2_ref().size() && ngbrFlags2.size()) {
+					
+					newvec.ngbrFlags2_ref()[sidx] = ngbrFlags2[idx] & ~NF2_DIRICHLET;
+				}
 			}
 		}
 	}
-
-	//dirichlet vectors not copied - these should be set externally if needed
-
-	//copy robin values
-	newvec.robin_px = robin_px;
-	newvec.robin_nx = robin_nx;
-	newvec.robin_py = robin_py;
-	newvec.robin_ny = robin_ny;
-	newvec.robin_pz = robin_pz;
-	newvec.robin_nz = robin_nz;
-	newvec.robin_v = robin_v;
-
-	//copy shift debt
-	newvec.shift_debt = shift_debt;
-
-	//copy pbc parameters
-	newvec.pbc_x = pbc_x;
-	newvec.pbc_y = pbc_y;
-	newvec.pbc_z = pbc_z;
 
 	//now make sure flags in new VEC_VC are self consistent
 	newvec.set_ngbrFlags();

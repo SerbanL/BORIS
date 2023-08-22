@@ -21,7 +21,7 @@ VType VEC_VC<VType>::curl_neu(int idx) const
 		curl.z += (VEC<VType>::quantity[idx + 1].y - VEC<VType>::quantity[idx - 1].y) / (2 * VEC<VType>::h.x);
 	}
 	//Is it a CMBND boundary? - if not then use homogeneous Neumann condition (differential zero at the boundary)
-	else if (ngbrFlags[idx] & NF_CMBNDX) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDX)) {
 
 		if (ngbrFlags[idx] & NF_NPX) {
 
@@ -75,7 +75,7 @@ VType VEC_VC<VType>::curl_neu(int idx) const
 		curl.z -= (VEC<VType>::quantity[idx + VEC<VType>::n.x].x - VEC<VType>::quantity[idx - VEC<VType>::n.x].x) / (2 * VEC<VType>::h.y);
 	}
 	//Is it a CMBND boundary? - if not then use homogeneous Neumann condition (differential zero at the boundary)
-	else if (ngbrFlags[idx] & NF_CMBNDY) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDY)) {
 
 		if (ngbrFlags[idx] & NF_NPY) {
 
@@ -129,7 +129,7 @@ VType VEC_VC<VType>::curl_neu(int idx) const
 		curl.y += (VEC<VType>::quantity[idx + VEC<VType>::n.x*VEC<VType>::n.y].x - VEC<VType>::quantity[idx - VEC<VType>::n.x*VEC<VType>::n.y].x) / (2 * VEC<VType>::h.z);
 	}
 	//Is it a CMBND boundary? - if not then use homogeneous Neumann condition (differential zero at the boundary)
-	else if (ngbrFlags[idx] & NF_CMBNDZ) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDZ)) {
 
 		if (ngbrFlags[idx] & NF_NPZ) {
 
@@ -197,7 +197,7 @@ VType VEC_VC<VType>::curl_nneu(int idx, const VAL3<VType>& bdiff) const
 		curl.z += (VEC<VType>::quantity[idx + 1].y - VEC<VType>::quantity[idx - 1].y) / (2 * VEC<VType>::h.x);
 	}
 	//Is it a CMBND boundary? - if not then use homogeneous Neumann condition (differential zero at the boundary)
-	else if (ngbrFlags[idx] & NF_CMBNDX) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDX)) {
 
 		if (ngbrFlags[idx] & NF_NPX) {
 
@@ -251,7 +251,7 @@ VType VEC_VC<VType>::curl_nneu(int idx, const VAL3<VType>& bdiff) const
 		curl.z -= (VEC<VType>::quantity[idx + VEC<VType>::n.x].x - VEC<VType>::quantity[idx - VEC<VType>::n.x].x) / (2 * VEC<VType>::h.y);
 	}
 	//Is it a CMBND boundary? - if not then use homogeneous Neumann condition (differential zero at the boundary)
-	else if (ngbrFlags[idx] & NF_CMBNDY) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDY)) {
 
 		if (ngbrFlags[idx] & NF_NPY) {
 
@@ -305,7 +305,7 @@ VType VEC_VC<VType>::curl_nneu(int idx, const VAL3<VType>& bdiff) const
 		curl.y += (VEC<VType>::quantity[idx + VEC<VType>::n.x*VEC<VType>::n.y].x - VEC<VType>::quantity[idx - VEC<VType>::n.x*VEC<VType>::n.y].x) / (2 * VEC<VType>::h.z);
 	}
 	//Is it a CMBND boundary? - if not then use homogeneous Neumann condition (differential zero at the boundary)
-	else if (ngbrFlags[idx] & NF_CMBNDZ) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDZ)) {
 
 		if (ngbrFlags[idx] & NF_NPZ) {
 
@@ -386,7 +386,7 @@ VType VEC_VC<VType>::curl_diri(int idx) const
 		}
 	}
 	//Is it a CMBND boundary? - if not then use homogeneous Neumann condition (differential zero at the boundary)
-	else if (ngbrFlags[idx] & NF_CMBNDX) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDX)) {
 
 		if (ngbrFlags[idx] & NF_NPX) {
 
@@ -453,7 +453,7 @@ VType VEC_VC<VType>::curl_diri(int idx) const
 		}
 	}
 	//Is it a CMBND boundary? - if not then use homogeneous Neumann condition (differential zero at the boundary)
-	else if (ngbrFlags[idx] & NF_CMBNDY) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDY)) {
 
 		if (ngbrFlags[idx] & NF_NPY) {
 
@@ -520,7 +520,7 @@ VType VEC_VC<VType>::curl_diri(int idx) const
 		}
 	}
 	//Is it a CMBND boundary? - if not then use homogeneous Neumann condition (differential zero at the boundary)
-	else if (ngbrFlags[idx] & NF_CMBNDZ) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDZ)) {
 
 		if (ngbrFlags[idx] & NF_NPZ) {
 
@@ -602,7 +602,7 @@ VType VEC_VC<VType>::curl_diri_nneu(int idx, const VAL3<VType>& bdiff) const
 		}
 	}
 	//Is it a CMBND boundary? - if not then use homogeneous Neumann condition (differential zero at the boundary)
-	else if (ngbrFlags[idx] & NF_CMBNDX) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDX)) {
 
 		if (ngbrFlags[idx] & NF_NPX) {
 
@@ -669,7 +669,7 @@ VType VEC_VC<VType>::curl_diri_nneu(int idx, const VAL3<VType>& bdiff) const
 		}
 	}
 	//Is it a CMBND boundary? - if not then use homogeneous Neumann condition (differential zero at the boundary)
-	else if (ngbrFlags[idx] & NF_CMBNDY) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDY)) {
 
 		if (ngbrFlags[idx] & NF_NPY) {
 
@@ -736,7 +736,7 @@ VType VEC_VC<VType>::curl_diri_nneu(int idx, const VAL3<VType>& bdiff) const
 		}
 	}
 	//Is it a CMBND boundary? - if not then use homogeneous Neumann condition (differential zero at the boundary)
-	else if (ngbrFlags[idx] & NF_CMBNDZ) {
+	else if (ngbrFlags2.size() && (ngbrFlags2[idx] & NF2_CMBNDZ)) {
 
 		if (ngbrFlags[idx] & NF_NPZ) {
 

@@ -5,6 +5,31 @@
 
 //mcu_arr is used to manage multiple cu_arr objects, one for each gpu available
 
+//Some special cases:
+// 
+//See EXAMPLE 6 usage in cuArray.h. The same can be achieved with a mcu_arr as follows:
+//
+//If we have (in addition to cuObj we require the usual Policy class for it):
+//mcu_obj<cuObj, cuObj_Policy> mcuObj1(mGPU);
+//mcu_obj<cuObj, cuObj_Policy> mcuObj2(mGPU);
+
+//mcu_arr<cuObj> mcuObj_arr(mGPU);
+//
+//for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
+//
+//	mcuObj_arr.push_back(mGPU, mcuObj1.get_managed_object(mGPU));
+//	mcuObj_arr.push_back(mGPU, mcuObj2.get_managed_object(mGPU));
+//}
+//If we have __global__ void cuda_kernel(cuObj* pcuObj_arr, size_t arr_size);
+//Then pass it into the kernel as follows:
+//
+//for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
+//
+//	func_kernel <<<1, 1 >>> (mcuObj_arr(mGPU), mcuObj_arr.size(mGPU));
+//}
+//
+//Now each cuda_kernel function on each respective device will have access to an array of cuObj objects for each respective device
+
 template <typename VType>
 class mcu_arr
 {

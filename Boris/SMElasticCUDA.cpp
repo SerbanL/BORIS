@@ -21,7 +21,6 @@ SMElasticCUDA::SMElasticCUDA(SuperMesh* pSMesh_, SMElastic* pSMElastic_) :
 
 SMElasticCUDA::~SMElasticCUDA()
 {
-
 }
 
 //-------------------Abstract base class method implementations
@@ -29,9 +28,9 @@ SMElasticCUDA::~SMElasticCUDA()
 BError SMElasticCUDA::Initialize(void)
 {
 	BError error(CLASS_STR(SMElasticCUDA));
-
+	
 	ZeroEnergy();
-
+	
 	error = pSMElastic->Initialize();
 	if (error) return error;
 
@@ -63,19 +62,18 @@ BError SMElasticCUDA::Initialize(void)
 		//2. pMElastic in SMelastic has exactly the same size and order
 		//3. SMelastic UpdateConfiguration was called just before, which called this CUDA version at the end.
 
-		if (!(*pu_disp[idx])()->copyflags_from_cpuvec(*pSMElastic->pu_disp[idx])) error(BERROR_GPUERROR_CRIT);
+		if (!(*pu_disp[idx]).copyflags_from_cpuvec(*pSMElastic->pu_disp[idx])) error(BERROR_GPUERROR_CRIT);
 	}
-
+	
 	for (int idx = 0; idx < pSMElastic->CMBNDcontacts.size(); idx++) {
 
-		std::vector<cu_obj<CMBNDInfoCUDA>> mesh_contacts;
+		std::vector<mCMBNDInfoCUDA> mesh_contacts;
 		std::vector<CMBNDInfoCUDA> mesh_contacts_cpu;
 
 		for (int idx_contact = 0; idx_contact < pSMElastic->CMBNDcontacts[idx].size(); idx_contact++) {
 
-			cu_obj<CMBNDInfoCUDA> contact;
-
-			contact()->copy_from_CMBNDInfo<CMBNDInfo>(pSMElastic->CMBNDcontacts[idx][idx_contact]);
+			mCMBNDInfoCUDA contact(mGPU);
+			contact.copy_from_CMBNDInfo<CMBNDInfo>(pSMElastic->CMBNDcontacts[idx][idx_contact], pu_disp[idx]->get_pbox_d_ref());
 
 			mesh_contacts.push_back(contact);
 
@@ -86,30 +84,24 @@ BError SMElasticCUDA::Initialize(void)
 		CMBNDcontacts.push_back(mesh_contacts_cpu);
 	}
 
-	initialized = true;
-
 	//CMBND for continuous stress - since velocity is solved first, must make sure any initial stress is continuous across CMBND when multiple meshes used
 	for (int idx1 = 0; idx1 < (int)CMBNDcontacts.size(); idx1++) {
 		for (int idx2 = 0; idx2 < (int)CMBNDcontacts[idx1].size(); idx2++) {
 
-			//contact descriptor
-			CMBNDInfoCUDA& contact = CMBNDcontacts[idx1][idx2];
-
 			//mexh indexes
-			int idx_sec = contact.mesh_idx.i;
-			int idx_pri = contact.mesh_idx.j;
+			int idx_sec = CMBNDcontacts[idx1][idx2].mesh_idx.i;
+			int idx_pri = CMBNDcontacts[idx1][idx2].mesh_idx.j;
 
 			int axis;
-			if (contact.cell_shift.x) axis = 1;
-			else if (contact.cell_shift.y) axis = 2;
+			if (CMBNDcontacts[idx1][idx2].cell_shift.x) axis = 1;
+			else if (CMBNDcontacts[idx1][idx2].cell_shift.y) axis = 2;
 			else axis = 3;
 
-			pMElastic[idx_pri]->make_stress_continuous(
-				contact.cells_box.size(), axis, CMBNDcontactsCUDA[idx1][idx2],
-				pMElastic[idx_sec]->sdd, pMElastic[idx_sec]->sxy, pMElastic[idx_sec]->sxz, pMElastic[idx_sec]->syz,
-				pMElastic[idx_sec]->pMeshCUDA->u_disp);
+			pMElastic[idx_pri]->make_stress_continuous(axis, CMBNDcontactsCUDA[idx1][idx2], pMElastic[idx_sec]);
 		}
 	}
+
+	initialized = true;
 
 	return error;
 }
@@ -195,55 +187,44 @@ void SMElasticCUDA::UpdateField(void)
 
 				pMElastic[idx]->Iterate_Elastic_Solver_Velocity(dT);
 			}
-			
+
 			//CMBND for continuous velocity
 			for (int idx1 = 0; idx1 < (int)CMBNDcontacts.size(); idx1++) {
 				for (int idx2 = 0; idx2 < (int)CMBNDcontacts[idx1].size(); idx2++) {
 
-					//contact descriptor
-					CMBNDInfoCUDA& contact = CMBNDcontacts[idx1][idx2];
-
 					//mexh indexes
-					int idx_sec = contact.mesh_idx.i;
-					int idx_pri = contact.mesh_idx.j;
+					int idx_sec = CMBNDcontacts[idx1][idx2].mesh_idx.i;
+					int idx_pri = CMBNDcontacts[idx1][idx2].mesh_idx.j;
 
 					int axis;
-					if (contact.cell_shift.x) axis = 1;
-					else if (contact.cell_shift.y) axis = 2;
+					if (CMBNDcontacts[idx1][idx2].cell_shift.x) axis = 1;
+					else if (CMBNDcontacts[idx1][idx2].cell_shift.y) axis = 2;
 					else axis = 3;
 
-					pMElastic[idx_pri]->make_velocity_continuous(
-						contact.cells_box.size(), axis, CMBNDcontactsCUDA[idx1][idx2],
-						pMElastic[idx_sec]);
+					pMElastic[idx_pri]->make_velocity_continuous(axis, CMBNDcontactsCUDA[idx1][idx2], pMElastic[idx_sec]);
 				}
 			}
-			
+
 			//1b. Update stress
 			for (int idx = 0; idx < pMElastic.size(); idx++) {
 
 				pMElastic[idx]->Iterate_Elastic_Solver_Stress(dT, pSMElastic->magnetic_dT);
 			}
-			
+
 			//CMBND for continuous stress
 			for (int idx1 = 0; idx1 < (int)CMBNDcontacts.size(); idx1++) {
 				for (int idx2 = 0; idx2 < (int)CMBNDcontacts[idx1].size(); idx2++) {
 
-					//contact descriptor
-					CMBNDInfoCUDA& contact = CMBNDcontacts[idx1][idx2];
-
 					//mexh indexes
-					int idx_sec = contact.mesh_idx.i;
-					int idx_pri = contact.mesh_idx.j;
+					int idx_sec = CMBNDcontacts[idx1][idx2].mesh_idx.i;
+					int idx_pri = CMBNDcontacts[idx1][idx2].mesh_idx.j;
 
 					int axis;
-					if (contact.cell_shift.x) axis = 1;
-					else if (contact.cell_shift.y) axis = 2;
+					if (CMBNDcontacts[idx1][idx2].cell_shift.x) axis = 1;
+					else if (CMBNDcontacts[idx1][idx2].cell_shift.y) axis = 2;
 					else axis = 3;
 
-					pMElastic[idx_pri]->make_stress_continuous(
-						contact.cells_box.size(), axis, CMBNDcontactsCUDA[idx1][idx2],
-						pMElastic[idx_sec]->sdd, pMElastic[idx_sec]->sxy, pMElastic[idx_sec]->sxz, pMElastic[idx_sec]->syz,
-						pMElastic[idx_sec]->pMeshCUDA->u_disp);
+					pMElastic[idx_pri]->make_stress_continuous(axis, CMBNDcontactsCUDA[idx1][idx2], pMElastic[idx_sec]);
 				}
 			}
 		}

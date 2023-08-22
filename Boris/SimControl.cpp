@@ -54,8 +54,7 @@ void Simulation::Simulate(void)
 #endif
 		}
 
-		//Display update (asynchronous only if cuda is enabled)
-		if (iterUpdate && SMesh.GetIteration() % iterUpdate == 0) UpdateScreen_Quick(cudaEnabled);
+		if (iterUpdate && SMesh.GetIteration() % iterUpdate == 0) UpdateScreen_Quick();
 
 		//Check conditions for advancing simulation schedule
 		CheckSimulationSchedule();

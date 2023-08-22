@@ -17,8 +17,8 @@ class MElastic :
 	public ProgramState<MElastic, std::tuple<
 	int,
 	DBL3, 
-	VEC<double>, VEC<double>, VEC<double>, VEC<DBL3>, VEC<double>, VEC<double>, VEC<double>,
-	VEC<double>, VEC<double>, VEC<double>, VEC<DBL3>, VEC<double>, VEC<double>, VEC<double>,
+	VEC_VC<double>, VEC_VC<double>, VEC_VC<double>, VEC_VC<DBL3>, VEC_VC<double>, VEC_VC<double>, VEC_VC<double>,
+	VEC_VC<double>, VEC_VC<double>, VEC_VC<double>, VEC_VC<DBL3>, VEC_VC<double>, VEC_VC<double>, VEC_VC<double>,
 	TEquation<double, double, double, double>, TEquation<double, double, double, double>>, std::tuple<>>
 {
 	friend SMElastic;
@@ -55,49 +55,49 @@ private:
 	//---- Main scheme
 
 	//velocity x : mid x edges, size nx * (ny + 1) * (nz + 1)
-	VEC<double> vx;
+	VEC_VC<double> vx;
 
 	//velocity y : mid y edges, size (nx + 1) * ny * (nz + 1)
-	VEC<double> vy;
+	VEC_VC<double> vy;
 
 	//velocity z : mid z edges, size (nx + 1) * (ny + 1) * nz
-	VEC<double> vz;
+	VEC_VC<double> vz;
 
 	//diagonal stress components : vertices, size (nx + 1) * (ny + 1) * (nz + 1)
-	VEC<DBL3> sdd;
+	VEC_VC<DBL3> sdd;
 
 	//off-diagonal stress sigma_xy : mid xy faces, size nx * ny * (nz + 1)
-	VEC<double> sxy;
+	VEC_VC<double> sxy;
 
 	//off-diagonal stress sigma_xz : mid xz faces, size nx * (ny + 1) * nz
-	VEC<double> sxz;
+	VEC_VC<double> sxz;
 
 	//off-diagonal stress sigma_yz : mid yz faces, size (nx + 1) * ny * nz
-	VEC<double> syz;
+	VEC_VC<double> syz;
 
 	//---- Additional discretization scheme needed for trigonal crystal system. These are velocity and stress values on rectangular frame at +hy/2, -hz/2 staggering w.r.t. main one.
 	//positions below indicated for 1) main discretization frame, 2) additional staggered discretization frame
 
 	//velocity x : 1) centers of cells, 2) mid x edges, size nx * ny * nz
-	VEC<double> vx2;
+	VEC_VC<double> vx2;
 
 	//velocity y : 1) mid z edges 2) mid y edges, size (nx + 1) * (ny + 1) * nz
-	VEC<double> vy2;
+	VEC_VC<double> vy2;
 
 	//velocity z : 1) mid y edges 2) mid z edges, size (nx + 1) * ny * (nz + 1)
-	VEC<double> vz2;
+	VEC_VC<double> vz2;
 
 	//diagonal stress components : 1) mid yz faces 2) vertices, size (nx + 1) * ny * nz
-	VEC<DBL3> sdd2;
+	VEC_VC<DBL3> sdd2;
 
 	//off-diagonal stress sigma_xy : 1) mid xz faces  2) mid xy faces, size nx * (ny + 1) * nz
-	VEC<double> sxy2;
+	VEC_VC<double> sxy2;
 
 	//off-diagonal stress sigma_xz : 1) mid xy faces 2) mid xz faces, size nx * ny * (nz + 1)
-	VEC<double> sxz2;
+	VEC_VC<double> sxz2;
 
 	//off-diagonal stress sigma_yz : 1) vertices 2) mid yz faces, size (nx + 1) * (ny + 1) * (nz + 1)
-	VEC<double> syz2;
+	VEC_VC<double> syz2;
 	
 	//----------------------
 
@@ -214,14 +214,14 @@ private:
 
 	void make_velocity_continuous(
 		CMBNDInfo& contact,
-		VEC<double>& vx_sec, VEC<double>& vy_sec, VEC<double>& vz_sec, VEC_VC<DBL3>& u_disp_sec,
+		VEC_VC<double>& vx_sec, VEC_VC<double>& vy_sec, VEC_VC<double>& vz_sec, VEC_VC<DBL3>& u_disp_sec,
 		Mesh *pMesh_sec);
 
 	//-----Stress
 
 	void make_stress_continuous(
 		CMBNDInfo& contact,
-		VEC<DBL3>& sdd_sec, VEC<double>& sxy_sec, VEC<double>& sxz_sec, VEC<double>& syz_sec,
+		VEC_VC<DBL3>& sdd_sec, VEC_VC<double>& sxy_sec, VEC_VC<double>& sxz_sec, VEC_VC<double>& syz_sec,
 		VEC_VC<DBL3>& u_disp_sec);
 
 public:

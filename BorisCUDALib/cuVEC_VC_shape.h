@@ -173,22 +173,21 @@ template <typename VType>
 __host__ void cuVEC_VC<VType>::clear(void)
 {
 	cuVEC<VType>::clear();
-	set_ngbrFlags_size(0);
-
-	gpu_free_managed(ngbrFlags2);
-	set_gpu_value(using_extended_flags, false);
+	
+	clear_dirichlet_flags();
+	clear_robin_conditions();
+	clear_cmbnd_flags();
+	clear_pbc();
+	clear_halo_flags();
 
 	set_gpu_value(shift_debt, cuReal3());
-
-	clear_dirichlet_flags();
-	clear_halo_flags();
 
 	nullgpuptr(pUVA_haloVEC_left);
 	nullgpuptr(pUVA_haloVEC_right);
 
-	set_gpu_value(pbc_x, (int)0);
-	set_gpu_value(pbc_y, (int)0);
-	set_gpu_value(pbc_z, (int)0);
+	set_ngbrFlags_size(0);
+	gpu_free_managed(ngbrFlags2);
+	set_gpu_value(using_extended_flags, false);
 }
 
 //--------------------------------------------MULTIPLE ENTRIES SETTERS - SHAPE CHANGERS

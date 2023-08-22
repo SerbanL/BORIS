@@ -77,7 +77,7 @@ __device__ void cuVEC_VC<VType>::IterateLaplace_SOR_red_ondevice(cuBReal damping
 	}
 
 	//calculate new value only in non-empty cells; also skip if indicated as a composite media boundary condition cell
-	bool calculate_idx = idx < cuVEC<VType>::n.dim() && (!(ngbrFlags[idx] & NF_CMBND) && (ngbrFlags[idx] & NF_NOTEMPTY));
+	bool calculate_idx = idx < cuVEC<VType>::n.dim() && (!(using_extended_flags && (ngbrFlags2[idx] & NF2_CMBND)) && (ngbrFlags[idx] & NF_NOTEMPTY));
 
 	if (calculate_idx) {
 
@@ -338,7 +338,7 @@ __device__ void cuVEC_VC<VType>::IterateLaplace_SOR_black_ondevice(cuBReal dampi
 	}
 
 	//calculate new value only in non-empty cells; also skip if indicated as a composite media boundary condition cell
-	bool calculate_idx = idx < cuVEC<VType>::n.dim() && (!(ngbrFlags[idx] & NF_CMBND) && (ngbrFlags[idx] & NF_NOTEMPTY));
+	bool calculate_idx = idx < cuVEC<VType>::n.dim() && (!(using_extended_flags && (ngbrFlags2[idx] & NF2_CMBND)) && (ngbrFlags[idx] & NF_NOTEMPTY));
 
 	VType old_value = VType();
 
@@ -655,7 +655,7 @@ __device__ void cuVEC_VC<VType>::IteratePoisson_SOR_red_ondevice(Class_Poisson_R
 	}
 
 	//calculate new value only in non-empty cells; also skip if indicated as a composite media boundary condition cell
-	bool calculate_idx = idx < cuVEC<VType>::n.dim() && (!(ngbrFlags[idx] & NF_CMBND) && (ngbrFlags[idx] & NF_NOTEMPTY));
+	bool calculate_idx = idx < cuVEC<VType>::n.dim() && (!(using_extended_flags && (ngbrFlags2[idx] & NF2_CMBND)) && (ngbrFlags[idx] & NF_NOTEMPTY));
 
 	if (calculate_idx) {
 
@@ -916,7 +916,7 @@ __device__ void cuVEC_VC<VType>::IteratePoisson_SOR_black_ondevice(Class_Poisson
 	}
 
 	//calculate new value only in non-empty cells; also skip if indicated as a composite media boundary condition cell
-	bool calculate_idx = idx < cuVEC<VType>::n.dim() && (!(ngbrFlags[idx] & NF_CMBND) && (ngbrFlags[idx] & NF_NOTEMPTY));
+	bool calculate_idx = idx < cuVEC<VType>::n.dim() && (!(using_extended_flags && (ngbrFlags2[idx] & NF2_CMBND)) && (ngbrFlags[idx] & NF_NOTEMPTY));
 
 	VType old_value = VType();
 
@@ -1224,7 +1224,7 @@ __device__ void cuVEC_VC<VType>::IteratePoisson_NNeu_SOR_red_ondevice(Class_Pois
 	}
 
 	//calculate new value only in non-empty cells; also skip if indicated as a composite media boundary condition cell
-	bool calculate_idx = idx < cuVEC<VType>::n.dim() && (!(ngbrFlags[idx] & NF_CMBND) && (ngbrFlags[idx] & NF_NOTEMPTY));
+	bool calculate_idx = idx < cuVEC<VType>::n.dim() && (!(using_extended_flags && (ngbrFlags2[idx] & NF2_CMBND)) && (ngbrFlags[idx] & NF_NOTEMPTY));
 
 	if (calculate_idx) {
 
@@ -1485,7 +1485,7 @@ __device__ void cuVEC_VC<VType>::IteratePoisson_NNeu_SOR_black_ondevice(Class_Po
 	}
 
 	//calculate new value only in non-empty cells; also skip if indicated as a composite media boundary condition cell
-	bool calculate_idx = idx < cuVEC<VType>::n.dim() && (!(ngbrFlags[idx] & NF_CMBND) && (ngbrFlags[idx] & NF_NOTEMPTY));
+	bool calculate_idx = idx < cuVEC<VType>::n.dim() && (!(using_extended_flags && (ngbrFlags2[idx] & NF2_CMBND)) && (ngbrFlags[idx] & NF_NOTEMPTY));
 
 	VType old_value = VType();
 

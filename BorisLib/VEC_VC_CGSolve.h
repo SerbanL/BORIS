@@ -118,7 +118,7 @@ VType CGSolve<VType>::A_p_Laplace_diri(int idx)
 		//both neighbors available so must be an inner point along this direction
 		diff_x = (p[idx + 1] + p[idx - 1] - 2 * p[idx]) / (h.x*h.x);
 	}
-	else if (pV->ngbrFlags[idx] & NF_CMBNDX) {
+	else if (using_extended_flags && (pV->ngbrFlags2[idx] & NF2_CMBNDX)) {
 
 		diff_x = 0;
 	}
@@ -141,7 +141,7 @@ VType CGSolve<VType>::A_p_Laplace_diri(int idx)
 
 		diff_y = (p[idx + n.x] + p[idx - n.x] - 2 * p[idx]) / (h.y*h.y);
 	}
-	else if (pV->ngbrFlags[idx] & NF_CMBNDY) {
+	else if (using_extended_flags && (pV->ngbrFlags2[idx] & NF2_CMBNDY)) {
 
 		diff_y = 0;
 	}
@@ -161,7 +161,7 @@ VType CGSolve<VType>::A_p_Laplace_diri(int idx)
 
 		diff_z = (p[idx + n.x*n.y] + p[idx - n.x*n.y] - 2 * p[idx]) / (h.z*h.z);
 	}
-	else if (pV->ngbrFlags[idx] & NF_CMBNDZ) {
+	else if (using_extended_flags && (pV->ngbrFlags2[idx] & NF2_CMBNDZ)) {
 
 		diff_z = 0;
 	}
@@ -196,7 +196,7 @@ VType CGSolve<VType>::b_minus_A(int idx)
 		//both neighbors available so must be an inner point along this direction
 		diff_x = (pV->quantity[idx + 1] + pV->quantity[idx - 1] - 2 * pV->quantity[idx]);
 	}
-	else if (pV->ngbrFlags[idx] & NF_CMBNDX) {
+	else if (using_extended_flags && (pV->ngbrFlags2[idx] & NF2_CMBNDX)) {
 
 		diff_x = 0;
 	}
@@ -221,7 +221,7 @@ VType CGSolve<VType>::b_minus_A(int idx)
 
 		diff_y = (pV->quantity[idx + n.x] + pV->quantity[idx - n.x] - 2 * pV->quantity[idx]);
 	}
-	else if (pV->ngbrFlags[idx] & NF_CMBNDY) {
+	else if (using_extended_flags && (pV->ngbrFlags2[idx] & NF2_CMBNDY)) {
 
 		diff_y = 0;
 	}
@@ -243,7 +243,7 @@ VType CGSolve<VType>::b_minus_A(int idx)
 
 		diff_z = (pV->quantity[idx + n.x*n.y] + pV->quantity[idx - n.x*n.y] - 2 * pV->quantity[idx]);
 	}
-	else if (pV->ngbrFlags[idx] & NF_CMBNDZ) {
+	else if (using_extended_flags && (pV->ngbrFlags2[idx] & NF2_CMBNDZ)) {
 
 		diff_z = 0;
 	}
