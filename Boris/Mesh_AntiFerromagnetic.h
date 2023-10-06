@@ -131,17 +131,10 @@ public:
 	BError SwitchCUDAState(bool cudaState);
 
 	//called at the start of each iteration
-	void PrepareNewIteration(void) { if (!pMod.is_ID_set(MOD_ZEEMAN)) { Heff.set(DBL3(0)); Heff2.set(DBL3(0)); } }
+	void PrepareNewIteration(void);
 
 #if COMPILECUDA == 1
-	void PrepareNewIterationCUDA(void) 
-	{ 
-		if (pMeshCUDA && !pMod.is_ID_set(MOD_ZEEMAN)) {
-
-			pMeshCUDA->Heff.set(cuReal3());
-			pMeshCUDA->Heff2.set(cuReal3());
-		}
-	}
+	void PrepareNewIterationCUDA(void);
 #endif
 
 	//Take a Monte Carlo step in this mesh
@@ -157,6 +150,14 @@ public:
 
 	//couple this mesh to touching dipoles by setting skip cells as required : used for domain wall moving mesh algorithms
 	void CoupleToDipoles(bool status);
+
+	//----------------------------------- ALGORITHMS
+
+	//implement track shifting - called during PrepareNewIteration if this is a dormant mesh with track shifting configured (non-zero trackWindow_velocity and idTrackShiftMesh vector not empty)
+	void Track_Shift_Algorithm(void);
+
+	//setup track shifting algoithm for the holder mesh, with simulation window mesh, to be moved at set velocity and clipping during a simulation
+	BError Setup_Track_Shifting(std::vector<int> sim_meshIds, DBL3 velocity, DBL3 clipping);
 
 	//----------------------------------- MOVING MESH TRIGGER FLAG
 
@@ -344,6 +345,14 @@ public:
 #if COMPILECUDA == 1
 	void PrepareNewIterationCUDA(void) {}
 #endif
+
+	//----------------------------------- ALGORITHMS
+
+	//implement track shifting - called during PrepareNewIteration if this is a dormant mesh with track shifting configured (non-zero trackWindow_velocity and idTrackShiftMesh vector not empty)
+	void Track_Shift_Algorithm(void) {}
+
+	//setup track shifting algoithm for the holder mesh, with simulation window mesh, to be moved at set velocity and clipping during a simulation
+	BError Setup_Track_Shifting(std::vector<int> sim_meshIds, DBL3 velocity, DBL3 clipping) { return BError(); }
 
 	//----------------------------------- GETTERS
 

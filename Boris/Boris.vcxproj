@@ -185,7 +185,7 @@
       </OptimizeReferences>
       <AdditionalOptions>/FORCE:MULTIPLE %(AdditionalOptions)</AdditionalOptions>
       <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
-      <AdditionalDependencies>cudart_static.lib;cufft.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>nvml.lib;cudart_static.lib;cufft.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories);$(CudaToolkitLibDir); C:\Users\Serban\AppData\Local\Programs\Python\Python310\libs; C:\Users\Serban\AppData\Local\Programs\Python\Python38\libs; C:\Users\slg13\AppData\Local\Programs\Python\Python38\libs</AdditionalLibraryDirectories>
     </Link>
     <CudaCompile>
@@ -269,6 +269,8 @@
     <ClInclude Include="Atom_HeatCUDA.h" />
     <ClInclude Include="Atom_iDMExchange.h" />
     <ClInclude Include="Atom_iDMExchangeCUDA.h" />
+    <ClInclude Include="Atom_Mesh_CubicCUDA_Thermalize.h" />
+    <ClInclude Include="Atom_Mesh_CubicCUDA_ThermalizePolicy.h" />
     <ClInclude Include="Atom_MOptical.h" />
     <ClInclude Include="Atom_MOpticalCUDA.h" />
     <ClInclude Include="Atom_SOTField.h" />
@@ -296,6 +298,9 @@
     <ClInclude Include="DWRunTimeFit.h" />
     <ClInclude Include="DWRunTimeFitCUDA.h" />
     <ClInclude Include="DWRunTimeFitDefs.h" />
+    <ClInclude Include="EvalSpeedup.h" />
+    <ClInclude Include="EvalSpeedupCUDA.h" />
+    <ClInclude Include="EvalSpeedupDefs.h" />
     <ClInclude Include="HeatBase.h" />
     <ClInclude Include="HeatBaseCUDA.h" />
     <ClInclude Include="HeatCUDA_PolicyCMBND.h" />
@@ -411,12 +416,16 @@
     <CudaCompile Include="Atom_DiffEq_CommonCUDA.cu" />
     <CudaCompile Include="Atom_DipoleDipoleMCUDA.cu" />
     <CudaCompile Include="Atom_DipoleDipoleMCUDA_single.cu" />
+    <CudaCompile Include="Atom_DMExchangeCoupling_CUDA.cu" />
     <CudaCompile Include="Atom_DMExchangeCUDA.cu" />
+    <CudaCompile Include="Atom_ExchangeCoupling_CUDA.cu" />
     <CudaCompile Include="Atom_ExchangeCUDA.cu" />
     <CudaCompile Include="Atom_HeatCUDA.cu" />
+    <CudaCompile Include="Atom_iDMExchangeCoupling_CUDA.cu" />
     <CudaCompile Include="Atom_iDMExchangeCUDA.cu" />
     <CudaCompile Include="Atom_MeshCUDA.cu" />
     <CudaCompile Include="Atom_Mesh_CubicCUDA.cu" />
+    <CudaCompile Include="Atom_Mesh_CubicCUDA_Algorithms.cu" />
     <CudaCompile Include="Atom_Mesh_CubicCUDA_Compute.cu" />
     <CudaCompile Include="Atom_Mesh_CubicCUDA_Histo.cu" />
     <CudaCompile Include="Atom_Mesh_CubicCUDA_MonteCarlo.cu" />
@@ -451,6 +460,7 @@
     <CudaCompile Include="DiffEq_CommonBaseCUDA.cu" />
     <CudaCompile Include="DipoleDipoleKernelCUDA.cu" />
     <CudaCompile Include="DWRunTimeFitCUDA.cu" />
+    <CudaCompile Include="EvalSpeedupCUDA.cu" />
     <CudaCompile Include="HeatBaseCUDA.cu" />
     <CudaCompile Include="ManagedAtom_MeshCUDA_MonteCarlo_SC.cu" />
     <CudaCompile Include="ManagedMeshCUDA_MonteCarlo_AFM.cu" />
@@ -497,6 +507,7 @@
     <ClInclude Include="MOpticalCUDA.h" />
     <ClInclude Include="Oersted.h" />
     <ClInclude Include="OerstedCUDA.h" />
+    <ClInclude Include="OerstedMCUDA_single.h" />
     <ClInclude Include="OerstedKernel.h" />
     <ClInclude Include="OerstedKernelCUDA.h" />
     <ClInclude Include="OerstedTFunc.h" />
@@ -514,6 +525,8 @@
     <ClInclude Include="SDemag.h" />
     <ClInclude Include="SDemagCUDA.h" />
     <ClInclude Include="SDemagCUDA_Demag.h" />
+    <ClInclude Include="SDemagMCUDA_Demag_single.h" />
+    <ClInclude Include="SDemagMCUDA_single.h" />
     <ClInclude Include="SDemag_Demag.h" />
     <ClInclude Include="SHeat.h" />
     <ClInclude Include="SHeatCUDA.h" />
@@ -641,6 +654,8 @@
     <ClCompile Include="Atom_iDMExchange.cpp" />
     <ClCompile Include="Atom_iDMExchangeCUDA.cpp" />
     <ClCompile Include="Atom_Mesh_CubicCUDA_Compute.cpp" />
+    <ClCompile Include="Atom_Mesh_CubicCUDA_Thermalize.cpp" />
+    <ClCompile Include="Atom_Mesh_Cubic_Algorithms.cpp" />
     <ClCompile Include="Atom_Mesh_Cubic_Compute.cpp" />
     <ClCompile Include="Atom_Mesh_Cubic_Histo.cpp" />
     <ClCompile Include="Atom_Mesh_Cubic_MonteCarlo.cpp" />
@@ -682,6 +697,8 @@
     <ClCompile Include="DipoleDipoleTFunc_PBC.cpp" />
     <ClCompile Include="DipoleDipoleTFunc_Self.cpp" />
     <ClCompile Include="DWRunTimeFit.cpp" />
+    <ClCompile Include="EvalSpeedup.cpp" />
+    <ClCompile Include="EvalSpeedupCUDA.cpp" />
     <ClCompile Include="HeatBase.cpp" />
     <ClCompile Include="HeatBaseCUDA.cpp" />
     <ClCompile Include="ManagedAtom_DiffEqCubicCUDA.cpp" />
@@ -834,6 +851,7 @@
     <ClCompile Include="MeshParamsCUDA.cpp" />
     <ClCompile Include="MeshShape.cpp" />
     <ClCompile Include="Mesh_AntiFerromagnetic.cpp" />
+    <ClCompile Include="Mesh_AntiFerromagnetic_Algorithms.cpp" />
     <ClCompile Include="Mesh_AntiFerromagnetic_Compute.cpp" />
     <ClCompile Include="Mesh_AntiFerromagnetic_Control.cpp" />
     <ClCompile Include="Mesh_AntiFerromagnetic_Histo.cpp" />
@@ -841,6 +859,7 @@
     <ClCompile Include="Mesh_AntiFerromagnetic_ODEControl.cpp" />
     <ClCompile Include="Mesh_Dipole.cpp" />
     <ClCompile Include="Mesh_DipoleCUDA.cpp" />
+    <ClCompile Include="Mesh_Ferromagnetic_Algorithms.cpp" />
     <ClCompile Include="Mesh_Ferromagnetic_Compute.cpp" />
     <ClCompile Include="Mesh_Ferromagnetic.cpp" />
     <ClCompile Include="Mesh_FerromagneticCUDA.cpp" />
@@ -859,6 +878,7 @@
     <ClCompile Include="MOpticalCUDA.cpp" />
     <ClCompile Include="Oersted.cpp" />
     <ClCompile Include="OerstedCUDA.cpp" />
+    <ClCompile Include="OerstedMCUDA_single.cpp" />
     <ClCompile Include="OerstedKernel.cpp" />
     <ClCompile Include="OerstedKernelCUDA.cpp" />
     <ClCompile Include="OerstedTFunc.cpp" />
@@ -871,7 +891,13 @@
     <ClCompile Include="SDemag.cpp" />
     <ClCompile Include="SDemagCUDA.cpp" />
     <ClCompile Include="SDemagCUDA_Demag.cpp" />
+    <ClCompile Include="SDemagCUDA_MConv.cpp" />
+    <ClCompile Include="SDemagCUDA_SMesh.cpp" />
+    <ClCompile Include="SDemagMCUDA_Demag_single.cpp" />
+    <ClCompile Include="SDemagMCUDA_single.cpp" />
     <ClCompile Include="SDemag_Demag.cpp" />
+    <ClCompile Include="SDemag_MConv.cpp" />
+    <ClCompile Include="SDemag_SMesh.cpp" />
     <ClCompile Include="SHeat.cpp" />
     <ClCompile Include="SHeatCUDA.cpp" />
     <ClCompile Include="SimControl.cpp" />
@@ -1060,10 +1086,14 @@
     <CudaCompile Include="Mesh_FerromagneticCUDA_MonteCarlo.cu" />
     <CudaCompile Include="ModulesCUDA.cu" />
     <CudaCompile Include="MOpticalCUDA.cu" />
+    <CudaCompile Include="OerstedMCUDA_single.cu" />
     <CudaCompile Include="OerstedKernelCUDA.cu" />
     <CudaCompile Include="RoughnessCUDA.cu" />
     <CudaCompile Include="SDemagCUDA.cu" />
     <CudaCompile Include="SDemagCUDA_Demag.cu" />
+    <CudaCompile Include="SDemagCUDA_SMesh.cu" />
+    <CudaCompile Include="SDemagMCUDA_Demag_single.cu" />
+    <CudaCompile Include="SDemagMCUDA_single.cu" />
     <CudaCompile Include="SHeatCUDA.cu" />
     <CudaCompile Include="SOTFieldCUDA.cu" />
     <CudaCompile Include="STFieldCUDA.cu" />

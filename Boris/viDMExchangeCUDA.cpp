@@ -10,8 +10,7 @@
 #include "viDMExchange.h"
 #include "MeshDefs.h"
 
-viDMExchangeCUDA::viDMExchangeCUDA(MeshCUDA* pMeshCUDA_, viDMExchange* pviDMExchange)
-	:
+viDMExchangeCUDA::viDMExchangeCUDA(MeshCUDA* pMeshCUDA_, viDMExchange* pviDMExchange) :
 	ModulesCUDA(),
 	ExchangeBaseCUDA(pMeshCUDA_, pviDMExchange)
 {

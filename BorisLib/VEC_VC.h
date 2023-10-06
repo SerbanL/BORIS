@@ -249,10 +249,10 @@ private:
 	//initialization method for neighbor flags : set flags at size VEC<VType>::n, counting neighbors etc.
 	//Set empty cell values using information in linked_vec (keep same shape) - this must have same rectangle
 	template <typename LVType>
-	void set_ngbrFlags(const VEC_VC<LVType> &linked_vec);
+	void set_ngbrFlags(const VEC_VC<LVType> &linked_vec, bool do_reset = true);
 
 	//initialization method for neighbor flags : set flags at size VEC<VType>::n, counting neighbors etc. Use current shape in ngbrFlags
-	void set_ngbrFlags(void);
+	void set_ngbrFlags(bool do_reset = true);
 
 	//calculate faces and edges flags - called by set_ngbrFlags if calculate_faces_and_edges is true
 	void set_faces_and_edges_flags(void);
@@ -554,7 +554,7 @@ public:
 	void setrect(const Rect& rectangle, VType value = VType());
 
 	//delete rectangle, where the rectangle is relative to this VEC's rectangle, by setting empty cell values - all cells become empty cells
-	void delrect(const Rect& rectangle);
+	void delrect(const Rect& rectangle, bool recalculate_flags = true);
 
 	//mask values in cells using bitmap image : white -> empty cells. black -> keep values. Apply mask up to given z depth depending on grayscale value (all if default 0 value).
 	bool apply_bitmap_mask(const std::vector<unsigned char>& bitmap, double zDepth = 0.0);
@@ -633,24 +633,22 @@ public:
 	template <typename PType = decltype(GetMagnitude(std::declval<VType>()))>
 	void renormalize(PType new_norm);
 
-	//copy values from copy_this but keep current dimensions - if necessary map values from copy_this to local dimensions. Points with zero values are set as empty.
-	void copy_values(const VEC<VType>& copy_this, Rect dstRect = Rect(), Rect srcRect = Rect());
-
 	//copy values from copy_this but keep current dimensions - if necessary map values from copy_this to local dimensions; from flags only copy the shape but not the boundary condition values or anything else - these are reset
-	void copy_values(const VEC_VC<VType>& copy_this, Rect dstRect = Rect(), Rect srcRect = Rect());
+	void copy_values(const VEC<VType>& copy_this, Rect dstRect = Rect(), Rect srcRect = Rect(), double multiplier = 1.0, bool recalculate_flags = true);
+	void copy_values(const VEC_VC<VType>& copy_this, Rect dstRect = Rect(), Rect srcRect = Rect(), double multiplier = 1.0, bool recalculate_flags = true);
 
-	//shift all the values in this VEC by the given delta (units same as VEC<VType>::h). Shift values in given shift_rect (absolute coordinates). Not optimised, not parallel code.
-	void shift(const DBL3& delta, const Rect& shift_rect);
-	
+	//copy values from copy_this but keep current dimensions - if necessary map values from copy_this to local dimensions
+	//can specify destination and source rectangles in relative coordinates
+	//this is intended for VECs where copy_this cellsize is much larger than that in this VEC, and instead of setting all values the same, thermalize_func generator will generate values
+	//e.g. this is useful for copying values from a micromagnetic mesh into an atomistic mesh, where the atomistic spins are generated according to a distribution setup in thermalize_func
+	//thermalize_func returns the value to set, and takes parameters VType (value in the larger cell from copy_this which is being copied), and int, int (index of larger cell from copy_this which is being copied, and index of destination cell)
+	void copy_values_thermalize(const VEC_VC<VType>& copy_this, std::function<VType(VType, int, int)>& thermalize_func, Rect dstRect = Rect(), Rect srcRect = Rect(), bool recalculate_flags = true);
+
 	//shift along an axis - use this for moving mesh algorithms. Fast parallel code.
-	void shift_x(double delta, const Rect& shift_rect);
+	void shift_x(double delta, const Rect& shift_rect, bool recalculate_flags = true);
 
 	//shift along an axis - use this for moving mesh algorithms. Fast parallel code.
-	void shift_y(double delta, const Rect& shift_rect);
-
-	//shift all the values in this VEC by the given delta (units same as VEC<VType>::h). Shift values in given shift_rect (absolute coordinates).
-	//Also keep magnitude in each cell (e.g. use for vectorial quantities, such as magnetization, to shift only the direction). Not optimised, not parallel code.
-	void shift_keepmag(const DBL3& delta, const Rect& shift_rect);
+	void shift_y(double delta, const Rect& shift_rect, bool recalculate_flags = true);
 
 	//--------------------------------------------ARITHMETIC OPERATIONS ON ENTIRE VEC : VEC_VC_arith.h
 

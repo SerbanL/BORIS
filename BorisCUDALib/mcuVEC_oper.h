@@ -2,42 +2,7 @@
 
 #include "mcuVEC.h"
 
-//------------------------------------------------------------------- SETBOX
-
-//set value in box
-template <typename VType, typename MType>
-void mcuVEC<VType, MType>::setbox(cuBox box, VType value)
-{
-	for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
-
-		mng(mGPU)->setbox(box.get_intersection(pbox_d[mGPU]) - pbox_d[mGPU].s, value);
-	}
-}
-
-//------------------------------------------------------------------- SETRECT
-
-//set value in rectangle (i.e. in cells intersecting the rectangle), where the rectangle is relative to this cuVEC's rectangle.
-template <typename VType, typename MType>
-void mcuVEC<VType, MType>::setrect(const cuRect& rectangle, VType value)
-{
-	for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
-
-		mng(mGPU)->setrect(rectangle.get_intersection(prect_d[mGPU]) - prect_d[mGPU].s, value);
-	}
-}
-
-//------------------------------------------------------------------- DELRECT
-
-//delete rectangle, where the rectangle is relative to this VEC's rectangle, by setting empty cell values - all cells become empty cells. Applicable to cuVEC_VC only
-template <typename VType, typename MType>
-template <typename VType_, typename MType_, std::enable_if_t<std::is_same<MType_, cuVEC_VC<VType_>>::value>*>
-void mcuVEC<VType, MType>::delrect(cuRect rectangle)
-{
-	for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
-
-		mng(mGPU)->delrect(rectangle.get_intersection(prect_d[mGPU]) - prect_d[mGPU].s);
-	}
-}
+#include "mcu_prng.h"
 
 //------------------------------------------------------------------- SET
 
@@ -64,26 +29,6 @@ void mcuVEC<VType, MType>::renormalize(PType new_norm)
 	}
 }
 
-//------------------------------------------------------------------- BITMAP MASK
-
-//mask values in cells using bitmap image : white -> empty cells. black -> keep values. Apply mask up to given z depth number of cells depending on grayscale value (zDepth, all if 0). Applicable to cuVEC_VC only
-template <typename VType, typename MType>
-template <typename VType_, typename MType_, std::enable_if_t<std::is_same<MType_, cuVEC_VC<VType_>>::value>*>
-bool mcuVEC<VType, MType>::apply_bitmap_mask(std::vector<unsigned char>& bitmap, int zDepth)
-{
-	bool success = true;
-
-	for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
-
-		cuBox box = pbox_d[mGPU];
-		std::vector<unsigned char> sub_bitmap = subvec(bitmap, box.s.i, box.s.j, 0, box.e.i, box.e.j, 1, n.i, n.j, 1);
-
-		success &= mng(mGPU)->apply_bitmap_mask(sub_bitmap, zDepth);
-	}
-
-	return success;
-}
-
 //------------------------------------------------------------------- SETNONEMPTY
 
 //exactly the same as assign value - do not use assign as it is slow (sets flags). Applicable to cuVEC_VC only
@@ -106,8 +51,45 @@ void mcuVEC<VType, MType>::setrectnonempty(const cuRect& rectangle, VType value)
 {
 	for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
-		mng(mGPU)->setrectnonempty(rectangle.get_intersection(prect_d[mGPU]) - prect_d[mGPU].s, value);
+		mng(mGPU)->setrectnonempty(rectangle.get_intersection(prect_d[mGPU] - rect.s) + rect.s - prect_d[mGPU].s, value);
 	}
+}
+
+//------------------------------------------------------------------- COPY VALUES
+
+//copy values from copy_this but keep current dimensions - if necessary map values from copy_this to local dimensions; from flags only copy the shape but not the boundary condition values or anything else - these are reset
+template <typename VType, typename MType>
+void mcuVEC<VType, MType>::copy_values(mcu_obj<cuVEC<VType>, mcuVEC<VType, cuVEC<VType>>>& copy_this, cuBox cells_box_dst, cuBox cells_box_src, cuBReal multiplier)
+{
+	for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
+
+		cuBox cells_box_dst_device = cells_box_dst.get_intersection(pbox_d[mGPU]);
+		if (!cells_box_dst_device.IsNull()) {
+
+			//destination box for each device (intersection of device box with cells_box_dst) but must be relative to each device
+			//also pass in source and destination boxes for entire mcuVECs
+			mng(mGPU)->copy_values_mcuVEC(copy_this.get_deviceobject(mGPU), cells_box_dst_device - pbox_d[mGPU].s, cells_box_dst, cells_box_src, multiplier);
+		}
+	}
+}
+
+
+template <typename VType, typename MType>
+template <typename VType_, typename MType_, std::enable_if_t<std::is_same<MType_, cuVEC_VC<VType_>>::value>*>
+void mcuVEC<VType, MType>::copy_values(mcu_obj<cuVEC_VC<VType>, mcuVEC<VType, cuVEC_VC<VType>>>& copy_this, cuBox cells_box_dst, cuBox cells_box_src, cuBReal multiplier, bool recalculate_flags)
+{
+	for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
+
+		cuBox cells_box_dst_device = cells_box_dst.get_intersection(pbox_d[mGPU]);
+		if (!cells_box_dst_device.IsNull()) {
+			
+			//destination box for each device (intersection of device box with cells_box_dst) but must be relative to each device
+			//also pass in source and destination boxes for entire mcuVECs
+			mng(mGPU)->copy_values_mcuVEC(copy_this.get_deviceobject(mGPU), cells_box_dst_device - pbox_d[mGPU].s, cells_box_dst, cells_box_src, multiplier, recalculate_flags);
+		}
+	}
+
+	if (recalculate_flags) set_halo_conditions();
 }
 
 //------------------------------------------------------------------- SHIFT
@@ -115,15 +97,35 @@ void mcuVEC<VType, MType>::setrectnonempty(const cuRect& rectangle, VType value)
 //shift all the values in this cuVEC by the given delta (units same as cuVEC<VType>::h). Shift values in given shift_rect (absolute coordinates). Applicable to cuVEC_VC only
 template <typename VType, typename MType>
 template <typename VType_, typename MType_, std::enable_if_t<std::is_same<MType_, cuVEC_VC<VType_>>::value>*>
-void mcuVEC<VType, MType>::shift_x(cuBReal delta, cuRect shift_rect)
+void mcuVEC<VType, MType>::shift_x(cuBReal delta, cuRect shift_rect, bool recalculate_flags)
 {
-	//before attempting shifts, must exchange halos as these are used for shifting values at boundaries for each gpu
-	//for shift_x we only need to do this if sub-rectangles are arranged along x
-	if (halo_flag == NF2_HALOX) exchange_halos();
+	bool shift_again = false;
 
-	//now we can do the shifts
-	for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
+	do {
 
-		mng(mGPU)->shift_x(pn_d[mGPU].dim(), delta, shift_rect);
-	}
+		shift_again = false;
+
+		//before attempting shifts, must exchange halos as these are used for shifting values at boundaries for each gpu
+		//for shift_x we only need to do this if sub-rectangles are arranged along x
+		//must force halo exchange in case UVA is being used (can't use UVA with shift algorithm - without special modification - due to data races)
+		if (halo_flag == NF2_HALOX) exchange_halos(true);
+
+		//now we can do the shifts
+		for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
+
+			//must force single cell shifts if multiple devices are being used, since halos must be exchanged after each step
+			shift_again |= mng(mGPU)->shift_x(pn_d[mGPU].dim(), delta, shift_rect.get_intersection(prect_d[mGPU]), recalculate_flags, mGPU.get_num_devices() > 1);
+		}
+
+		//this was banked in shift_debt so set it to zero if performing another cell shift
+		if (shift_again) {
+
+			delta = 0.0;
+			//also need to set halo flags again as these are used
+			set_halo_conditions();
+		}
+
+	} while (shift_again);
+
+	if (recalculate_flags) set_halo_conditions();
 }

@@ -1268,7 +1268,7 @@ void DifferentialEquationFMCUDA::RunTEuler_LLG(int step, bool calculate_mxh, boo
 
 			for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
-				RunTEuler_Step0_LLG_withReductions_Kernel <<< (pMeshCUDA->n.dim() + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> 
+				RunTEuler_Step0_LLG_withReductions_Kernel <<< (pMeshCUDA->M.device_size(mGPU) + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
 					(cuDiffEq.get_deviceobject(mGPU), pMeshCUDA->cuMesh.get_deviceobject(mGPU));
 			}
 		}
@@ -1276,7 +1276,7 @@ void DifferentialEquationFMCUDA::RunTEuler_LLG(int step, bool calculate_mxh, boo
 
 			for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
-				RunTEuler_Step0_LLG_Kernel <<< (pMeshCUDA->n.dim() + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> 
+				RunTEuler_Step0_LLG_Kernel <<< (pMeshCUDA->M.device_size(mGPU) + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
 					(cuDiffEq.get_deviceobject(mGPU), pMeshCUDA->cuMesh.get_deviceobject(mGPU));
 			}
 		}

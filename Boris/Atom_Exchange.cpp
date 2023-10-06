@@ -12,6 +12,7 @@
 
 Atom_Exchange::Atom_Exchange(Atom_Mesh *paMesh_) :
 	Modules(),
+	ExchangeBase(paMesh_),
 	ProgramStateNames(this, {}, {})
 {
 	paMesh = paMesh_;
@@ -30,6 +31,8 @@ Atom_Exchange::Atom_Exchange(Atom_Mesh *paMesh_) :
 BError Atom_Exchange::Initialize(void)
 {
 	BError error(CLASS_STR(Atom_Exchange));
+
+	error = ExchangeBase::Initialize();
 
 	//Make sure display data has memory allocated (or freed) as required
 	error = Update_Module_Display_VECs(
@@ -110,6 +113,81 @@ double Atom_Exchange::UpdateField(void)
 			if (Module_energy.linear_size()) Module_energy[idx] = -MUB_MU0 * paMesh->M1[idx] * Heff_value / (2  * paMesh->M1.h.dim());
 		}
 	}
+
+	///////////////////////////////////////////////////////////////////////////////////////////////
+	/////////////////////////////// COUPLING ACROSS MULTIPLE MESHES ///////////////////////////////
+	///////////////////////////////////////////////////////////////////////////////////////////////
+
+	//if exchange coupling across multiple meshes, this is calculation method to use
+	std::function<double(int, int, DBL3, DBL3, DBL3, MeshBase&, MeshBase&)> calculate_coupling = [&]
+	(int cell1_idx, int cell2_idx, DBL3 relpos_m1, DBL3 stencil, DBL3 hshift_primary, MeshBase& Mesh_pri, MeshBase& Mesh_sec) -> double {
+
+		double energy_ = 0.0;
+
+		double hR = hshift_primary.norm();
+		double hRsq = hR * hR;
+
+		//this applies for atomistic to atomistic mesh coupling (note, the primary mesh here will be atomistic since Atom_Exchange module is held in Atomistic meshes only)
+		if (Mesh_pri.is_atomistic() && Mesh_sec.is_atomistic()) {
+
+			Atom_Mesh& mMesh_pri = *reinterpret_cast<Atom_Mesh*>(&Mesh_pri);
+			Atom_Mesh& mMesh_sec = *reinterpret_cast<Atom_Mesh*>(&Mesh_sec);
+
+			double mu_s = mMesh_pri.mu_s;
+			double J = mMesh_pri.J;
+			mMesh_pri.update_parameters_mcoarse(cell1_idx, mMesh_pri.mu_s, mu_s, mMesh_pri.J, J);
+
+			DBL3 Hexch;
+
+			//direction values at cells -1, 2
+			DBL3 m_2;
+			if (cell2_idx < mMesh_pri.n.dim() && mMesh_pri.M1.is_not_empty(cell2_idx)) m_2 = mMesh_pri.M1[cell2_idx].normalized();
+
+			DBL3 m_m1 = mMesh_sec.M1.weighted_average(relpos_m1, stencil);
+			if (m_m1 != DBL3()) m_m1 = m_m1.normalized();
+
+			Hexch = (J / (MUB_MU0 * mu_s)) * (m_2 + m_m1);
+
+			mMesh_pri.Heff1[cell1_idx] += Hexch;
+
+			energy_ = mMesh_pri.M1[cell1_idx] * Hexch;
+		}
+
+		//FM to atomistic coupling
+		else if (Mesh_pri.is_atomistic() && Mesh_sec.GetMeshType() == MESH_FERROMAGNETIC) {
+
+			Atom_Mesh& mMesh_pri = *reinterpret_cast<Atom_Mesh*>(&Mesh_pri);
+			Mesh& mMesh_sec = *reinterpret_cast<Mesh*>(&Mesh_sec);
+
+			double mu_s = mMesh_pri.mu_s;
+			double J = mMesh_pri.J;
+			mMesh_pri.update_parameters_mcoarse(cell1_idx, mMesh_pri.mu_s, mu_s, mMesh_pri.J, J);
+
+			DBL3 Hexch;
+
+			//direction values at cells -1, 2
+			DBL3 m_2;
+			if (cell2_idx < mMesh_pri.n.dim() && mMesh_pri.M1.is_not_empty(cell2_idx)) m_2 = mMesh_pri.M1[cell2_idx].normalized();
+
+			DBL3 m_m1;
+			if (!mMesh_sec.M.is_empty(relpos_m1)) m_m1 = mMesh_sec.M[relpos_m1].normalized();
+
+			Hexch = (J / (MUB_MU0 * mu_s)) * (m_2 + m_m1);
+
+			mMesh_pri.Heff1[cell1_idx] += Hexch;
+
+			energy_ = mMesh_pri.M1[cell1_idx] * Hexch;
+		}
+
+		return energy_;
+	};
+
+	//if exchange coupled to other meshes calculate the exchange field at marked cmbnd cells and accumulate energy density contribution
+	if (paMesh->GetMeshExchangeCoupling()) CalculateExchangeCoupling(energy, calculate_coupling);
+
+	///////////////////////////////////////////////////////////////////////////////////////////////
+	///////////////////////////////////// FINAL ENERGY DENSITY VALUE //////////////////////////////
+	///////////////////////////////////////////////////////////////////////////////////////////////
 
 	//convert to energy density and return. Divide by two since in the Hamiltonian the sum is performed only once for every pair of spins, but if you use the M.H expression each sum appears twice.
 	//Also note, this energy density is not the same as the micromagnetic one, due to different zero-energy points.

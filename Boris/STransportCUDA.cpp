@@ -37,7 +37,7 @@ BError STransportCUDA::Initialize(void)
 
 	//no energy density contribution here
 	ZeroEnergy();
-	
+
 	//re-set cmbnd flags (also building contacts), as TMR initialization could have changed available cells in insulator meshes
 	for (int idx = 0; idx < (int)pSTrans->pTransport.size(); idx++) {
 		
@@ -65,7 +65,7 @@ BError STransportCUDA::Initialize(void)
 			if (!pTransport[idx]->SetFixedPotentialCells(pSTrans->electrode_rects[el_idx], pSTrans->electrode_potentials[el_idx])) return error(BERROR_OUTOFGPUMEMORY_NCRIT);
 		}
 	}
-
+	
 	if (!initialized) {
 
 		if (!pSMesh->disabled_transport_solver) {
@@ -95,6 +95,8 @@ BError STransportCUDA::Initialize(void)
 
 		initialized = true;
 	}
+
+	initialized = true;
 
 	return error;
 }
@@ -158,7 +160,7 @@ BError STransportCUDA::UpdateConfiguration(UPDATECONFIG_ cfgMessage)
 				pS.push_back(&(*pSMesh)[idx]->pMeshBaseCUDA->S);
 			}
 		}
-		
+
 		//set fixed potential cells and cmbnd flags
 		for (int idx = 0; idx < (int)pTransport.size(); idx++) {
 
@@ -194,7 +196,7 @@ BError STransportCUDA::UpdateConfiguration(UPDATECONFIG_ cfgMessage)
 			CMBNDcontactsCUDA.push_back(mesh_contacts);
 			CMBNDcontacts.push_back(mesh_contacts_cpu);
 		}
-
+		
 		//copy fixed SOR damping from STransport
 		SOR_damping_V.from_cpu(pSTrans->SOR_damping.i);
 		SOR_damping_S.from_cpu(pSTrans->SOR_damping.j);

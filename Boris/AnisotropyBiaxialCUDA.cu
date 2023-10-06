@@ -142,7 +142,7 @@ void Anisotropy_BiaxialCUDA::UpdateField(void)
 
 			for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
-				Anisotropy_BiaxialCUDA_AFM_UpdateField <<< (pMeshCUDA->n.dim() + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> 
+				Anisotropy_BiaxialCUDA_AFM_UpdateField <<< (pMeshCUDA->M.device_size(mGPU) + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
 					(pMeshCUDA->cuMesh.get_deviceobject(mGPU), cuModule.get_deviceobject(mGPU), false);
 			}
 		}

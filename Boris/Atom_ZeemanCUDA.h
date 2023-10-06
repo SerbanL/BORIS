@@ -68,6 +68,11 @@ public:
 
 	BError SetFieldVEC(VEC<DBL3>& Havec_cpu);
 
+	BError SetFieldVEC_FromcuVEC(mcu_VEC(cuReal3)& Hext);
+
+	//Set globalField from SMeshCUDA::globalField (without mesh transfer, simply read values)
+	void SetGlobalField(mcu_VEC(cuReal3)& SMesh_globalField);
+
 	//-------------------Torque methods
 
 	cuReal3 GetTorque(cuRect avRect);

@@ -7,6 +7,9 @@
 #include "DiffEq.h"
 #include "Atom_DiffEq.h"
 
+#include "Mesh.h"
+#include "Atom_Mesh.h"
+
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 //calculate time step for adaptive methods based on current error values and evaluation method settings
@@ -62,6 +65,9 @@ bool ODECommon_Base::SetAdaptiveTimeStep(void)
 
 void ODECommon_Base::Iterate(void)
 {
+	//save current dT value in case it changes (adaptive time step methods)
+	dT_last = dT;
+
 	switch (evalMethod) {
 
 	case EVAL_EULER:
@@ -71,10 +77,14 @@ void ODECommon_Base::Iterate(void)
 
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->RunEuler_withReductions();
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->RunEuler_withReductions();
 			}
@@ -99,10 +109,14 @@ void ODECommon_Base::Iterate(void)
 
 			for (int idx = 0; idx < (int)podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->RunEuler();
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->RunEuler();
 			}
@@ -112,8 +126,6 @@ void ODECommon_Base::Iterate(void)
 		stagetime += dT;
 		iteration++;
 		stageiteration++;
-		available = true;
-		dT_last = dT;
 #endif
 	}
 	break;
@@ -127,10 +139,14 @@ void ODECommon_Base::Iterate(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					podeSolver->pODE[idx]->RunTEuler_Step0_withReductions();
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					patom_odeSolver->pODE[idx]->RunTEuler_Step0_withReductions();
 				}
@@ -144,10 +160,14 @@ void ODECommon_Base::Iterate(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					podeSolver->pODE[idx]->RunTEuler_Step0();
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					patom_odeSolver->pODE[idx]->RunTEuler_Step0();
 				}
@@ -162,10 +182,14 @@ void ODECommon_Base::Iterate(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					podeSolver->pODE[idx]->RunTEuler_Step1_withReductions();
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					patom_odeSolver->pODE[idx]->RunTEuler_Step1_withReductions();
 				}
@@ -179,10 +203,14 @@ void ODECommon_Base::Iterate(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					podeSolver->pODE[idx]->RunTEuler_Step1();
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					patom_odeSolver->pODE[idx]->RunTEuler_Step1();
 				}
@@ -190,7 +218,6 @@ void ODECommon_Base::Iterate(void)
 
 			evalStep = 0;
 			available = true;
-			dT_last = dT;
 
 			time += dT;
 			stagetime += dT;
@@ -210,10 +237,14 @@ void ODECommon_Base::Iterate(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					podeSolver->pODE[idx]->RunAHeun_Step0_withReductions();
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					patom_odeSolver->pODE[idx]->RunAHeun_Step0_withReductions();
 				}
@@ -227,10 +258,14 @@ void ODECommon_Base::Iterate(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					podeSolver->pODE[idx]->RunAHeun_Step0();
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					patom_odeSolver->pODE[idx]->RunAHeun_Step0();
 				}
@@ -245,10 +280,14 @@ void ODECommon_Base::Iterate(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					podeSolver->pODE[idx]->RunAHeun_Step1_withReductions();
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					patom_odeSolver->pODE[idx]->RunAHeun_Step1_withReductions();
 				}
@@ -262,10 +301,14 @@ void ODECommon_Base::Iterate(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					podeSolver->pODE[idx]->RunAHeun_Step1();
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					patom_odeSolver->pODE[idx]->RunAHeun_Step1();
 				}
@@ -277,8 +320,8 @@ void ODECommon_Base::Iterate(void)
 			iteration++;
 			stageiteration++;
 			available = true;
+
 			dT_last = dT;
-			
 			//accumulate lte value so we can use it to adjust the time step
 			lte = 0.0;
 			podeSolver->Set_lte();
@@ -305,10 +348,14 @@ void ODECommon_Base::Iterate(void)
 
 					for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+						if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 						podeSolver->pODE[idx]->RunABM_Predictor_withReductions();
 					}
 
 					for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+						if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 						patom_odeSolver->pODE[idx]->RunABM_Predictor_withReductions();
 					}
@@ -323,10 +370,14 @@ void ODECommon_Base::Iterate(void)
 
 					for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+						if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 						podeSolver->pODE[idx]->RunABM_Predictor();
 					}
 
 					for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+						if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 						patom_odeSolver->pODE[idx]->RunABM_Predictor();
 					}
@@ -341,10 +392,14 @@ void ODECommon_Base::Iterate(void)
 
 					for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+						if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 						podeSolver->pODE[idx]->RunABM_Corrector_withReductions();
 					}
 
 					for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+						if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 						patom_odeSolver->pODE[idx]->RunABM_Corrector_withReductions();
 					}
@@ -359,10 +414,14 @@ void ODECommon_Base::Iterate(void)
 
 					for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+						if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 						podeSolver->pODE[idx]->RunABM_Corrector();
 					}
 
 					for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+						if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 						patom_odeSolver->pODE[idx]->RunABM_Corrector();
 					}
@@ -374,8 +433,8 @@ void ODECommon_Base::Iterate(void)
 				iteration++;
 				stageiteration++;
 				available = true;
+
 				dT_last = dT;
-				
 				lte = 0.0;
 				podeSolver->Set_lte();
 				patom_odeSolver->Set_lte();
@@ -398,10 +457,14 @@ void ODECommon_Base::Iterate(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					podeSolver->pODE[idx]->RunABM_TEuler0();
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					patom_odeSolver->pODE[idx]->RunABM_TEuler0();
 				}
@@ -413,10 +476,14 @@ void ODECommon_Base::Iterate(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					podeSolver->pODE[idx]->RunABM_TEuler1();
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					patom_odeSolver->pODE[idx]->RunABM_TEuler1();
 				}
@@ -448,10 +515,14 @@ void ODECommon_Base::Iterate(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					podeSolver->pODE[idx]->RunRK23_Step0_withReductions();
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					patom_odeSolver->pODE[idx]->RunRK23_Step0_withReductions();
 				}
@@ -465,10 +536,14 @@ void ODECommon_Base::Iterate(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					podeSolver->pODE[idx]->RunRK23_Step0();
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					patom_odeSolver->pODE[idx]->RunRK23_Step0();
 				}
@@ -500,10 +575,14 @@ void ODECommon_Base::Iterate(void)
 			//Advance with new stepsize
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->RunRK23_Step0_Advance();
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->RunRK23_Step0_Advance();
 			}
@@ -516,10 +595,14 @@ void ODECommon_Base::Iterate(void)
 		{
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->RunRK23_Step1();
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->RunRK23_Step1();
 			}
@@ -534,10 +617,14 @@ void ODECommon_Base::Iterate(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					podeSolver->pODE[idx]->RunRK23_Step2_withReductions();
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					patom_odeSolver->pODE[idx]->RunRK23_Step2_withReductions();
 				}
@@ -551,10 +638,14 @@ void ODECommon_Base::Iterate(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					podeSolver->pODE[idx]->RunRK23_Step2();
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					patom_odeSolver->pODE[idx]->RunRK23_Step2();
 				}
@@ -584,10 +675,14 @@ void ODECommon_Base::Iterate(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					podeSolver->pODE[idx]->RunRK4_Step0_withReductions();
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					patom_odeSolver->pODE[idx]->RunRK4_Step0_withReductions();
 				}
@@ -601,10 +696,14 @@ void ODECommon_Base::Iterate(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					podeSolver->pODE[idx]->RunRK4_Step0();
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					patom_odeSolver->pODE[idx]->RunRK4_Step0();
 				}
@@ -619,10 +718,14 @@ void ODECommon_Base::Iterate(void)
 		{
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->RunRK4_Step1();
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->RunRK4_Step1();
 			}
@@ -635,10 +738,14 @@ void ODECommon_Base::Iterate(void)
 		{
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->RunRK4_Step2();
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->RunRK4_Step2();
 			}
@@ -653,10 +760,14 @@ void ODECommon_Base::Iterate(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					podeSolver->pODE[idx]->RunRK4_Step3_withReductions();
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					patom_odeSolver->pODE[idx]->RunRK4_Step3_withReductions();
 				}
@@ -670,10 +781,14 @@ void ODECommon_Base::Iterate(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					podeSolver->pODE[idx]->RunRK4_Step3();
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					patom_odeSolver->pODE[idx]->RunRK4_Step3();
 				}
@@ -681,7 +796,6 @@ void ODECommon_Base::Iterate(void)
 
 			evalStep = 0;
 			available = true;
-			dT_last = dT;
 
 			time += dT;
 			stagetime += dT;
@@ -705,10 +819,14 @@ void ODECommon_Base::Iterate(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					podeSolver->pODE[idx]->RunRKF45_Step0_withReductions();
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					patom_odeSolver->pODE[idx]->RunRKF45_Step0_withReductions();
 				}
@@ -722,10 +840,14 @@ void ODECommon_Base::Iterate(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					podeSolver->pODE[idx]->RunRKF45_Step0();
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					patom_odeSolver->pODE[idx]->RunRKF45_Step0();
 				}
@@ -740,10 +862,14 @@ void ODECommon_Base::Iterate(void)
 		{
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->RunRKF45_Step1();
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->RunRKF45_Step1();
 			}
@@ -756,10 +882,14 @@ void ODECommon_Base::Iterate(void)
 		{
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->RunRKF45_Step2();
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->RunRKF45_Step2();
 			}
@@ -772,10 +902,14 @@ void ODECommon_Base::Iterate(void)
 		{
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->RunRKF45_Step3();
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->RunRKF45_Step3();
 			}
@@ -788,10 +922,14 @@ void ODECommon_Base::Iterate(void)
 		{
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->RunRKF45_Step4();
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->RunRKF45_Step4();
 			}
@@ -806,10 +944,14 @@ void ODECommon_Base::Iterate(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					podeSolver->pODE[idx]->RunRKF45_Step5_withReductions();
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					patom_odeSolver->pODE[idx]->RunRKF45_Step5_withReductions();
 				}
@@ -823,10 +965,14 @@ void ODECommon_Base::Iterate(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					podeSolver->pODE[idx]->RunRKF45_Step5();
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					patom_odeSolver->pODE[idx]->RunRKF45_Step5();
 				}
@@ -838,8 +984,8 @@ void ODECommon_Base::Iterate(void)
 			iteration++;
 			stageiteration++;
 			available = true;
+
 			dT_last = dT;
-			
 			lte = 0.0;
 			podeSolver->Set_lte();
 			patom_odeSolver->Set_lte();
@@ -867,10 +1013,14 @@ void ODECommon_Base::Iterate(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					podeSolver->pODE[idx]->RunRKF56_Step0_withReductions();
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					patom_odeSolver->pODE[idx]->RunRKF56_Step0_withReductions();
 				}
@@ -884,10 +1034,14 @@ void ODECommon_Base::Iterate(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					podeSolver->pODE[idx]->RunRKF56_Step0();
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					patom_odeSolver->pODE[idx]->RunRKF56_Step0();
 				}
@@ -902,10 +1056,14 @@ void ODECommon_Base::Iterate(void)
 		{
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->RunRKF56_Step1();
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->RunRKF56_Step1();
 			}
@@ -918,10 +1076,14 @@ void ODECommon_Base::Iterate(void)
 		{
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->RunRKF56_Step2();
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->RunRKF56_Step2();
 			}
@@ -934,10 +1096,14 @@ void ODECommon_Base::Iterate(void)
 		{
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->RunRKF56_Step3();
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->RunRKF56_Step3();
 			}
@@ -950,10 +1116,14 @@ void ODECommon_Base::Iterate(void)
 		{
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->RunRKF56_Step4();
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->RunRKF56_Step4();
 			}
@@ -966,10 +1136,14 @@ void ODECommon_Base::Iterate(void)
 		{
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->RunRKF56_Step5();
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->RunRKF56_Step5();
 			}
@@ -982,10 +1156,14 @@ void ODECommon_Base::Iterate(void)
 		{
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->RunRKF56_Step6();
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->RunRKF56_Step6();
 			}
@@ -1000,10 +1178,14 @@ void ODECommon_Base::Iterate(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					podeSolver->pODE[idx]->RunRKF56_Step7_withReductions();
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					patom_odeSolver->pODE[idx]->RunRKF56_Step7_withReductions();
 				}
@@ -1017,10 +1199,14 @@ void ODECommon_Base::Iterate(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					podeSolver->pODE[idx]->RunRKF56_Step7();
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					patom_odeSolver->pODE[idx]->RunRKF56_Step7();
 				}
@@ -1032,8 +1218,8 @@ void ODECommon_Base::Iterate(void)
 			iteration++;
 			stageiteration++;
 			available = true;
+
 			dT_last = dT;
-			
 			lte = 0.0;
 			podeSolver->Set_lte();
 			patom_odeSolver->Set_lte();
@@ -1061,10 +1247,14 @@ void ODECommon_Base::Iterate(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					podeSolver->pODE[idx]->RunRKCK45_Step0_withReductions();
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					patom_odeSolver->pODE[idx]->RunRKCK45_Step0_withReductions();
 				}
@@ -1078,10 +1268,14 @@ void ODECommon_Base::Iterate(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					podeSolver->pODE[idx]->RunRKCK45_Step0();
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					patom_odeSolver->pODE[idx]->RunRKCK45_Step0();
 				}
@@ -1096,10 +1290,14 @@ void ODECommon_Base::Iterate(void)
 		{
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->RunRKCK45_Step1();
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->RunRKCK45_Step1();
 			}
@@ -1112,10 +1310,14 @@ void ODECommon_Base::Iterate(void)
 		{
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->RunRKCK45_Step2();
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->RunRKCK45_Step2();
 			}
@@ -1128,10 +1330,14 @@ void ODECommon_Base::Iterate(void)
 		{
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->RunRKCK45_Step3();
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->RunRKCK45_Step3();
 			}
@@ -1144,10 +1350,14 @@ void ODECommon_Base::Iterate(void)
 		{
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->RunRKCK45_Step4();
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->RunRKCK45_Step4();
 			}
@@ -1162,10 +1372,14 @@ void ODECommon_Base::Iterate(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					podeSolver->pODE[idx]->RunRKCK45_Step5_withReductions();
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					patom_odeSolver->pODE[idx]->RunRKCK45_Step5_withReductions();
 				}
@@ -1179,10 +1393,14 @@ void ODECommon_Base::Iterate(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					podeSolver->pODE[idx]->RunRKCK45_Step5();
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					patom_odeSolver->pODE[idx]->RunRKCK45_Step5();
 				}
@@ -1194,8 +1412,8 @@ void ODECommon_Base::Iterate(void)
 			iteration++;
 			stageiteration++;
 			available = true;
+
 			dT_last = dT;
-			
 			lte = 0.0;
 			podeSolver->Set_lte();
 			patom_odeSolver->Set_lte();
@@ -1223,10 +1441,14 @@ void ODECommon_Base::Iterate(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					podeSolver->pODE[idx]->RunRKDP54_Step0_withReductions();
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					patom_odeSolver->pODE[idx]->RunRKDP54_Step0_withReductions();
 				}
@@ -1240,10 +1462,14 @@ void ODECommon_Base::Iterate(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					podeSolver->pODE[idx]->RunRKDP54_Step0();
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					patom_odeSolver->pODE[idx]->RunRKDP54_Step0();
 				}
@@ -1275,10 +1501,14 @@ void ODECommon_Base::Iterate(void)
 			//Advance magnetization with new stepsize
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->RunRKDP54_Step0_Advance();
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->RunRKDP54_Step0_Advance();
 			}
@@ -1291,10 +1521,14 @@ void ODECommon_Base::Iterate(void)
 		{
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->RunRKDP54_Step1();
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->RunRKDP54_Step1();
 			}
@@ -1307,10 +1541,14 @@ void ODECommon_Base::Iterate(void)
 		{
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->RunRKDP54_Step2();
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->RunRKDP54_Step2();
 			}
@@ -1323,10 +1561,14 @@ void ODECommon_Base::Iterate(void)
 		{
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->RunRKDP54_Step3();
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->RunRKDP54_Step3();
 			}
@@ -1339,10 +1581,14 @@ void ODECommon_Base::Iterate(void)
 		{
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->RunRKDP54_Step4();
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->RunRKDP54_Step4();
 			}
@@ -1357,10 +1603,14 @@ void ODECommon_Base::Iterate(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					podeSolver->pODE[idx]->RunRKDP54_Step5_withReductions();
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					patom_odeSolver->pODE[idx]->RunRKDP54_Step5_withReductions();
 				}
@@ -1374,10 +1624,14 @@ void ODECommon_Base::Iterate(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					podeSolver->pODE[idx]->RunRKDP54_Step5();
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					patom_odeSolver->pODE[idx]->RunRKDP54_Step5();
 				}
@@ -1401,9 +1655,6 @@ void ODECommon_Base::Iterate(void)
 	case EVAL_SD:
 	{
 #ifdef ODE_EVAL_COMPILATION_SD
-		available = true;
-		dT_last = dT;
-
 		if (primed) {
 
 			bool do_sd_reset = false;
@@ -1424,14 +1675,18 @@ void ODECommon_Base::Iterate(void)
 
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->RunSD_BB();
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
 
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
+
 				patom_odeSolver->pODE[idx]->RunSD_BB();
 			}
-			
+
 			double delta_m_sq = podeSolver->delta_m_sq + podeSolver->delta_m2_sq + patom_odeSolver->delta_m_sq;
 			double delta_m_G = podeSolver->delta_m_dot_delta_G + podeSolver->delta_m2_dot_delta_G2 + patom_odeSolver->delta_m_dot_delta_G;
 			double delta_G_sq = podeSolver->delta_G_sq + podeSolver->delta_G2_sq + patom_odeSolver->delta_G_sq;
@@ -1465,10 +1720,14 @@ void ODECommon_Base::Iterate(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					podeSolver->pODE[idx]->RunSD_Advance_withReductions();
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					patom_odeSolver->pODE[idx]->RunSD_Advance_withReductions();
 				}
@@ -1493,10 +1752,14 @@ void ODECommon_Base::Iterate(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					podeSolver->pODE[idx]->RunSD_Advance();
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					patom_odeSolver->pODE[idx]->RunSD_Advance();
 				}
@@ -1514,10 +1777,14 @@ void ODECommon_Base::Iterate(void)
 			//0. prime the SD solver
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->RunSD_Start();
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->RunSD_Start();
 			}

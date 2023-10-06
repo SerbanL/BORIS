@@ -6,6 +6,8 @@
 #include "ErrorHandler.h"
 #include "Atom_MeshCUDA.h"
 
+#include "Atom_Mesh_CubicCUDA_ThermalizePolicy.h"
+
 #include "BorisCUDALib.h"
 
 #ifdef MESH_COMPILATION_ATOM_CUBIC
@@ -31,6 +33,10 @@ private:
 	//mc indices and shuffling auxiliary array : same as for the cpu version, but generate unsigned random numbers, not doubles, for most efficient sort-based shuffle
 	mcu_arr<unsigned> mc_indices_red, mc_indices_black;
 	mcu_arr<unsigned> mc_shuf_red, mc_shuf_black;
+
+	// THERMALIZATION CLASS
+
+	mcu_obj<Thermalize_FM_to_Atom, Thermalize_FM_to_AtomPolicy> thermalize_FM_to_Atom;
 
 protected:
 
@@ -59,6 +65,11 @@ public:
 	cuBReal CheckMoveMesh(bool antisymmetric, double threshold);
 
 	//----------------------------------- OTHER CONTROL METHODS : implement pure virtual Atom_Mesh methods
+
+	//----------------------------------- ALGORITHMS
+
+	//called by Track_Shift_Algorithm when copy_values_thermalize call is required, since this needs to be implemented in a cu file
+	void Track_Shift_Algorithm_CopyThermalize(mcu_VEC_VC(cuReal3)& M_src, cuBox cells_box_dst, cuBox cells_box_src);
 
 	//----------------------------------- ENABLED MESH PROPERTIES CHECKERS
 

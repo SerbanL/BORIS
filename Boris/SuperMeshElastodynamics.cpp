@@ -38,7 +38,7 @@ BError SuperMesh::Set_Sod_Equation(std::string meshName, std::string text_equati
 
 	if (!contains(meshName)) return error(BERROR_INCORRECTNAME);
 
-	error = pMesh[meshName]->CallModuleMethod(&MElastic::Set_Sd_Equation, text_equation);
+	error = pMesh[meshName]->CallModuleMethod(&MElastic::Set_Sod_Equation, text_equation);
 	//disable elastodynamics solver iteration
 	CallModuleMethod(&SMElastic::set_el_dT, 0.0);
 

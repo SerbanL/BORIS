@@ -1,6 +1,7 @@
 #pragma once
 
 #include "mcuVEC.h"
+#include "mcuVEC_MeshTransfer.h"
 #include "cuVEC_mcuVEC.h"
 #include "cuVEC_VC_mcuVEC.h"
 
@@ -81,11 +82,13 @@ template <typename VType, typename MType>
 void mcuVEC<VType, MType>::construct_managed(void)
 {
 	man_mcuVEC.resize(mGPU.get_num_devices());
+	man_mcuVEC_Base.resize(mGPU.get_num_devices());
 
 	//make a cu_obj-managed mcuVEC_Managed object for each device so we can pass it into CUDA kernels
 	for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
 		man_mcuVEC[mGPU] = new cu_obj<mcuVEC_Managed<MType, VType>>();
+		man_mcuVEC_Base[mGPU] = new cu_obj<mcuVEC_Managed<cuVEC<VType>, VType>>();
 	}
 
 	//setup cuVEC(_VC) pointers in each one so we can use UVA to access them in CUDA kernels
@@ -96,13 +99,15 @@ void mcuVEC<VType, MType>::construct_managed(void)
 		for (int device_idx = 0; device_idx < mGPU.get_num_devices(); device_idx++) {
 
 			(*man_mcuVEC[mGPU])()->set_pointers(mGPU.get_num_devices(), device_idx, mng.get_managed_object(device_idx));
+			//here conversion from cuVEC_VC to cuVEC is done
+			(*man_mcuVEC_Base[mGPU])()->set_pointers(mGPU.get_num_devices(), device_idx, (cuVEC<VType>*&)mng.get_managed_object(device_idx));
 		}
 	}
 
 	//now for each device sub-cuVEC store pointer to respective man_mcuVEC
 	for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 		
-		mng(mGPU)->set_pmcuVEC(man_mcuVEC[mGPU]->get_managed_object());
+		mng(mGPU)->set_pmcuVEC(man_mcuVEC[mGPU]->get_managed_object(), man_mcuVEC_Base[mGPU]->get_managed_object());
 	}
 }
 
@@ -114,6 +119,9 @@ void mcuVEC<VType, MType>::destruct_managed(void)
 
 		delete man_mcuVEC[mGPU];
 		man_mcuVEC[mGPU] = nullptr;
+
+		delete man_mcuVEC_Base[mGPU];
+		man_mcuVEC_Base[mGPU] = nullptr;
 	}
 }
 
@@ -125,6 +133,7 @@ void mcuVEC<VType, MType>::synch_dimensions(void)
 	for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
 		(*man_mcuVEC[mGPU])()->synch_dimensions(mGPU.get_num_devices(), n, h, rect, pn_d, prect_d, pbox_d);
+		(*man_mcuVEC_Base[mGPU])()->synch_dimensions(mGPU.get_num_devices(), n, h, rect, pn_d, prect_d, pbox_d);
 	}
 }
 
@@ -245,8 +254,8 @@ bool mcuVEC<VType, MType>::resize(cuSZ3 new_n)
 }
 
 //special resizing mode where the device dimensions are specified externally 
-	//device_dimension specifies dimensions for all but possibly last device
-	//last device dimension adjusted to make up any difference
+//device_dimension specifies dimensions for all but possibly last device
+//last device dimension adjusted to make up any difference
 template <typename VType, typename MType>
 bool mcuVEC<VType, MType>::resize(cuSZ3 new_n, cuSZ3 device_dimension)
 {
@@ -472,6 +481,9 @@ void mcuVEC<VType, MType>::clear(void)
 
 	//synch dimensions in man_mcuVEC since they have changed here
 	synch_dimensions();
+
+	clear_transfer();
+	clear_transfer2();
 }
 
 //set rect start (i.e. shift the entire rectangle to align with given absolute starting coordinates
@@ -480,7 +492,7 @@ void mcuVEC<VType, MType>::set_rect_start(const cuReal3& rect_start)
 {
 	for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
-		prect_d[mGPU] += (rect_start - prect_d[mGPU].s);
+		prect_d[mGPU] += (rect_start - rect.s);
 		mng(mGPU)->set_rect_start(prect_d[mGPU].s);
 	}
 

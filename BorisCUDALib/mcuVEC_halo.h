@@ -225,15 +225,17 @@ void mcuVEC<VType, MType>::set_halo_conditions(void)
 //exchange values in all halos
 template <typename VType, typename MType>
 template <typename VType_, typename MType_, std::enable_if_t<std::is_same<MType_, cuVEC_VC<VType_>>::value>*>
-void mcuVEC<VType, MType>::exchange_halos(void)
+void mcuVEC<VType, MType>::exchange_halos(bool force_exchange)
 {
 	//only use if halos applicable. 
 	//Also, when using UVA there's no need to exchange halos as we can read directly using pointers set through set_halo_conditions
 	//However NOTE : UVA can be slower than halo exchange mechanism, especially with more than 2 GPUs
+	
 	if (halo_depth == 0 || mGPU.get_num_devices() == 1 || !n.dim()) return;
 
 	//additionally if uva is enabled we must synchronize at this point, as this method will be called before launching a kernel using uva to access memory on other devices so must guarantee no data race
-	if (mGPU.is_uva_enabled()) {
+	//The exception is when we want to force halo exchange for special-use cases (e.g. shifting algorithm)
+	if (!force_exchange && mGPU.is_uva_enabled()) {
 
 		mGPU.synchronize();
 		return;

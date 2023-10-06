@@ -7,10 +7,13 @@ class Atom_Mesh;
 
 #if defined(MODULE_COMPILATION_IDMEXCHANGE) && ATOMISTIC == 1
 
+#include "ExchangeBase.h"
+
 //interfacial DM exchange for an atomistic simple cubic mesh
 
 class Atom_iDMExchange :
 	public Modules,
+	public ExchangeBase,
 	public ProgramState<Atom_iDMExchange, std::tuple<>, std::tuple<>>
 {
 private:

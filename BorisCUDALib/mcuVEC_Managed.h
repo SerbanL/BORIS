@@ -92,6 +92,12 @@ public:
 		return (*ppcuvec[device])[devrel_pos];
 	}
 
+	//if device index is known already then index using a cuINT2 : i contains device index, j contains cell index in that device
+	__device__ VType& operator[](const cuINT2& dev_cell_index)
+	{
+		return (*ppcuvec[dev_cell_index.i])[dev_cell_index.j];
+	}
+
 	//--------------------------------------------FLAG CHECKING
 
 	__device__ bool is_empty(const cuINT3& ijk) const
@@ -108,7 +114,14 @@ public:
 		return ppcuvec[device]->is_empty(devrel_pos);
 	}
 
+	__device__ bool is_empty(const cuRect& rectangle) const;
+
 	//--------------------------------------------GETTERS : mcuVEC_Managed_aux.h
+
+	__device__ size_t linear_size(void)  const { return n.dim(); }
+
+	//return cell index from relative position : the inverse of cellidx_to_position
+	__device__ int position_to_cellidx(const cuReal3& position) const { return cu_floor_epsilon(position.x / h.x) + cu_floor_epsilon(position.y / h.y) * n.x + cu_floor_epsilon(position.z / h.z) * n.x * n.y; }
 
 	//get index of cell which contains position (absolute value, not relative to start of rectangle), capped to mesh size
 	__device__ cuINT3 cellidx_from_position(const cuReal3& absolute_position)  const;
@@ -129,6 +142,18 @@ public:
 
 	//get weighted average around coord in given stencil, where coord is relative to entire cuVEC
 	__device__ VType weighted_average(const cuReal3& coord, const cuReal3& stencil);
+
+	//--------------------------------------------Others
+
+	//number of points allocated for a given GPU (linear index, not physical device index)
+	__device__ size_t device_size(int idx) const { return pn_d[idx].dim(); }
+
+	__device__ const cuSZ3& device_n(int idx) const { return pn_d[idx]; }
+
+	__device__ const cuRect& device_rect(int idx) const { return prect_d[idx]; }
+	__device__ const cuBox& device_box(int idx) const { return pbox_d[idx]; }
+
+	__device__ int get_num_devices(void) const { return num_devices; }
 
 	//--------------------------------------------TESTING
 

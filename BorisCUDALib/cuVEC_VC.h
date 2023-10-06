@@ -340,10 +340,10 @@ private:
 
 	//initialization method for neighbor flags : set flags at size cuVEC<VType>::n, counting neighbors etc.
 	//Set empty cell values using information in linked_vec (keep same shape) - this must have same rectangle
-	__host__ void set_ngbrFlags(const cuSZ3& linked_n, const cuReal3& linked_h, const cuRect& linked_rect, int*& linked_ngbrFlags);
+	__host__ void set_ngbrFlags(const cuSZ3& linked_n, const cuReal3& linked_h, const cuRect& linked_rect, int*& linked_ngbrFlags, bool do_reset = true);
 
 	//initialization method for neighbor flags : set flags at size cuVEC<VType>::n, counting neighbors etc. Use current shape in ngbrFlags
-	__host__ void set_ngbrFlags(void);
+	__host__ void set_ngbrFlags(bool do_reset = true);
 	
 	//calculate faces and edges flags - called by set_ngbrFlags if calculate_faces_and_edges is true
 	__host__ void set_faces_and_edges_flags(void);
@@ -357,10 +357,6 @@ private:
 
 	//set pbc flags depending on set conditions and currently calculated flags - ngbrFlags must already be calculated before using this
 	__host__ void set_pbc_flags(void);
-
-	//mark cell as not empty / empty : internal use only; routines that use these must finish with recalculating ngbrflags as neighbours will have changed
-	__device__ void mark_not_empty(int index) { ngbrFlags[index] |= NF_NOTEMPTY; }
-	__device__ void mark_empty(int index) { ngbrFlags[index] &= ~NF_NOTEMPTY; cuVEC<VType>::quantity[index] = VType(); }
 
 	//check if we need to use ngbrFlags2 (allocate memory etc.)
 	__host__ bool use_extended_flags(void);
@@ -391,17 +387,21 @@ public:
 	__host__ void destruct_cu_obj(void);
 
 	//called by mcuVEC when mcuVEC_Managed objects are constructed, so pointer can be stored here too (cuVEC_VC_mcuVEC.h)
-	__host__ void set_pmcuVEC(mcuVEC_Managed<cuVEC_VC<VType>, VType>*& pmcuVEC_);
+	__host__ void set_pmcuVEC(mcuVEC_Managed<cuVEC_VC<VType>, VType>*& pmcuVEC_, mcuVEC_Managed<cuVEC<VType>, VType>*& pmcuVEC_Base);
 
 	//--------------------------------------------SPECIAL ACCESS
 
-	__host__ int*& ngbrFlags_ref(void) { return ngbrFlags; }
+	__host__ __device__ int*& ngbrFlags_ref(void) { return ngbrFlags; }
+	__host__ __device__ int*& ngbrFlags2_ref(void) { return ngbrFlags2; }
 
-	__host__ VType*& halo_p_ref(void) { return halo_p; }
-	__host__ VType*& halo_n_ref(void) { return halo_n; }
+	__host__ __device__ VType*& halo_p_ref(void) { return halo_p; }
+	__host__ __device__ VType*& halo_n_ref(void) { return halo_n; }
 	__host__ VType*& halotemp_p_ref(void) { return halotemp_p; }
 	__host__ VType*& halotemp_n_ref(void) { return halotemp_n; }
-
+	
+	__device__ cuVEC_VC<VType>*& pUVA_haloVEC_left_ref(void) { return pUVA_haloVEC_left; }
+	__device__ cuVEC_VC<VType>*& pUVA_haloVEC_right_ref(void) { return pUVA_haloVEC_right; }
+	
 	__host__ void set_pUVA_haloVEC_left(cuVEC_VC<VType>*& pUVA_haloVEC_left_) { set_gpu_value(pUVA_haloVEC_left, pUVA_haloVEC_left_); }
 	__host__ void set_pUVA_haloVEC_right(cuVEC_VC<VType>*& pUVA_haloVEC_right_) { set_gpu_value(pUVA_haloVEC_right, pUVA_haloVEC_right_); }
 
@@ -616,6 +616,13 @@ public:
 	//clear all Robin boundary conditions and values
 	__host__ void clear_robin_conditions(void);
 	
+	//mark cell as not empty / empty : internal use only; routines that use these must finish with recalculating ngbrflags as neighbours will have changed
+	__device__ void mark_not_empty(int index) { ngbrFlags[index] |= NF_NOTEMPTY; }
+	__device__ void mark_empty(int index) { ngbrFlags[index] &= ~NF_NOTEMPTY; cuVEC<VType>::quantity[index] = VType(); }
+
+	//similar to set_ngbrFlags, but only recalculate shape-related flags (neighbors) directly from stored values (zero value means empty cell), usable at runtime if shape changes
+	__host__ void set_ngbrFlags_shapeonly(void) { set_ngbrFlags(false); }
+
 	//when enabled then set_faces_and_edges_flags method will be called by set_ngbrFlags every time it is executed
 	//if false then faces and edges flags not calculated to avoid extra unnecessary initialization work
 	__host__ void set_calculate_faces_and_edges(bool status) { set_gpu_value(calculate_faces_and_edges, status); if (status) set_faces_and_edges_flags(); }
@@ -629,7 +636,7 @@ public:
 	__host__ void setrect(cuRect rectangle, VType value = VType());
 
 	//delete rectangle, where the rectangle is relative to this VEC's rectangle, by setting empty cell values - all cells become empty cells
-	__host__ void delrect(cuRect rectangle);
+	__host__ void delrect(cuRect rectangle, bool recalculate_flags = true);
 
 	//mask values in cells using bitmap image : white -> empty cells. black -> keep values. Apply mask up to given z depth number of cells depending on grayscale value (zDepth, all if 0).
 	__host__ bool apply_bitmap_mask(std::vector<unsigned char>& bitmap, int zDepth = 0);
@@ -647,8 +654,31 @@ public:
 	template <typename PType = decltype(cu_GetMagnitude(std::declval<VType>()))>
 	__host__ void renormalize(size_t arr_size, PType new_norm);
 
-	//shift all the values in this cuVEC by the given delta (units same as cuVEC<VType>::h). Shift values in given shift_rect (absolute coordinates).
-	__host__ void shift_x(size_t size, cuBReal delta, cuRect shift_rect);
+	//copy values from copy_this but keep current dimensions - if necessary map values from copy_this to local dimensions; from flags only copy the shape but not the boundary condition values or anything else - these are reset
+	__host__ void copy_values(cuVEC_VC<VType>& copy_this, cuBox cells_box_dst, cuBox cells_box_src, cuBReal multiplier = 1.0, bool recalculate_flags = true);
+	//special modification of copy_values method above, where we use copy_this.mcuvec() instead of copy_this directly
+	//this should only be used by mcuVEC
+	__host__ void copy_values_mcuVEC(cuVEC_VC<VType>& copy_this, cuBox cells_box_dst_device, cuBox cells_box_dst, cuBox cells_box_src, cuBReal multiplier = 1.0, bool recalculate_flags = true);
+
+	//copy values from copy_this but keep current dimensions - if necessary map values from copy_this to local dimensions
+	//can specify destination and source rectangles in relative coordinates
+	//this is intended for VECs where copy_this cellsize is much larger than that in this VEC, and instead of setting all values the same, thermalize_func generator will generate values
+	//e.g. this is useful for copying values from a micromagnetic mesh into an atomistic mesh, where the atomistic spins are generated according to a distribution setup in obj.thermalize_func
+	//obj.thermalize_func returns the value to set, and takes parameters VType (value in the larger cell from copy_this which is being copied), and int, int (index of larger cell from copy_this which is being copied, and index of destination cell)
+	//NOTE : can only be called in cu files (where it is possible to include cuVEC_VC_oper.cuh), otherwise explicit template parameters would have to be declared, which is too restrictive.
+	template <typename Class_Thermalize>
+	__host__ void copy_values_thermalize(cuVEC_VC<VType>& copy_this, Class_Thermalize& obj, cuBox cells_box_dst, cuBox cells_box_src, cuBorisRand<>& prng, bool recalculate_flags = true);
+	//as above but to be used by mcuVEC
+	template <typename Class_Thermalize>
+	__host__ void copy_values_thermalize_mcuVEC(cuVEC_VC<VType>& copy_this, Class_Thermalize& obj, cuBox cells_box_dst_device, cuBox cells_box_dst, cuBox cells_box_src, cuBorisRand<>& prng, bool recalculate_flags = true);
+
+	//shift all the values in this VEC by the given delta (units same as h). Shift values in given shift_rect (absolute coordinates).
+	//the shift may require performing multiple single cell shifts, which are done unless force_single_cell_shift is true
+	//in this case the function return true if further single cell shifts are required but were not executed since force_single_cell_shift = true
+	//this is used by an external coordinating algorithm (mcuVEC). Only a single cell shift is performed, and the rest is banked in shift_debt.
+	//thus the coordinating algorithm needs to call shift_x again, but with delta = 0, since the shift_debt will be used instead.
+	//repeat until shift_debt is exhausted and function returns false.
+	__host__ bool shift_x(size_t size, cuBReal delta, cuRect shift_rect, bool recalculate_flags = true, bool force_single_cell_shift = false);
 
 	//--------------------------------------------ARITHMETIC OPERATIONS ON ENTIRE VEC : cuVEC_VC_arith.cuh
 
@@ -668,6 +698,9 @@ public:
 	__host__ VType sum_nonempty(size_t arr_size, cuBox box, bool transfer_to_cpu = true);
 	//sum over non-empty cells over given rectangle (relative to this VEC's rect)
 	__host__ VType sum_nonempty(size_t arr_size, cuRect rectangle = cuRect(), bool transfer_to_cpu = true);
+
+	//average in given rectangle (relative coordinates), excluding zero points (assumed empty).
+	__device__ VType average_nonempty(const cuRect& rectangle);
 
 	//--------------------------------------------NUMERICAL PROPERTIES : cuVEC_VC_nprops.cuh
 	
@@ -736,6 +769,26 @@ public:
 	//delVs = c_pri * V_pri - c_sec * V_sec, c are double values specified by given functions
 	template <typename cuVEC_sec, typename Class_CMBNDs, typename Class_CMBNDp, typename Class_CMBND_S>
 	__host__ void set_cmbnd_discontinuous(size_t size, cuVEC_sec& V_sec, Class_CMBNDs& cmbndFuncs_sec, Class_CMBNDp& cmbndFuncs_pri, Class_CMBND_S& cmbndFuncs_s, CMBNDInfoCUDA& contact);
+
+	//--------------------------------------------EXTRACT A LINE PROFILE : cuVEC_VC_extract.cuh
+
+	//for all these methods use wrap-around when extracting profiles if points on profile exceed mesh boundaries
+	//cordinates are relative
+
+	//1. Profile values only, without stencil operation
+
+	//in cuVEC
+
+	//2. Profile values only, with stencil operation around profile point
+
+	//extract profile components: extract starting at start in the direction end - step, with given step; use weighted average to extract profile with given stencil
+	//all coordinates are relative positions. Return profile values in profile_gpu (which is resized as needed)
+	__host__ bool extract_profile(cuReal3 start, cuReal3 end, cuBReal step, cuReal3 stencil, cu_arr<VType>& profile_gpu);
+
+	//as above, but only store profile in internal memory (line_profile) so we can read it out later as needed
+	__host__ bool extract_profile(cuReal3 start, cuReal3 end, cuBReal step, cuReal3 stencil);
+
+	//also see cuVEC methods, not overloaded here
 
 	//--------------------------------------------OPERATORS and ALGORITHMS
 

@@ -89,15 +89,18 @@ void VEC_VC<VType>::resize_ngbrFlags(SZ3 new_n)
 
 //initialization method for neighbor flags : set flags at size VEC<VType>::n, counting neighbors etc. Use current shape in ngbrFlags
 template <typename VType>
-void VEC_VC<VType>::set_ngbrFlags(void)
+void VEC_VC<VType>::set_ngbrFlags(bool do_reset)
 {
 	if (VEC<VType>::rect.IsNull() || VEC<VType>::h == DBL3()) return;
 
-	//clear any shift debt as mesh has been resized so not valid anymore
-	shift_debt = DBL3();
+	if (do_reset) {
 
-	//dirichlet flags will be cleared from ngbrFlags, so also clear the dirichlet vectors
-	clear_dirichlet_flags();
+		//clear any shift debt as mesh has been resized so not valid anymore
+		shift_debt = DBL3();
+
+		//dirichlet flags will be cleared from ngbrFlags, so also clear the dirichlet vectors
+		clear_dirichlet_flags();
+	}
 
 	//also count non-empty points
 	int cellsCount = 0;
@@ -317,7 +320,7 @@ void VEC_VC<VType>::set_faces_and_edges_flags(void)
 //Set empty cell values using information in linked_vec (keep same shape) - this must have same rectangle
 template <typename VType>
 template <typename LVType>
-void VEC_VC<VType>::set_ngbrFlags(const VEC_VC<LVType>& linked_vec)
+void VEC_VC<VType>::set_ngbrFlags(const VEC_VC<LVType>& linked_vec, bool do_reset)
 {
 	//linked_vec must have same mesh rect
 	if (linked_vec.rect != VEC<VType>::rect || VEC<VType>::rect.IsNull() || VEC<VType>::h == DBL3()) return;
@@ -331,7 +334,7 @@ void VEC_VC<VType>::set_ngbrFlags(const VEC_VC<LVType>& linked_vec)
 	}
 
 	//now continue with set_ngbrFlags
-	set_ngbrFlags();
+	set_ngbrFlags(do_reset);
 }
 
 //from NF2_DIRICHLET type flag and cell_idx return boundary value from one of the dirichlet vectors

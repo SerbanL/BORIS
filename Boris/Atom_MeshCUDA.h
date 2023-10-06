@@ -83,6 +83,11 @@ public:
 	//Check if mesh needs to be moved (using the MoveMesh method) - return amount of movement required (i.e. parameter to use when calling MoveMesh).
 	cuBReal CheckMoveMesh(bool antisymmetric, double threshold) { return 0.0; }
 
+	//----------------------------------- ALGORITHMS
+
+	//called by Track_Shift_Algorithm when copy_values_thermalize call is required, since this needs to be implemented in a cu file
+	virtual void Track_Shift_Algorithm_CopyThermalize(mcu_VEC_VC(cuReal3)& M_src, cuBox cells_box_dst, cuBox cells_box_src) = 0;
+
 	//----------------------------------- DISPLAY-ASSOCIATED GET/SET METHODS
 
 	PhysQ FetchOnScreenPhysicalQuantity(double detail_level, bool getBackground);

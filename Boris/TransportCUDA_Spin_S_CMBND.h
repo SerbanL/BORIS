@@ -38,9 +38,6 @@ class TransportCUDA_Spin_S_CMBND_Pri {
 
 public:
 
-	//spin transport solver type (see Transport_Defs.h) : copy of stsolve in TransportCUDA, but on the gpu so we can use it in device code
-	int stsolve;
-
 	//managed mesh for access to all required mesh VECs and material parameters
 	ManagedMeshCUDA* pcuMesh;
 
@@ -53,6 +50,9 @@ public:
 	//dM_dt VEC (charge pumping and spin pumping)
 	//points to cuVEC in TransportBaseCUDA
 	cuVEC_VC<cuReal3>* pdM_dt;
+
+	//spin transport solver type (see Transport_Defs.h) : copy of stsolve in TransportCUDA, but on the gpu so we can use it in device code
+	int stsolve;
 
 public:
 
@@ -376,9 +376,6 @@ class TransportCUDA_Spin_S_CMBND_Sec {
 
 public:
 
-	//spin transport solver type (see Transport_Defs.h) : copy of stsolve in TransportCUDA, but on the gpu so we can use it in device code
-	int stsolve;
-
 	//managed mesh for access to all required mesh VECs and material parameters
 	ManagedMeshCUDA** ppcuMesh;
 
@@ -391,6 +388,9 @@ public:
 	//dM_dt VEC (charge pumping and spin pumping)
 	//points to cuVEC in TransportBaseCUDA
 	cuVEC_VC<cuReal3>** ppdM_dt;
+
+	//spin transport solver type (see Transport_Defs.h) : copy of stsolve in TransportCUDA, but on the gpu so we can use it in device code
+	int stsolve;
 
 	//number of devices available (i.e. size of above arrays)
 	int num_devices;

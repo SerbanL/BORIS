@@ -555,6 +555,9 @@ public:
 	//change named mesh dormant states. Also calls UpdateConfiguration, since dormant status can affect multilayered demag and supermesh rectangles
 	BError Set_Dormant(bool dormant, std::string meshName);
 
+	//setup track shifting algoithm for the holder mesh, with simulation window mesh, to be moved at set velocity and clipping during a simulation
+	BError Setup_Track_Shifting(std::string holder_meshName, std::vector<std::string> sim_meshNames, DBL3 velocity, DBL3 clipping);
+
 	//set link_stochastic flag in named mesh, or all meshes if supermesh handle given
 	BError SetLinkStochastic(bool link_stochastic, std::string meshName);
 
@@ -641,6 +644,9 @@ public:
 	//Set temperature model
 	BError SetTemperatureModel(std::string meshName, int tmtype);
 
+	//load temperature in supermesh (SHeat::globalTemp) or in named mesh
+	BError LoadOVF2Temp(std::string meshName, std::string fileName);
+
 	//--------------------------------------------------------- ELASTODYNAMICS SOLVER CONTROL : SuperMeshElastodynamics.cpp
 
 	//reset elastodynamics solver state
@@ -679,6 +685,13 @@ public:
 	BError ClearGlobalField(void);
 	//shift globalField rectangle
 	void ShiftGlobalField(DBL3 shift);
+
+	void SetGlobalFieldVelocity(DBL3 velocity, DBL3 clipping) { globalField_velocity = velocity; globalField_shift_clip = clipping; }
+	DBL3 GetGlobalFieldVelocity(void) { return globalField_velocity; }
+	DBL3 GetGlobalFieldClipping(void) { return globalField_shift_clip; }
+
+	//if globalField_velocity is not zero, then implement global field shifting
+	void GlobalFieldShifting_Algorithm(void);
 
 	//----------------------------------- MODULES CONTROL : SuperMeshModules.cpp
 

@@ -11,10 +11,10 @@
 #include "Atom_viDMExchange.h"
 
 Atom_viDMExchangeCUDA::Atom_viDMExchangeCUDA(Atom_MeshCUDA* paMeshCUDA_, Atom_viDMExchange* pAtom_viDMExchange_) :
-	ModulesCUDA()
+	ModulesCUDA(),
+	ExchangeBaseCUDA(paMeshCUDA_, pAtom_viDMExchange_)
 {
 	paMeshCUDA = paMeshCUDA_;
-	pAtom_viDMExchange = pAtom_viDMExchange_;
 }
 
 Atom_viDMExchangeCUDA::~Atom_viDMExchangeCUDA()
@@ -24,8 +24,7 @@ BError Atom_viDMExchangeCUDA::Initialize(void)
 {
 	BError error(CLASS_STR(Atom_viDMExchangeCUDA));
 
-	//initialize cpu version also (couple to dipole setting)
-	pAtom_viDMExchange->Initialize();
+	error = ExchangeBaseCUDA::Initialize();
 
 	//Make sure display data has memory allocated (or freed) as required
 	error = Update_Module_Display_VECs(

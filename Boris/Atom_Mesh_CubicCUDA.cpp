@@ -13,11 +13,14 @@
 Atom_Mesh_CubicCUDA::Atom_Mesh_CubicCUDA(Atom_Mesh_Cubic* paMesh) :
 	Atom_MeshCUDA(paMesh),
 	mc_indices_red(mGPU), mc_indices_black(mGPU),
-	mc_shuf_red(mGPU), mc_shuf_black(mGPU)
+	mc_shuf_red(mGPU), mc_shuf_black(mGPU),
+	thermalize_FM_to_Atom(mGPU)
 {
 	paMeshCubic = paMesh;
 
 	cmc_n.from_cpu(paMesh->cmc_n);
+
+	if (!error_on_create) error_on_create = thermalize_FM_to_Atom.set_pointers(this);
 }
 
 Atom_Mesh_CubicCUDA::~Atom_Mesh_CubicCUDA()

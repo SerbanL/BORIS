@@ -1,37 +1,85 @@
 #include "stdafx.h"
 #include "Atom_Mesh.h"
+#include "Atom_MeshParamsControl.h"
 
 #include "SuperMesh.h"
 
 //----------------------------------- OTHER MESH SHAPE CONTROL
 
-BError Atom_Mesh::copy_mesh_data(MeshBase& copy_this)
+BError Atom_Mesh::copy_mesh_data(MeshBase& copy_this, Rect dstRect, Rect srcRect)
 {
 	BError error(__FUNCTION__);
-
-	Atom_Mesh* pcopy_this = dynamic_cast<Atom_Mesh*>(&copy_this);
-
-	if (pcopy_this == nullptr || meshType != pcopy_this->GetMeshType()) return error(BERROR_INCORRECTVALUE);
 
 #if COMPILECUDA == 1
 	//if CUDA on then first transfer data to cpu as there may be a mismatch
 	if (paMeshCUDA) {
 
-		error = pcopy_this->paMeshCUDA->copy_shapes_to_cpu();
+		error = paMeshCUDA->copy_shapes_to_cpu();
+		error = copy_this.pMeshBaseCUDA->copy_shapes_to_cpu();
 	}
 #endif
 
-	//1a. shape atomic moments
-	if (M1.linear_size() && pcopy_this->M1.linear_size()) {
+	//atomistic to atomistic mesh
+	if (copy_this.is_atomistic()) {
 
-		M1.copy_values(pcopy_this->M1);
+		Atom_Mesh* pcopy_this = dynamic_cast<Atom_Mesh*>(&copy_this);
+		if (pcopy_this == nullptr) return error(BERROR_INCORRECTVALUE);
+
+		//1a. shape atomic moments
+		if (M1.linear_size() && pcopy_this->M1.linear_size()) {
+
+			M1.copy_values(pcopy_this->M1, dstRect, srcRect);
+		}
+	}
+	//ferromagnetic to atomistic mesh
+	else {
+
+		Mesh* pcopy_this = dynamic_cast<Mesh*>(&copy_this);
+		if (pcopy_this == nullptr) return error(BERROR_INCORRECTVALUE);
+
+		if (M1.linear_size() && pcopy_this->M.linear_size()) {
+
+			double Ms0 = Show_Ms();
+
+			std::function<DBL3(DBL3, int, int)> thermalize_func = [&](DBL3 Mval, int idx_src, int idx_dst) -> DBL3 {
+
+				double Mval_norm = Mval.norm();
+				if (IsZ(Mval_norm)) return DBL3();
+
+				DBL3 Mval_dir = Mval / Mval_norm;
+
+				//need the normalized average over spins in this cell to be mz (the resultant Ms0 value in this atomistic mesh should match that in the micromagnetic mesh)
+				double mz = Mval_norm / Ms0;
+				//enforce min and max values possible
+				if (mz < 1.0 / 6) mz = 1.0 / 6;
+				if (mz > 1.0) mz = 1.0;
+				//maximum polar angle around Mval direction
+				double theta_max = sqrt(10 - sqrt(100 + 120 * (mz - 1)));
+				if (theta_max > PI) theta_max = PI;
+
+				double theta = prng.rand() * theta_max;
+				double phi = prng.rand() * 2 * PI;
+
+				double mu_s_val = mu_s;
+				update_parameters_mcoarse(idx_dst, mu_s, mu_s_val);
+
+				DBL3 spin_val = mu_s_val * relrotate_polar(Mval_dir, theta, phi);
+
+				return spin_val;
+			};
+
+			M1.copy_values_thermalize(pcopy_this->M, thermalize_func, dstRect, srcRect);
+		}
 	}
 
 	//2. shape electrical conductivity
-	if (elC.linear_size() && pcopy_this->elC.linear_size()) elC.copy_values(pcopy_this->elC);
+	if (elC.linear_size() && copy_this.elC.linear_size()) elC.copy_values(copy_this.elC, dstRect, srcRect);
 
 	//3. shape temperature
-	if (Temp.linear_size() && pcopy_this->Temp.linear_size()) Temp.copy_values(pcopy_this->Temp);
+	if (Temp.linear_size() && copy_this.Temp.linear_size()) Temp.copy_values(copy_this.Temp, dstRect, srcRect);
+
+	//4. shape mechanical displacement
+	if (u_disp.linear_size() && copy_this.u_disp.linear_size()) u_disp.copy_values(copy_this.u_disp, dstRect, srcRect);
 
 #if COMPILECUDA == 1
 	//if CUDA on then load back to gpu

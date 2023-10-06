@@ -62,6 +62,11 @@ public:
 
 	virtual BError SetFieldVEC_FromOVF2(std::string fileName) = 0;
 
+	virtual BError SetFieldVEC_FromVEC(VEC<DBL3>& Hext) = 0;
+
 	//if base temperature changes we need to adjust Tb in H_equation if it's used.
 	virtual void SetBaseTemperature(double Temperature) = 0;
+
+	//Set globalField from SMesh::globalField (without mesh transfer, simply read values)
+	virtual void SetGlobalField(void) = 0;
 };

@@ -7,9 +7,7 @@
 
 #include "ModulesCUDA.h"
 #include "BorisCUDALib.h"
-
-#include "ConvolutionCUDA.h"
-#include "DemagKernelCollectionCUDA.h"
+#include "EvalSpeedupCUDA.h"
 
 class MeshBaseCUDA;
 class MeshCUDA;
@@ -18,11 +16,14 @@ class ManagedMeshCUDA;
 class SDemag_Demag;
 class SDemagCUDA;
 
+class SDemagMCUDA_Demag_single;
+
 class SDemagCUDA_Demag :
 	public ModulesCUDA,
-	public ConvolutionCUDA<SDemagCUDA_Demag, DemagKernelCollectionCUDA>
+	public EvalSpeedupCUDA
 {
 	friend SDemagCUDA;
+	friend SDemagMCUDA_Demag_single;
 
 private:
 
@@ -35,12 +36,14 @@ private:
 	//pointer to cpu version of this module
 	SDemag_Demag *pSDemag_Demag = nullptr;
 
-	//transfer values from M of this mesh to a cuVEC with fixed number of cells -> use same meshing for all layers.
-	cu_obj<cuVEC<cuReal3>> transfer;
+	////////////////////////////////////////////////////
+
+	//transfer values from M of this mesh to a mcuVEC with fixed number of cells -> use same meshing for all layers.
+	mcu_VEC(cuReal3) transfer;
 
 	//if displaying module Heff or energy, and mesh transfer is required, then use these (capture output field and energy, then do transfer)
-	cu_obj<cuVEC<cuReal3>> transfer_Module_Heff;
-	cu_obj<cuVEC<cuBReal>> transfer_Module_energy;
+	mcu_VEC(cuReal3) transfer_Module_Heff;
+	mcu_VEC(cuBReal) transfer_Module_energy;
 
 	//do transfer as M -> transfer -> convolution -> transfer -> Heff if true
 	//if false then don't use the transfer VEC but can do M -> convolution -> Heff directly
@@ -48,19 +51,42 @@ private:
 	bool do_transfer = true;
 
 	//different meshes have different weights when contributing to the total energy density -> ratio of their non-empty volume to total non-empty volume
-	cu_obj<cuBReal> energy_density_weight;
+	mcu_val<cuBReal> energy_density_weight;
 
-	//Evaluation speedup mode data
+	////////////////////////////////////////////////////
 
-	//vec for demagnetizing field polynomial extrapolation
-	cu_obj<cuVEC<cuReal3>> Hdemag, Hdemag2, Hdemag3, Hdemag4, Hdemag5, Hdemag6;
+	//one SDemagMCUDA_Demag_single object per GPU
+	std::vector<SDemagMCUDA_Demag_single*> pDemagMCUDA;
 
-	//-Nxx, -Nyy, -Nzz values at r = r0
-	cu_obj<cuReal3> selfDemagCoeff;
+	//transfer data before x-FFTs
+	std::vector<std::vector<mGPU_Transfer<cuReal3>*>> M_Input_transfer;
+	std::vector<std::vector<mGPU_Transfer<cuBHalf>*>> M_Input_transfer_half;
+
+	std::vector<std::vector<mGPU_Transfer<cuBComplex>*>> xFFT_Data_transfer;
+	std::vector<std::vector<mGPU_Transfer<cuBHalf>*>> xFFT_Data_transfer_half;
+
+	//transfer data before x-IFFTs
+	std::vector<std::vector<mGPU_Transfer<cuBComplex>*>> xIFFT_Data_transfer;
+	std::vector<std::vector<mGPU_Transfer<cuBHalf>*>> xIFFT_Data_transfer_half;
+
+	//transfer data after x-IFFTs
+	std::vector<std::vector<mGPU_Transfer<cuReal3>*>> Out_Data_transfer;
+	std::vector<std::vector<mGPU_Transfer<cuBHalf>*>> Out_Data_transfer_half;
+
+	////////////////////////////////////////////////////
 
 private:
 
+	//check if all pDemagMCUDA modules are initialized
+	bool Submodules_Initialized(void);
+
 	void set_SDemag_DemagCUDA_pointers(void);
+
+	//this is called from SDemagCUDA so this mesh module can set convolution sizes
+	BError Set_Convolution_Dimensions(cuBReal h_max, cuSZ3 n_common, cuINT3 pbc, std::vector<cuRect>& Rect_collection, int mesh_idx);
+
+	//Get Ms0 value for mesh holding this module
+	double Get_Ms0(void);
 
 public:
 
@@ -69,7 +95,7 @@ public:
 
 	//-------------------Abstract base class method implementations
 
-	void Uninitialize(void) { initialized = false; }
+	void Uninitialize(void);
 
 	BError Initialize(void);
 
@@ -81,7 +107,7 @@ public:
 	//-------------------Getters
 
 	//add energy in this module to a running total
-	void Add_Energy(cu_obj<cuBReal>& total_energy);
+	void Add_Energy(mcu_val<cuBReal>& total_energy);
 
 	//-------------------Setters
 };
@@ -95,5 +121,4 @@ class SDemagCUDA_Demag
 #endif
 
 #endif
-
 

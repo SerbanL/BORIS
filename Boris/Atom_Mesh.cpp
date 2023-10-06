@@ -37,3 +37,31 @@ BError Atom_Mesh::SuperMesh_UpdateConfiguration(UPDATECONFIG_ cfgMessage)
 {
 	return pSMesh->UpdateConfiguration(cfgMessage);
 }
+
+//----------------------------------- IMPORTANT CONTROL METHODS
+
+#if COMPILECUDA == 1
+//check the shape_synchronization_lost flag when starting a simulation (called from SuperMesh::InitializeAllModulesCUDA)
+BError Atom_Mesh::CheckSynchronization_on_Initialization(void)
+{
+	BError error(__FUNCTION__);
+
+	if (shape_synchronization_lost) {
+
+		bool success = true;
+
+		if (paMeshCUDA) {
+
+			//make sure all CPU quantities which could have changed shape at run-time are re-synchronized to GPU versions
+			//at the moment this can only arise from the track shifting algorithm
+			if (M1.linear_size()) success &= paMeshCUDA->M1.copy_to_cpuvec(M1);
+
+			if (!success) return error(BERROR_GPUERROR_CRIT);
+		}
+
+		shape_synchronization_lost = false;
+	}
+
+	return error;
+}
+#endif

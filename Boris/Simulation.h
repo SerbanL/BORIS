@@ -32,11 +32,6 @@
 
 //Crash if too much memory allocated (mesh too large)
 
-//MCUDA : TO DO
-
-//Mesh Transfer
-//pMeshCUDA->M.device_size(mGPU) + CUDATHREADS check all code and similar (e.g. for string .dim() + CUDATHREADS, or .dim() / 2 + CUDATHREADS -> this should not appear anywhere when finished)
-
 #pragma once
 
 #include "BorisLib.h"
@@ -83,7 +78,8 @@ class Simulation :
 	DBL4, DBL2, DBL2, int,
 	DBL3, INT3, DBL3, std::string,
 	vector_key<double>,
-	std::vector<std::string>>,
+	std::vector<std::string>,
+	int, int>,
 	std::tuple<> >
 {
 private:
@@ -336,6 +332,13 @@ private:
 	//still need to test for this in the constructor
 	bool cudaAvailable;
 #endif
+
+	//maximum operating GPU temperature (C)
+	int max_gpu_temperature = 95;
+	//simulation timeout if maximum temperature reached
+	int max_temperature_timeout_s = 60;
+	bool simulation_timeout = false;
+	unsigned int timeout_tick_start_ms = 0;
 
 	////////////////////////////////////////////////////////////////////////////////////
 	//MUTEXES

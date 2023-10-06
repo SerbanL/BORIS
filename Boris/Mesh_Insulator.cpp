@@ -107,6 +107,15 @@ BError InsulatorMesh::UpdateConfiguration(UPDATECONFIG_ cfgMessage)
 		if (!error) update_all_meshparam_equations();
 	}
 
+	if (ucfg::check_cfgflags(cfgMessage, UPDATECONFIG_MESHDELETED)) {
+
+		//are all entries in idTrackShiftMesh still valid meshes?
+		for (int tidx = idTrackShiftMesh.size() - 1; tidx >= 0; tidx--) {
+
+			if (!pSMesh->contains_id(idTrackShiftMesh[tidx])) idTrackShiftMesh.erase(idTrackShiftMesh.begin() + tidx);
+		}
+	}
+
 	//------------------------ CUDA UpdateConfiguration if set
 
 #if COMPILECUDA == 1

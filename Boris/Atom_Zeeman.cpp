@@ -62,6 +62,35 @@ BError Atom_Zeeman::InitializeGlobalField(void)
 	return error;
 }
 
+//Set globalField from SMesh::globalField (without mesh transfer, simply read values)
+void Atom_Zeeman::SetGlobalField(void)
+{
+#if COMPILECUDA == 1
+	if (pModuleCUDA) {
+
+		dynamic_cast<Atom_ZeemanCUDA*>(pModuleCUDA)->SetGlobalField(pSMesh->GetGlobalFieldCUDA());
+		return;
+	}
+#endif
+
+	VEC<DBL3>& SMesh_globalField = pSMesh->GetGlobalField();
+
+#pragma omp parallel for
+	for (int idx = 0; idx < globalField.linear_size(); idx++) {
+
+		DBL3 abs_pos = globalField.cellidx_to_position(idx) + globalField.rect.s;
+
+		if (SMesh_globalField.rect.contains(abs_pos)) {
+
+			globalField[idx] = SMesh_globalField[abs_pos - SMesh_globalField.rect.s];
+		}
+		else {
+
+			globalField[idx] = DBL3();
+		}
+	}
+}
+
 BError Atom_Zeeman::Initialize(void)
 {
 	BError error(CLASS_STR(Atom_Zeeman));
@@ -170,48 +199,26 @@ double Atom_Zeeman::UpdateField(void)
 
 	if (!H_equation.is_set()) {
 
-		if (Havec.linear_size()) {
-
-			/////////////////////////////////////////
-			// Field VEC set
-			/////////////////////////////////////////
+		/////////////////////////////////////////
+		// No equation set
+		/////////////////////////////////////////
 
 #pragma omp parallel for reduction(+:energy)
-			for (int idx = 0; idx < paMesh->n.dim(); idx++) {
+		for (int idx = 0; idx < paMesh->n.dim(); idx++) {
 
-				DBL3 Hext = Havec[idx];
-				if (globalField.linear_size()) Hext += globalField[idx];
+			double cHA = paMesh->cHA;
+			paMesh->update_parameters_mcoarse(idx, paMesh->cHA, cHA);
 
-				paMesh->Heff1[idx] = Hext;
+			DBL3 Hext = cHA * Ha;
+			if (Havec.linear_size()) Hext += Havec[idx];
+			if (globalField.linear_size()) Hext += globalField[idx] * cHA;
 
-				energy += -MUB_MU0 * paMesh->M1[idx] * Hext;
+			paMesh->Heff1[idx] = Hext;
 
-				if (Module_Heff.linear_size()) Module_Heff[idx] = Hext;
-				if (Module_energy.linear_size()) Module_energy[idx] = -MUB_MU0 * paMesh->M1[idx] * Hext / paMesh->M1.h.dim();
-			}
-		}
-		else {
+			energy += -MUB_MU0 * paMesh->M1[idx] * Hext;
 
-			/////////////////////////////////////////
-			// Fixed set field
-			/////////////////////////////////////////
-
-#pragma omp parallel for reduction(+:energy)
-			for (int idx = 0; idx < paMesh->n.dim(); idx++) {
-
-				double cHA = paMesh->cHA;
-				paMesh->update_parameters_mcoarse(idx, paMesh->cHA, cHA);
-
-				DBL3 Hext = cHA * Ha;
-				if (globalField.linear_size()) Hext += globalField[idx];
-
-				paMesh->Heff1[idx] = Hext;
-
-				energy += -MUB_MU0 * paMesh->M1[idx] * Hext;
-
-				if (Module_Heff.linear_size()) Module_Heff[idx] = Hext;
-				if (Module_energy.linear_size()) Module_energy[idx] = -MUB_MU0 * paMesh->M1[idx] * Hext / paMesh->M1.h.dim();
-			}
+			if (Module_Heff.linear_size()) Module_Heff[idx] = Hext;
+			if (Module_energy.linear_size()) Module_energy[idx] = -MUB_MU0 * paMesh->M1[idx] * Hext / paMesh->M1.h.dim();
 		}
 	}
 
@@ -228,7 +235,7 @@ double Atom_Zeeman::UpdateField(void)
 			for (int k = 0; k < paMesh->n.z; k++) {
 				for (int i = 0; i < paMesh->n.x; i++) {
 
-					int idx = i + j * paMesh->n.x + k * paMesh->n.x*paMesh->n.y;
+					int idx = i + j * paMesh->n.x + k * paMesh->n.x * paMesh->n.y;
 
 					//on top of spatial dependence specified through an equation, also allow spatial dependence through the cHA parameter
 					double cHA = paMesh->cHA;
@@ -238,7 +245,8 @@ double Atom_Zeeman::UpdateField(void)
 					DBL3 H = H_equation.evaluate_vector(relpos.x, relpos.y, relpos.z, time);
 
 					DBL3 Hext = cHA * H;
-					if (globalField.linear_size()) Hext += globalField[idx];
+					if (Havec.linear_size()) Hext += Havec[idx];
+					if (globalField.linear_size()) Hext += globalField[idx] * cHA;
 
 					paMesh->Heff1[idx] = Hext;
 
@@ -267,54 +275,34 @@ double Atom_Zeeman::Get_EnergyChange(int spin_index, DBL3 Mnew)
 
 	if (paMesh->M1.is_not_empty(spin_index)) {
 
+		double cHA = paMesh->cHA;
+		paMesh->update_parameters_mcoarse(spin_index, paMesh->cHA, cHA);
+
 		if (!H_equation.is_set()) {
 
-			if (Havec.linear_size()) {
+			/////////////////////////////////////////
+			// No equation set
+			/////////////////////////////////////////
 
-				/////////////////////////////////////////
-				// Field VEC set
-				/////////////////////////////////////////
+			DBL3 Hext = cHA * Ha;
+			if (Havec.linear_size()) Hext += Havec[spin_index];
+			if (globalField.linear_size()) Hext += globalField[spin_index] * cHA;
 
-				DBL3 Hext = Havec[spin_index];
-				if (globalField.linear_size()) Hext += globalField[spin_index];
-
-				if (Mnew != DBL3()) return -MUB_MU0 * (Mnew - paMesh->M1[spin_index]) * Hext;
-				else return -MUB_MU0 * paMesh->M1[spin_index] * Hext;
-			}
-			else {
-
-				/////////////////////////////////////////
-				// Fixed set field
-				/////////////////////////////////////////
-
-				if (IsZ(Ha.norm())) return 0.0;
-
-				double cHA = paMesh->cHA;
-				paMesh->update_parameters_mcoarse(spin_index, paMesh->cHA, cHA);
-
-				DBL3 Hext = cHA * Ha;
-				if (globalField.linear_size()) Hext += globalField[spin_index];
-
-				if (Mnew != DBL3()) return -MUB_MU0 * (Mnew - paMesh->M1[spin_index]) * Hext;
-				else return -MUB_MU0 * paMesh->M1[spin_index] * Hext;
-			}
+			if (Mnew != DBL3()) return -MUB_MU0 * (Mnew - paMesh->M1[spin_index]) * Hext;
+			else return -MUB_MU0 * paMesh->M1[spin_index] * Hext;
 		}
-
-		/////////////////////////////////////////
-		// Field set from user equation
-		/////////////////////////////////////////
-
 		else {
 
-			//on top of spatial dependence specified through an equation, also allow spatial dependence through the cHA parameter
-			double cHA = paMesh->cHA;
-			paMesh->update_parameters_mcoarse(spin_index, paMesh->cHA, cHA);
+			/////////////////////////////////////////
+			// Field set from user equation
+			/////////////////////////////////////////
 
 			DBL3 relpos = paMesh->M1.cellidx_to_position(spin_index);
 			DBL3 H = H_equation.evaluate_vector(relpos.x, relpos.y, relpos.z, pSMesh->GetStageTime());
 
 			DBL3 Hext = cHA * H;
-			if (globalField.linear_size()) Hext += globalField[spin_index];
+			if (Havec.linear_size()) Hext += Havec[spin_index];
+			if (globalField.linear_size()) Hext += globalField[spin_index] * cHA;
 
 			if (Mnew != DBL3()) return -MUB_MU0 * (Mnew - paMesh->M1[spin_index]) * Hext;
 			else return -MUB_MU0 * paMesh->M1[spin_index] * Hext;
@@ -421,6 +409,36 @@ BError Atom_Zeeman::SetFieldVEC_FromOVF2(std::string fileName)
 
 	return error;
 }
+
+BError Atom_Zeeman::SetFieldVEC_FromVEC(VEC<DBL3>& Hext)
+{
+	BError error(CLASS_STR(Atom_Zeeman));
+
+	//Make sure size and resolution matches M
+	if (Havec.size() != paMesh->M1.size()) {
+		if (!Havec.resize(paMesh->h, paMesh->meshRect)) {
+
+			Havec.clear();
+			return error(BERROR_OUTOFMEMORY_NCRIT);
+		}
+	}
+
+	//now copy from Hext into Havec
+	Havec.copy_values(Hext, Havec.rect - Havec.rect.s, Havec.rect - Hext.rect.s);
+
+	return error;
+}
+
+#if COMPILECUDA == 1
+BError Atom_Zeeman::SetFieldVEC_FromVEC_CUDA(mcu_VEC(cuReal3)& Hext)
+{
+	BError error(CLASS_STR(Atom_Zeeman));
+
+	if (pModuleCUDA) error = reinterpret_cast<Atom_ZeemanCUDA*>(pModuleCUDA)->SetFieldVEC_FromcuVEC(Hext);
+
+	return error;
+}
+#endif
 
 //Update TEquation object with user constants values
 void Atom_Zeeman::UpdateTEquationUserConstants(bool makeCuda)

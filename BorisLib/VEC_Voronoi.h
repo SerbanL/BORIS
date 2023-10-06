@@ -217,7 +217,7 @@ void VEC<VType>::aux_generate_uVoronoi3D(double spacing, double variation, Boris
 
 				double start_x = spacing / 2 - (num_cells_x * spacing - (rect.e.x - rect.s.x)) / 2;
 				double start_y = spacing / 2 - (num_cells_y * spacing - (rect.e.y - rect.s.y)) / 2;
-				double start_z = spacing / 2 - (num_cells_y * spacing - (rect.e.z - rect.s.z)) / 2;
+				double start_z = spacing / 2 - (num_cells_z * spacing - (rect.e.z - rect.s.z)) / 2;
 
 				double x_pos = start_x + spacing * i + (-0.5 + prng.rand()) * variation;
 				double y_pos = start_y + spacing * j + (-0.5 + prng.rand()) * variation;
@@ -572,7 +572,7 @@ void VEC<VType>::aux_generate_uVoronoiBoundary3D(double spacing, double variatio
 
 				double start_x = spacing / 2 - (num_cells_x * spacing - (rect.e.x - rect.s.x)) / 2;
 				double start_y = spacing / 2 - (num_cells_y * spacing - (rect.e.y - rect.s.y)) / 2;
-				double start_z = spacing / 2 - (num_cells_y * spacing - (rect.e.z - rect.s.z)) / 2;
+				double start_z = spacing / 2 - (num_cells_z * spacing - (rect.e.z - rect.s.z)) / 2;
 
 				double x_pos = start_x + spacing * i + (-0.5 + prng.rand()) * variation;
 				double y_pos = start_y + spacing * j + (-0.5 + prng.rand()) * variation;

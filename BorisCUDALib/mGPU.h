@@ -3,6 +3,12 @@
 #include <cuda_runtime.h>
 #include <vector>
 
+#include "cuBLib_Flags.h"
+
+#if COMPILE_NVML_CODE == 1
+#include <nvml.h>
+#endif
+
 //EXAMPLE :
 
 //To iterate over devices:
@@ -54,6 +60,19 @@ private:
 	int* pdevices = nullptr;
 	int num_devices = 0;
 
+	//----------------- NVML data (for GPU temperatures)
+
+	bool nvml_available = false;
+
+	//can read all device temperatures at once (with one function call), which will be stored here
+	std::vector<unsigned int> gpu_temperatures;
+
+#if COMPILE_NVML_CODE == 1
+	//array will have size number of configured GPUs, if nvml_available
+	//they can then be indexed with 0, 1, ..., up to num_devices - 1
+	nvmlDevice_t* nvml_pdevices = nullptr;
+#endif
+
 private:
 
 	//cleanup all memory allocation, bringing object back to empty state
@@ -64,6 +83,15 @@ private:
 			delete[] pdevices;
 			pdevices = nullptr;
 		}
+
+#if COMPILE_NVML_CODE == 1
+		if (nvml_pdevices) {
+
+			delete[] nvml_pdevices;
+			nvml_pdevices = nullptr;
+			gpu_temperatures.clear();
+		}
+#endif
 
 		if (transfer_type) {
 
@@ -137,17 +165,60 @@ private:
 			delete[] transfer_type;
 			transfer_type = nullptr;
 		}
+
+		//Configure NVML devices for reading temperatures
+		gpu_temperatures.resize(num_devices, 0);
+
+#if COMPILE_NVML_CODE == 1
+		//get nvml device handles (for reading gpu temperatures)
+		if (nvml_available) {
+
+			nvml_pdevices = new nvmlDevice_t[num_devices];
+
+			nvmlReturn_t result;
+			for (int idx = 0; idx < num_devices; idx++) {
+
+				result = nvmlDeviceGetHandleByIndex(pdevices[idx], nvml_pdevices + idx);
+				if (result != NVML_SUCCESS) {
+
+					nvml_available = false;
+					break;
+				}
+			}
+		}
+#endif
 	}
 
 public:
 
 	/////////////CONSTRUCTORS
 
-	mGPUConfig(void) {}
+	mGPUConfig(void) 
+	{
+#if COMPILE_NVML_CODE == 1
+		nvmlReturn_t result;
+		result = nvmlInit();
+		nvml_available = (result == NVML_SUCCESS);
+#endif
+	}
 
-	mGPUConfig(std::vector<int> devices) { configure_devices_aux(devices); }
+	mGPUConfig(std::vector<int> devices) 
+	{ 
+#if COMPILE_NVML_CODE == 1
+		nvmlReturn_t result;
+		result = nvmlInit();
+		nvml_available = (result == NVML_SUCCESS);
+#endif
+		configure_devices_aux(devices); 
+	}
 
-	~mGPUConfig() { clear(); }
+	~mGPUConfig() 
+	{ 
+		clear(); 
+#if COMPILE_NVML_CODE == 1
+		if (nvml_available) nvmlShutdown();
+#endif
+	}
 
 	/////////////CONFIGURATION CHANGE
 
@@ -300,5 +371,38 @@ public:
 	void synchronize_if_uva(void)
 	{
 		if (num_devices > 1 && disable_uva == false) synchronize();
+	}
+
+	/////////////NVML
+
+	//read temperature of indicated gpu (linear index 0, 1, ..., num_devices - 1)
+	unsigned int get_gpu_temperature(int idx)
+	{
+#if COMPILE_NVML_CODE == 1
+		if (nvml_available && nvml_pdevices && idx >= 0 && idx < num_devices) {
+			nvmlDeviceGetTemperature(nvml_pdevices[idx], NVML_TEMPERATURE_GPU, &gpu_temperatures[idx]);
+			return gpu_temperatures[idx];
+		}
+#endif
+		return 0;
+	}
+
+	std::vector<unsigned int> get_gpu_temperatures(void)
+	{
+#if COMPILE_NVML_CODE == 1
+		if (nvml_available && nvml_pdevices) {
+			for (int idx = 0; idx < gpu_temperatures.size(); idx++)
+				nvmlDeviceGetTemperature(nvml_pdevices[idx], NVML_TEMPERATURE_GPU, &gpu_temperatures[idx]);
+		}
+#endif
+		return gpu_temperatures;
+	}
+
+	unsigned int get_max_gpu_temperature(void)
+	{
+		get_gpu_temperatures();
+		unsigned int max_temperature = 0;
+		for (int idx = 0; idx < gpu_temperatures.size(); idx++) max_temperature = (max_temperature > gpu_temperatures[idx] ? max_temperature : gpu_temperatures[idx]);
+		return max_temperature;
 	}
 };

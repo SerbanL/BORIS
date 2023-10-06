@@ -1,6 +1,7 @@
 #pragma once
 
 #include "mcuVEC.h"
+#include "mcuVEC_MeshTransfer.h"
 
 //clear all allocated memory
 template <typename VType, typename MType>
@@ -39,6 +40,9 @@ void mcuVEC<VType, MType>::clear_memory_aux(void)
 			phalo_ngbr_p[mGPU] = nullptr;
 		}
 	}
+
+	clear_transfer();
+	clear_transfer2();
 }
 
 //for given h and rect values, find n

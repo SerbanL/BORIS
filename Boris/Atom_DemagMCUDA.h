@@ -7,11 +7,14 @@
 
 #include "ModulesCUDA.h"
 
+#include "EvalSpeedupCUDA.h"
+
 class Atom_MeshCUDA;
 class Atom_DemagMCUDA_single;
 
 class Atom_DemagMCUDA :
-	public ModulesCUDA
+	public ModulesCUDA,
+	public EvalSpeedupCUDA
 {
 	friend Atom_DemagMCUDA_single;
 
@@ -46,20 +49,6 @@ private:
 	//Hd has cellsize h_dm (but can be cleared so need to keep this info separate, above).
 	mcu_VEC(cuReal3) M, Hd;
 
-	////////////////////////////////////////////////////
-	//Evaluation speedup mode data
-
-	//vec for demagnetizing field polynomial extrapolation
-	mcu_VEC(cuReal3) Hdemag, Hdemag2, Hdemag3, Hdemag4, Hdemag5, Hdemag6;
-
-	//times at which evaluations were done, used for extrapolation
-	double time_demag1 = 0.0, time_demag2 = 0.0, time_demag3 = 0.0, time_demag4 = 0.0, time_demag5 = 0.0, time_demag6 = 0.0;
-
-	int num_Hdemag_saved = 0;
-
-	//-Nxx, -Nyy, -Nzz values at r = r0
-	mcu_val<cuReal3> selfDemagCoeff;
-
 private:
 
 	//check if all pDemagMCUDA modules are initialized
@@ -73,15 +62,6 @@ private:
 
 	//from Hd transfer calculated field by adding into Heff1
 	void Transfer_Demag_Field(mcu_VEC(cuReal3)& H);
-
-	void Atom_Demag_EvalSpeedup_SubSelf(mcu_VEC(cuReal3)& H);
-
-	void Atom_Demag_EvalSpeedup_SetExtrapField_AddSelf(mcu_VEC(cuReal3)& H, cuBReal a1, cuBReal a2, cuBReal a3, cuBReal a4, cuBReal a5, cuBReal a6);
-	void Atom_Demag_EvalSpeedup_SetExtrapField_AddSelf(mcu_VEC(cuReal3)& H, cuBReal a1, cuBReal a2, cuBReal a3, cuBReal a4, cuBReal a5);
-	void Atom_Demag_EvalSpeedup_SetExtrapField_AddSelf(mcu_VEC(cuReal3)& H, cuBReal a1, cuBReal a2, cuBReal a3, cuBReal a4);
-	void Atom_Demag_EvalSpeedup_SetExtrapField_AddSelf(mcu_VEC(cuReal3)& H, cuBReal a1, cuBReal a2, cuBReal a3);
-	void Atom_Demag_EvalSpeedup_SetExtrapField_AddSelf(mcu_VEC(cuReal3)& H, cuBReal a1, cuBReal a2);
-	void Atom_Demag_EvalSpeedup_SetExtrapField_AddSelf(mcu_VEC(cuReal3)& H);
 
 public:
 

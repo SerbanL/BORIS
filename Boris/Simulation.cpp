@@ -27,7 +27,8 @@ Simulation::Simulation(
 			VINFO(image_cropping), VINFO(displayTransparency), VINFO(displayThresholds), VINFO(displayThresholdTrigger),
 			VINFO(shape_rotation), VINFO(shape_repetitions), VINFO(shape_displacement), VINFO(shape_method),
 			VINFO(userConstants),
-			VINFO(command_buffer)
+			VINFO(command_buffer),
+			VINFO(max_gpu_temperature), VINFO(max_temperature_timeout_s)
 		}, {})
 
 #else
@@ -55,7 +56,8 @@ Simulation::Simulation(
 			VINFO(image_cropping), VINFO(displayTransparency), VINFO(displayThresholds), VINFO(displayThresholdTrigger),
 			VINFO(shape_rotation), VINFO(shape_repetitions), VINFO(shape_displacement), VINFO(shape_method),
 			VINFO(userConstants),
-			VINFO(command_buffer)
+			VINFO(command_buffer),
+			VINFO(max_gpu_temperature), VINFO(max_temperature_timeout_s)
 		}, {})
 
 #endif
@@ -1113,6 +1115,23 @@ Simulation::Simulation(
 	commands[CMD_TMODEL].limits = { { Any(), Any() }, { int(1), Any() } };
 	commands[CMD_TMODEL].descr = "[tc0,0.5,0.5,1/tc]Set temperature model (determined by number of temperatures) in given meshname (focused mesh if not specified). Note insulating meshes only allow a 1-temperature model.";
 
+	commands.insert(CMD_CLEARGLOBALTEMP, CommandSpecifier(CMD_CLEARGLOBALTEMP), "clearglobaltemp");
+	commands[CMD_CLEARGLOBALTEMP].usage = "[tc0,0.5,0,1/tc]USAGE : <b>clearglobaltemp</b>";
+	commands[CMD_CLEARGLOBALTEMP].descr = "[tc0,0.5,0.5,1/tc]Clear any loaded global temperature profile.";
+
+	commands.insert(CMD_SHIFTGLOBALTEMP, CommandSpecifier(CMD_SHIFTGLOBALTEMP), "shiftglobaltemp");
+	commands[CMD_SHIFTGLOBALTEMP].usage = "[tc0,0.5,0,1/tc]USAGE : <b>shiftglobaltemp</b> <i>shift</i>";
+	commands[CMD_SHIFTGLOBALTEMP].limits = { { DBL3(-MAXSIMSPACE), DBL3(MAXSIMSPACE) } };
+	commands[CMD_SHIFTGLOBALTEMP].descr = "[tc0,0.5,0.5,1/tc]Shift rectangle of global temperature profile (previously loaded with loadovf2globaltemp).";
+	commands[CMD_SHIFTGLOBALTEMP].unit = "m";
+	commands[CMD_SHIFTGLOBALTEMP].return_descr = "[tc0,0.5,0,1/tc]Script return values: <i>rect</i> (global temperature rectangle)";
+
+	commands.insert(CMD_GLOBALTEMPVELOCITY, CommandSpecifier(CMD_GLOBALTEMPVELOCITY), "globaltempvelocity");
+	commands[CMD_GLOBALTEMPVELOCITY].usage = "[tc0,0.5,0,1/tc]USAGE : <b>globaltempvelocity</b> <i>velocity (clipping)</i>";
+	commands[CMD_GLOBALTEMPVELOCITY].limits = { { DBL3(-DIPOLEMAXVELOCITY), DBL3(DIPOLEMAXVELOCITY) }, {DBL3(), DBL3(MAXSIMSPACE)} };
+	commands[CMD_GLOBALTEMPVELOCITY].descr = "[tc0,0.5,0.5,1/tc]Set velocity for global temperature shifting algorithm (x, y, z, components). Optionally specify a clipping distance (x, y, z components) - i.e. shift clipped. Default is 0.5 nm; to disable clipping set to zero.";
+	commands[CMD_GLOBALTEMPVELOCITY].return_descr = "[tc0,0.5,0,1/tc]Script return values: <i>velocity clipping</i>";
+
 	commands.insert(CMD_RESETELSOLVER, CommandSpecifier(CMD_RESETELSOLVER), "resetelsolver");
 	commands[CMD_RESETELSOLVER].usage = "[tc0,0.5,0,1/tc]USAGE : <b>resetelsolver</b>";
 	commands[CMD_RESETELSOLVER].descr = "[tc0,0.5,0.5,1/tc]Reset the elastodynamics solver to unstrained state.";
@@ -1233,6 +1252,17 @@ Simulation::Simulation(
 	commands[CMD_SELCUDADEV].limits = { { Any(), Any() } };
 	commands[CMD_SELCUDADEV].descr = "[tc0,0.5,0.5,1/tc]Select CUDA device(s) to use from available devices. The device CUDA Compute version must match Boris CUDA version. Devices numbered from 0 up, default selection at startup is device 0. Multiple devices may be selected for multi-GPU computations.";
 	commands[CMD_SELCUDADEV].return_descr = "[tc0,0.5,0,1/tc]Script return values: <i>base device</i>";
+
+	commands.insert(CMD_GPUTEMPERATURE, CommandSpecifier(CMD_GPUTEMPERATURE), "gputemperature");
+	commands[CMD_GPUTEMPERATURE].usage = "[tc0,0.5,0,1/tc]USAGE : <b>gputemperature</b> <i>(device)</i>";
+	commands[CMD_GPUTEMPERATURE].limits = { { int(-1), Any() } };
+	commands[CMD_GPUTEMPERATURE].descr = "[tc0,0.5,0.5,1/tc]Read physical temperature of indicated GPU device. If device not indicated read all configured GPUs (selected with selectcudadevice).";
+	commands[CMD_GPUTEMPERATURE].return_descr = "[tc0,0.5,0,1/tc]Script return values: <i>temperature(s)</i>";
+
+	commands.insert(CMD_MAXGPUTEMPERATURE, CommandSpecifier(CMD_MAXGPUTEMPERATURE), "maxgputemperature");
+	commands[CMD_MAXGPUTEMPERATURE].usage = "[tc0,0.5,0,1/tc]USAGE : <b>maxgputemperature</b> <i>max_temperature timeout_s</i>";
+	commands[CMD_MAXGPUTEMPERATURE].limits = { { int(), Any() }, { int(), Any() } };
+	commands[CMD_MAXGPUTEMPERATURE].descr = "[tc0,0.5,0.5,1/tc]Set maximum operating temperature (C) of selected GPUs (selected with selectcudadevice). If maximum temperature reached then pause simulation for timeout_s seconds.";
 
 	commands.insert(CMD_CUDACONFIG, CommandSpecifier(CMD_CUDACONFIG), "cudaconfig");
 	commands[CMD_CUDACONFIG].usage = "[tc0,0.5,0,1/tc]USAGE : <b>cudaconfig</b> <i>disable_p2p disable_uva</i>";
@@ -1377,9 +1407,16 @@ Simulation::Simulation(
 	commands[CMD_SHIFTGLOBALFIELD].descr = "[tc0,0.5,0.5,1/tc]Shift rectangle of global field (previously loaded with loadovf2field on supermesh).";
 	commands[CMD_SHIFTGLOBALFIELD].return_descr = "[tc0,0.5,0,1/tc]Script return values: <i>rect</i> (global field rectangle)";
 
+	commands.insert(CMD_GLOBALFIELDVELOCITY, CommandSpecifier(CMD_GLOBALFIELDVELOCITY), "globalfieldvelocity");
+	commands[CMD_GLOBALFIELDVELOCITY].usage = "[tc0,0.5,0,1/tc]USAGE : <b>globalfieldvelocity</b> <i>velocity (clipping)</i>";
+	commands[CMD_GLOBALFIELDVELOCITY].unit = "m";
+	commands[CMD_GLOBALFIELDVELOCITY].limits = { { DBL3(-DIPOLEMAXVELOCITY), DBL3(DIPOLEMAXVELOCITY) }, {DBL3(), DBL3(MAXSIMSPACE)} };
+	commands[CMD_GLOBALFIELDVELOCITY].descr = "[tc0,0.5,0.5,1/tc]Set velocity for global field shifting algorithm (x, y, z, components). Optionally specify a clipping distance (x, y, z components) - i.e. shift clipped. Default is 0.5 nm; to disable clipping set to zero.";
+	commands[CMD_GLOBALFIELDVELOCITY].return_descr = "[tc0,0.5,0,1/tc]Script return values: <i>velocity clipping</i>";
+
 	commands.insert(CMD_LOADOVF2TEMP, CommandSpecifier(CMD_LOADOVF2TEMP), "loadovf2temp");
 	commands[CMD_LOADOVF2TEMP].usage = "[tc0,0.5,0,1/tc]USAGE : <b>loadovf2temp</b> <i>(meshname) (directory/)filename</i>";
-	commands[CMD_LOADOVF2TEMP].descr = "[tc0,0.5,0.5,1/tc]Load an OOMMF-style OVF 2.0 file containing temperature data, into the given mesh (which must have heat module enabled; focused mesh if not specified), mapping the data to the current mesh dimensions.";
+	commands[CMD_LOADOVF2TEMP].descr = "[tc0,0.5,0.5,1/tc]Load an OOMMF-style OVF 2.0 file containing temperature data, into the given mesh (which must have heat module enabled); focused mesh if not specified), mapping the data to the current mesh dimensions. Alternatively if meshname is supermesh, then load a global temperature with absolute rectangle coordinates and its own discretization. In this global temperature mode, the tmeperature values are scaled by cT and then added to the mesh base temperature.";
 	commands[CMD_LOADOVF2TEMP].limits = { { Any(), Any() }, { Any(), Any() } };
 
 	commands.insert(CMD_LOADOVF2CURR, CommandSpecifier(CMD_LOADOVF2CURR), "loadovf2curr");
@@ -1522,6 +1559,12 @@ Simulation::Simulation(
 	commands[CMD_DORMANT].descr = "[tc0,0.5,0.5,1/tc]Set given mesh dormant status (focused mesh if not specified). A dormant mesh is skipped over any computations (but its modules are still initialized) and is mostly just a data container, but can be used for algorithms (track shifting algorithm).";
 	commands[CMD_DORMANT].limits = { { Any(), Any() }, {int(0), int(1)} };
 	commands[CMD_DORMANT].return_descr = "[tc0,0.5,0,1/tc]Script return values: <i>status</i>";
+
+	commands.insert(CMD_TRACKSHIFTING, CommandSpecifier(CMD_TRACKSHIFTING), "trackshifting");
+	commands[CMD_TRACKSHIFTING].usage = "[tc0,0.5,0,1/tc]USAGE : <b>trackshifting</b> <i>meshname sim_meshname velocity clipping (...)</i>";
+	commands[CMD_TRACKSHIFTING].descr = "[tc0,0.5,0.5,1/tc]Setup track shifting algorithm. meshname is the dormant holder mesh (large mesh which holds initial magnetization, but is not iterated in simulation), sim_meshname is the mesh to be simulated, and whose rectangle should be included in the holder mesh. It is possible to include multiple simulation meshes, with rectangles contained within the holder mesh, and these can be specified as additional mesh names at the end. During a simulation sim_meshname is effectively moved at the specified velocity (x, y, z components) - actually it's the holder mesh which moves in the opposite direction. Magnetization is transferred between the holder and simulated meshes, effectively resulting in a track shifting effect. If demag module is enabled for the holder mesh, then stray fields originating from the holder mesh, to be included in the simulated mesh, are updated as the mesh moves. The shift is clipped by the given factor, which should take a minimum as the holder mesh cellsize. In order to enable track shifting algorithm, velocity must be non-zero (zero value disables it), and when enabled magnetization from holder mesh is transferred to the simulation mesh in the overlap region, emptying the holder mesh in the overlap. When disabled by setting velocity to zero, magnetization in the overlap region is written back to the holder mesh.";
+	commands[CMD_TRACKSHIFTING].unit = "m";
+	commands[CMD_TRACKSHIFTING].limits = { { Any(), Any() }, { Any(), Any() },  { DBL3(-DIPOLEMAXVELOCITY), DBL3(DIPOLEMAXVELOCITY) }, {DBL3(), DBL3(MAXSIMSPACE)}, { Any(), Any() } };
 
 	commands.insert(CMD_MCSERIAL, CommandSpecifier(CMD_MCSERIAL), "mcserial");
 	commands[CMD_MCSERIAL].usage = "[tc0,0.5,0,1/tc]USAGE : <b>mcserial</b> <i>(meshname) value</i>";

@@ -41,7 +41,7 @@ __global__ void ExchangeCUDA_FM_UpdateField(ManagedMeshCUDA& cuMesh, ManagedModu
 
 				cuBReal delsq_Msq = 2 * M[idx] * (M.dxx_neu(idx) + M.dyy_neu(idx) + M.dzz_neu(idx)) + 2 * (dMdx * dMdx + dMdy * dMdy + dMdz * dMdz);
 				cuBReal Mnorm = M[idx].norm();
-				Hexch = (2 * A / (MU0*Ms*Ms)) * (M.delsq_neu(idx) - M[idx] * delsq_Msq / (2 * Mnorm*Mnorm));
+				if (cuIsNZ(Mnorm)) Hexch = (2 * A / (MU0*Ms*Ms)) * (M.delsq_neu(idx) - M[idx] * delsq_Msq / (2 * Mnorm*Mnorm));
 			}
 			else {
 
@@ -94,9 +94,8 @@ __global__ void ExchangeCUDA_AFM_UpdateField(ManagedMeshCUDA& cuMesh, ManagedMod
 			cuReal3 delsq_M_B = M2.delsq_neu(idx);
 
 			cuReal2 Mmag = cuReal2(M[idx].norm(), M2[idx].norm());
-
-			Hexch = (2 * A_AFM.i / ((cuBReal)MU0*Ms_AFM.i*Ms_AFM.i)) * delsq_M_A + (-4 * Ah.i * (M[idx] ^ (M[idx] ^ M2[idx])) / (Mmag.i*Mmag.i) + Anh.i * delsq_M_B) / ((cuBReal)MU0*Ms_AFM.i*Ms_AFM.j);
-			Hexch2 = (2 * A_AFM.j / ((cuBReal)MU0*Ms_AFM.j*Ms_AFM.j)) * delsq_M_B + (-4 * Ah.j * (M2[idx] ^ (M2[idx] ^ M[idx])) / (Mmag.j*Mmag.j) + Anh.j * delsq_M_A) / ((cuBReal)MU0*Ms_AFM.i*Ms_AFM.j);
+			if (cuIsNZ(Mmag.i)) Hexch = (2 * A_AFM.i / ((cuBReal)MU0*Ms_AFM.i*Ms_AFM.i)) * delsq_M_A + (-4 * Ah.i * (M[idx] ^ (M[idx] ^ M2[idx])) / (Mmag.i*Mmag.i) + Anh.i * delsq_M_B) / ((cuBReal)MU0*Ms_AFM.i*Ms_AFM.j);
+			if (cuIsNZ(Mmag.j)) Hexch2 = (2 * A_AFM.j / ((cuBReal)MU0*Ms_AFM.j*Ms_AFM.j)) * delsq_M_B + (-4 * Ah.j * (M2[idx] ^ (M2[idx] ^ M[idx])) / (Mmag.j*Mmag.j) + Anh.j * delsq_M_A) / ((cuBReal)MU0*Ms_AFM.i*Ms_AFM.j);
 
 			if (do_reduction) {
 

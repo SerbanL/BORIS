@@ -72,8 +72,6 @@ DBL3 Atom_DifferentialEquationCubic::SLLG(int idx)
 
 DBL3 Atom_DifferentialEquationCubic::SLLGSTT(int idx)
 {
-	//Currently same as SLLG : TO DO
-
 	//gamma_e is the electron gyromagnetic ratio, which is negative
 
 	//LLG in explicit form : dm/dt = [gamma_e/(1+alpha^2)] * [m*B + alpha * m*(m*B) / mu_s]

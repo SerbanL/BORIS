@@ -4,8 +4,6 @@
 #include "Boris_Enums_Defs.h"
 #include "ErrorHandler.h"
 
-
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //
 //	Abstract base class for Demag modules (there are more than one: micromagnetic, atomistic)
@@ -27,19 +25,6 @@ protected:
 	//There is also a copy of this in ConvolutionData inherited from Convolution - we need another copy here to detect changes
 	//these pbc images are applicable in individual demag modules only
 	INT3 demag_pbc_images = INT3();
-
-	//Evaluation speedup mode data
-
-	//vec for demagnetizing field polynomial extrapolation
-	VEC<DBL3> Hdemag, Hdemag2, Hdemag3, Hdemag4, Hdemag5, Hdemag6;
-
-	//times at which evaluations were done, used for extrapolation
-	double time_demag1 = 0.0, time_demag2 = 0.0, time_demag3 = 0.0, time_demag4 = 0.0, time_demag5 = 0.0, time_demag6 = 0.0;
-
-	int num_Hdemag_saved = 0;
-
-	//-Nxx, -Nyy, -Nzz values at r = r0
-	DBL3 selfDemagCoeff = DBL3();
 
 public:
 

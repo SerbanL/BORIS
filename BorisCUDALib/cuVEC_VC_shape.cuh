@@ -52,21 +52,21 @@ __global__ void delrect_kernel(const cuSZ3& n, int*& ngbrFlags, VType*& quantity
 	}
 }
 
-template void cuVEC_VC<float>::delrect(cuRect rectangle);
-template void cuVEC_VC<double>::delrect(cuRect rectangle);
+template void cuVEC_VC<float>::delrect(cuRect rectangle, bool recalculate_flags);
+template void cuVEC_VC<double>::delrect(cuRect rectangle, bool recalculate_flags);
 
-template void cuVEC_VC<cuFLT3>::delrect(cuRect rectangle);
-template void cuVEC_VC<cuDBL3>::delrect(cuRect rectangle);
+template void cuVEC_VC<cuFLT3>::delrect(cuRect rectangle, bool recalculate_flags);
+template void cuVEC_VC<cuDBL3>::delrect(cuRect rectangle, bool recalculate_flags);
 
 //delete rectangle, where the rectangle is relative to this VEC's rectangle, by setting empty cell values - all cells become empty cells
 template <typename VType>
-__host__ void cuVEC_VC<VType>::delrect(cuRect rectangle)
+__host__ void cuVEC_VC<VType>::delrect(cuRect rectangle, bool recalculate_flags)
 {
 	cuBox box = cuVEC<VType>::box_from_rect_max_cpu(rectangle + get_gpu_value(cuVEC<VType>::rect).s);
 
 	delrect_kernel <<< (get_gpu_value(cuVEC<VType>::n).dim() + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (cuVEC<VType>::n, ngbrFlags, cuVEC<VType>::quantity, box);
 
-	set_ngbrFlags();
+	if (recalculate_flags) set_ngbrFlags();
 }
 
 //--------------------------------------------MULTIPLE ENTRIES SETTERS - SHAPE CHANGERS

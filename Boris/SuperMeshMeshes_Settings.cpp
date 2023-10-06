@@ -765,6 +765,33 @@ BError SuperMesh::Set_Dormant(bool dormant, std::string meshName)
 	return error;
 }
 
+//setup track shifting algoithm for the holder mesh, with simulation window mesh, to be moved at set velocity and clipping during a simulation
+BError SuperMesh::Setup_Track_Shifting(std::string holder_meshName, std::vector<std::string> sim_meshNames, DBL3 velocity, DBL3 clipping)
+{
+	BError error(__FUNCTION__);
+
+	//check correct configuration
+	if (!contains(holder_meshName)) return error(BERROR_INCORRECTNAME);
+
+	std::vector<int> sim_meshIds;
+
+	for (int midx = 0; midx < sim_meshNames.size(); midx++) {
+
+		std::string sim_meshName = sim_meshNames[midx];
+
+		if (!contains(sim_meshName) || holder_meshName == sim_meshName) return error(BERROR_INCORRECTNAME);
+		if (!pMesh[holder_meshName]->MComputation_Enabled() || !pMesh[sim_meshName]->MComputation_Enabled()) return error(BERROR_INCORRECTNAME);
+
+		sim_meshIds.push_back(pMesh[sim_meshName]->get_id());
+	}
+
+	error = pMesh[holder_meshName]->Setup_Track_Shifting(sim_meshIds, velocity, clipping);
+
+	error = UpdateConfiguration(UPDATECONFIG_MESHCHANGE);
+
+	return error;
+}
+
 //set link_stochastic flag in named mesh, or all meshes if supermesh handle given
 BError SuperMesh::SetLinkStochastic(bool link_stochastic, std::string meshName)
 {

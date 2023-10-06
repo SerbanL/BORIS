@@ -6,6 +6,9 @@
 #include "DiffEq.h"
 #include "Atom_DiffEq.h"
 
+#include "Mesh.h"
+#include "Atom_Mesh.h"
+
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #if COMPILECUDA == 1
@@ -23,6 +26,8 @@ void ODECommon_Base::IterateCUDA(void)
 
 		for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+			if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 			//Euler can be used for stochastic equations
 			if (podeSolver->pODE[idx]->H_Thermal.linear_size() && podeSolver->pODE[idx]->Torque_Thermal.linear_size()) podeSolver->pODE[idx]->pmeshODECUDA->GenerateThermalField_and_Torque();
 			else if (podeSolver->pODE[idx]->H_Thermal.linear_size()) podeSolver->pODE[idx]->pmeshODECUDA->GenerateThermalField();
@@ -32,6 +37,8 @@ void ODECommon_Base::IterateCUDA(void)
 		}
 
 		for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+			if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 			//Euler can be used for stochastic equations
 			if (patom_odeSolver->pODE[idx]->H_Thermal.linear_size()) patom_odeSolver->pODE[idx]->pameshODECUDA->GenerateThermalField();
@@ -57,8 +64,6 @@ void ODECommon_Base::IterateCUDA(void)
 		iteration++;
 		stageiteration++;
 		available = true;
-		dT_last = dT;
-		podeSolver->pODECUDA->Sync_dT_last();
 #endif
 	}
 	break;
@@ -72,6 +77,8 @@ void ODECommon_Base::IterateCUDA(void)
 
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				//Trapezoidal Euler can be used for stochastic equations
 				if (podeSolver->pODE[idx]->H_Thermal.linear_size() && podeSolver->pODE[idx]->Torque_Thermal.linear_size()) podeSolver->pODE[idx]->pmeshODECUDA->GenerateThermalField_and_Torque();
 				else if (podeSolver->pODE[idx]->H_Thermal.linear_size()) podeSolver->pODE[idx]->pmeshODECUDA->GenerateThermalField();
@@ -81,6 +88,8 @@ void ODECommon_Base::IterateCUDA(void)
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				//Trapezoidal Euler can be used for stochastic equations
 				if (patom_odeSolver->pODE[idx]->H_Thermal.linear_size()) patom_odeSolver->pODE[idx]->pameshODECUDA->GenerateThermalField();
@@ -104,11 +113,15 @@ void ODECommon_Base::IterateCUDA(void)
 
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				if (podeSolver->setODE == ODE_LLG) podeSolver->pODE[idx]->pmeshODECUDA->RunTEuler_LLG(1, calculate_mxh, calculate_dmdt);
 				else podeSolver->pODE[idx]->pmeshODECUDA->RunTEuler(1, calculate_mxh, calculate_dmdt);
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				if (patom_odeSolver->setODE == ODE_LLG) patom_odeSolver->pODE[idx]->pameshODECUDA->RunTEuler_LLG(1, calculate_mxh, calculate_dmdt);
 				else patom_odeSolver->pODE[idx]->pameshODECUDA->RunTEuler(1, calculate_mxh, calculate_dmdt);
@@ -122,8 +135,6 @@ void ODECommon_Base::IterateCUDA(void)
 
 			evalStep = 0;
 			available = true;
-			dT_last = dT;
-			podeSolver->pODECUDA->Sync_dT_last();
 
 			time += dT;
 			stagetime += dT;
@@ -143,6 +154,8 @@ void ODECommon_Base::IterateCUDA(void)
 
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				//Adaptive Heun can be used for stochastic equations
 				if (podeSolver->pODE[idx]->H_Thermal.linear_size() && podeSolver->pODE[idx]->Torque_Thermal.linear_size()) podeSolver->pODE[idx]->pmeshODECUDA->GenerateThermalField_and_Torque();
 				else if (podeSolver->pODE[idx]->H_Thermal.linear_size()) podeSolver->pODE[idx]->pmeshODECUDA->GenerateThermalField();
@@ -152,6 +165,8 @@ void ODECommon_Base::IterateCUDA(void)
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				//Adaptive Heun can be used for stochastic equations
 				if (patom_odeSolver->pODE[idx]->H_Thermal.linear_size()) patom_odeSolver->pODE[idx]->pameshODECUDA->GenerateThermalField();
@@ -177,11 +192,15 @@ void ODECommon_Base::IterateCUDA(void)
 
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				if (podeSolver->setODE == ODE_LLG) podeSolver->pODE[idx]->pmeshODECUDA->RunAHeun_LLG(1, calculate_mxh, calculate_dmdt);
 				else podeSolver->pODE[idx]->pmeshODECUDA->RunAHeun(1, calculate_mxh, calculate_dmdt);
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				if (patom_odeSolver->setODE == ODE_LLG) patom_odeSolver->pODE[idx]->pameshODECUDA->RunAHeun_LLG(1, calculate_mxh, calculate_dmdt);
 				else patom_odeSolver->pODE[idx]->pameshODECUDA->RunAHeun(1, calculate_mxh, calculate_dmdt);
@@ -199,9 +218,9 @@ void ODECommon_Base::IterateCUDA(void)
 			iteration++;
 			stageiteration++;
 			available = true;
+
 			dT_last = dT;
 			podeSolver->pODECUDA->Sync_dT_last();
-
 			lte = podeSolver->pODECUDA->Get_lte();
 
 			if (!SetAdaptiveTimeStep()) {
@@ -229,6 +248,8 @@ void ODECommon_Base::IterateCUDA(void)
 
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				//RK4 can be used for stochastic equations
 				if (podeSolver->pODE[idx]->H_Thermal.linear_size() && podeSolver->pODE[idx]->Torque_Thermal.linear_size()) { podeSolver->pODE[idx]->pmeshODECUDA->GenerateThermalField_and_Torque(); stochastic = true; }
 				else if (podeSolver->pODE[idx]->H_Thermal.linear_size()) { podeSolver->pODE[idx]->pmeshODECUDA->GenerateThermalField(); stochastic = true; }
@@ -236,17 +257,23 @@ void ODECommon_Base::IterateCUDA(void)
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
 
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
+
 				//RK4 can be used for stochastic equations
 				if (patom_odeSolver->pODE[idx]->H_Thermal.linear_size()) { patom_odeSolver->pODE[idx]->pameshODECUDA->GenerateThermalField(); stochastic = true; }
 			}
 
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				if (podeSolver->setODE == ODE_LLG) podeSolver->pODE[idx]->pmeshODECUDA->RunRK4_LLG(0, calculate_mxh, calculate_dmdt);
 				else podeSolver->pODE[idx]->pmeshODECUDA->RunRK4(0, calculate_mxh, calculate_dmdt, stochastic);
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				if (patom_odeSolver->setODE == ODE_LLG) patom_odeSolver->pODE[idx]->pameshODECUDA->RunRK4_LLG(0, calculate_mxh, calculate_dmdt);
 				else patom_odeSolver->pODE[idx]->pameshODECUDA->RunRK4(0, calculate_mxh, calculate_dmdt, stochastic);
@@ -268,11 +295,15 @@ void ODECommon_Base::IterateCUDA(void)
 		{
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				if (podeSolver->setODE == ODE_LLG) podeSolver->pODE[idx]->pmeshODECUDA->RunRK4_LLG(evalStep);
 				else podeSolver->pODE[idx]->pmeshODECUDA->RunRK4(evalStep);
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				if (patom_odeSolver->setODE == ODE_LLG) patom_odeSolver->pODE[idx]->pameshODECUDA->RunRK4_LLG(evalStep);
 				else patom_odeSolver->pODE[idx]->pameshODECUDA->RunRK4(evalStep);
@@ -293,11 +324,15 @@ void ODECommon_Base::IterateCUDA(void)
 
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				if (podeSolver->setODE == ODE_LLG) podeSolver->pODE[idx]->pmeshODECUDA->RunRK4_LLG(3, calculate_mxh, calculate_dmdt);
 				else podeSolver->pODE[idx]->pmeshODECUDA->RunRK4(3, calculate_mxh, calculate_dmdt, stochastic);
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				if (patom_odeSolver->setODE == ODE_LLG) patom_odeSolver->pODE[idx]->pameshODECUDA->RunRK4_LLG(3, calculate_mxh, calculate_dmdt);
 				else patom_odeSolver->pODE[idx]->pameshODECUDA->RunRK4(3, calculate_mxh, calculate_dmdt, stochastic);
@@ -316,8 +351,6 @@ void ODECommon_Base::IterateCUDA(void)
 
 			evalStep = 0;
 			available = true;
-			dT_last = dT;
-			podeSolver->pODECUDA->Sync_dT_last();
 		}
 		break;
 		}
@@ -336,11 +369,15 @@ void ODECommon_Base::IterateCUDA(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					if (podeSolver->setODE == ODE_LLG) podeSolver->pODE[idx]->pmeshODECUDA->RunABM_LLG(0, calculate_mxh, calculate_dmdt);
 					else podeSolver->pODE[idx]->pmeshODECUDA->RunABM(0, calculate_mxh, calculate_dmdt);
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					if (patom_odeSolver->setODE == ODE_LLG) patom_odeSolver->pODE[idx]->pameshODECUDA->RunABM_LLG(0, calculate_mxh, calculate_dmdt);
 					else patom_odeSolver->pODE[idx]->pameshODECUDA->RunABM(0, calculate_mxh, calculate_dmdt);
@@ -359,11 +396,15 @@ void ODECommon_Base::IterateCUDA(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					if (podeSolver->setODE == ODE_LLG) podeSolver->pODE[idx]->pmeshODECUDA->RunABM_LLG(1, calculate_mxh, calculate_dmdt);
 					else podeSolver->pODE[idx]->pmeshODECUDA->RunABM(1, calculate_mxh, calculate_dmdt);
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					if (patom_odeSolver->setODE == ODE_LLG) patom_odeSolver->pODE[idx]->pameshODECUDA->RunABM_LLG(1, calculate_mxh, calculate_dmdt);
 					else patom_odeSolver->pODE[idx]->pameshODECUDA->RunABM(1, calculate_mxh, calculate_dmdt);
@@ -377,9 +418,9 @@ void ODECommon_Base::IterateCUDA(void)
 				iteration++;
 				stageiteration++;
 				available = true;
+
 				dT_last = dT;
 				podeSolver->pODECUDA->Sync_dT_last();
-
 				lte = podeSolver->pODECUDA->Get_lte();
 
 				if (!SetAdaptiveTimeStep()) {
@@ -403,11 +444,15 @@ void ODECommon_Base::IterateCUDA(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					if (podeSolver->setODE == ODE_LLG) podeSolver->pODE[idx]->pmeshODECUDA->RunABMTEuler_LLG(0);
 					else podeSolver->pODE[idx]->pmeshODECUDA->RunABMTEuler(0);
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					if (patom_odeSolver->setODE == ODE_LLG) patom_odeSolver->pODE[idx]->pameshODECUDA->RunABMTEuler_LLG(0);
 					else patom_odeSolver->pODE[idx]->pameshODECUDA->RunABMTEuler(0);
@@ -420,11 +465,15 @@ void ODECommon_Base::IterateCUDA(void)
 
 				for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+					if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 					if (podeSolver->setODE == ODE_LLG) podeSolver->pODE[idx]->pmeshODECUDA->RunABMTEuler_LLG(1);
 					else podeSolver->pODE[idx]->pmeshODECUDA->RunABMTEuler(1);
 				}
 
 				for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+					if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 					if (patom_odeSolver->setODE == ODE_LLG) patom_odeSolver->pODE[idx]->pameshODECUDA->RunABMTEuler_LLG(1);
 					else patom_odeSolver->pODE[idx]->pameshODECUDA->RunABMTEuler(1);
@@ -460,10 +509,14 @@ void ODECommon_Base::IterateCUDA(void)
 
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->pmeshODECUDA->RunRK23_Step0_NoAdvance(calculate_mxh);
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->pameshODECUDA->RunRK23_Step0_NoAdvance(calculate_mxh);
 			}
@@ -486,7 +539,7 @@ void ODECommon_Base::IterateCUDA(void)
 
 					podeSolver->RestoreCUDA();
 					patom_odeSolver->RestoreCUDA();
-					
+
 					primed = false;
 					podeSolver->pODECUDA->Sync_dT();
 					break;
@@ -499,10 +552,14 @@ void ODECommon_Base::IterateCUDA(void)
 			//Advance with new stepsize
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->pmeshODECUDA->RunRK23(0);
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->pameshODECUDA->RunRK23(0);
 			}
@@ -515,10 +572,14 @@ void ODECommon_Base::IterateCUDA(void)
 		{
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->pmeshODECUDA->RunRK23(1);
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->pameshODECUDA->RunRK23(1);
 			}
@@ -533,10 +594,14 @@ void ODECommon_Base::IterateCUDA(void)
 
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->pmeshODECUDA->RunRK23(2, calculate_mxh, calculate_dmdt);
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->pameshODECUDA->RunRK23(2, calculate_mxh, calculate_dmdt);
 			}
@@ -567,11 +632,15 @@ void ODECommon_Base::IterateCUDA(void)
 
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				if (podeSolver->setODE == ODE_LLG) podeSolver->pODE[idx]->pmeshODECUDA->RunRKF45_LLG(0, calculate_mxh, calculate_dmdt);
 				else podeSolver->pODE[idx]->pmeshODECUDA->RunRKF45(0, calculate_mxh, calculate_dmdt);
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				if (patom_odeSolver->setODE == ODE_LLG) patom_odeSolver->pODE[idx]->pameshODECUDA->RunRKF45_LLG(0, calculate_mxh, calculate_dmdt);
 				else patom_odeSolver->pODE[idx]->pameshODECUDA->RunRKF45(0, calculate_mxh, calculate_dmdt);
@@ -591,11 +660,15 @@ void ODECommon_Base::IterateCUDA(void)
 		{
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				if (podeSolver->setODE == ODE_LLG) podeSolver->pODE[idx]->pmeshODECUDA->RunRKF45_LLG(evalStep);
 				else podeSolver->pODE[idx]->pmeshODECUDA->RunRKF45(evalStep);
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				if (patom_odeSolver->setODE == ODE_LLG) patom_odeSolver->pODE[idx]->pameshODECUDA->RunRKF45_LLG(evalStep);
 				else patom_odeSolver->pODE[idx]->pameshODECUDA->RunRKF45(evalStep);
@@ -613,11 +686,15 @@ void ODECommon_Base::IterateCUDA(void)
 
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				if (podeSolver->setODE == ODE_LLG) podeSolver->pODE[idx]->pmeshODECUDA->RunRKF45_LLG(5, calculate_mxh, calculate_dmdt);
 				else podeSolver->pODE[idx]->pmeshODECUDA->RunRKF45(5, calculate_mxh, calculate_dmdt);
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				if (patom_odeSolver->setODE == ODE_LLG) patom_odeSolver->pODE[idx]->pameshODECUDA->RunRKF45_LLG(5, calculate_mxh, calculate_dmdt);
 				else patom_odeSolver->pODE[idx]->pameshODECUDA->RunRKF45(5, calculate_mxh, calculate_dmdt);
@@ -631,9 +708,9 @@ void ODECommon_Base::IterateCUDA(void)
 			iteration++;
 			stageiteration++;
 			available = true;
+
 			dT_last = dT;
 			podeSolver->pODECUDA->Sync_dT_last();
-
 			lte = podeSolver->pODECUDA->Get_lte();
 
 			if (!SetAdaptiveTimeStep()) {
@@ -661,10 +738,14 @@ void ODECommon_Base::IterateCUDA(void)
 
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->pmeshODECUDA->RunRKF56(0, calculate_mxh, calculate_dmdt);
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->pameshODECUDA->RunRKF56(0, calculate_mxh, calculate_dmdt);
 			}
@@ -685,10 +766,14 @@ void ODECommon_Base::IterateCUDA(void)
 		{
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->pmeshODECUDA->RunRKF56(evalStep);
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->pameshODECUDA->RunRKF56(evalStep);
 			}
@@ -705,10 +790,14 @@ void ODECommon_Base::IterateCUDA(void)
 
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->pmeshODECUDA->RunRKF56(7, calculate_mxh, calculate_dmdt);
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->pameshODECUDA->RunRKF56(7, calculate_mxh, calculate_dmdt);
 			}
@@ -721,9 +810,9 @@ void ODECommon_Base::IterateCUDA(void)
 			iteration++;
 			stageiteration++;
 			available = true;
+
 			dT_last = dT;
 			podeSolver->pODECUDA->Sync_dT_last();
-
 			lte = podeSolver->pODECUDA->Get_lte();
 
 			if (!SetAdaptiveTimeStep()) {
@@ -751,10 +840,14 @@ void ODECommon_Base::IterateCUDA(void)
 
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->pmeshODECUDA->RunRKCK45(0, calculate_mxh, calculate_dmdt);
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->pameshODECUDA->RunRKCK45(0, calculate_mxh, calculate_dmdt);
 			}
@@ -773,10 +866,14 @@ void ODECommon_Base::IterateCUDA(void)
 		{
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->pmeshODECUDA->RunRKCK45(evalStep);
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->pameshODECUDA->RunRKCK45(evalStep);
 			}
@@ -793,10 +890,14 @@ void ODECommon_Base::IterateCUDA(void)
 
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->pmeshODECUDA->RunRKCK45(5, calculate_mxh, calculate_dmdt);
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->pameshODECUDA->RunRKCK45(5, calculate_mxh, calculate_dmdt);
 			}
@@ -809,9 +910,9 @@ void ODECommon_Base::IterateCUDA(void)
 			iteration++;
 			stageiteration++;
 			available = true;
+
 			dT_last = dT;
 			podeSolver->pODECUDA->Sync_dT_last();
-
 			lte = podeSolver->pODECUDA->Get_lte();
 
 			if (!SetAdaptiveTimeStep()) {
@@ -841,10 +942,14 @@ void ODECommon_Base::IterateCUDA(void)
 
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->pmeshODECUDA->RunRKDP54_Step0_NoAdvance(calculate_mxh);
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->pameshODECUDA->RunRKDP54_Step0_NoAdvance(calculate_mxh);
 			}
@@ -880,10 +985,14 @@ void ODECommon_Base::IterateCUDA(void)
 			//Advance with new stepsize
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->pmeshODECUDA->RunRKDP54(0);
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->pameshODECUDA->RunRKDP54(0);
 			}
@@ -899,10 +1008,14 @@ void ODECommon_Base::IterateCUDA(void)
 		{
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->pmeshODECUDA->RunRKDP54(evalStep);
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->pameshODECUDA->RunRKDP54(evalStep);
 			}
@@ -917,10 +1030,14 @@ void ODECommon_Base::IterateCUDA(void)
 
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->pmeshODECUDA->RunRKDP54(5, calculate_mxh, calculate_dmdt);
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->pameshODECUDA->RunRKDP54(5, calculate_mxh, calculate_dmdt);
 			}
@@ -943,10 +1060,6 @@ void ODECommon_Base::IterateCUDA(void)
 	case EVAL_SD:
 	{
 #ifdef ODE_EVAL_COMPILATION_SD
-		available = true;
-		dT_last = dT;
-		podeSolver->pODECUDA->Sync_dT_last();
-
 		if (primed) {
 
 			bool do_sd_reset = false;
@@ -960,10 +1073,14 @@ void ODECommon_Base::IterateCUDA(void)
 
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->pmeshODECUDA->RunSD_BB();
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->pameshODECUDA->RunSD_BB();
 			}
@@ -1011,10 +1128,14 @@ void ODECommon_Base::IterateCUDA(void)
 
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->pmeshODECUDA->RunSD_Advance(calculate_mxh, calculate_dmdt);
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->pameshODECUDA->RunSD_Advance(calculate_mxh, calculate_dmdt);
 			}
@@ -1037,10 +1158,14 @@ void ODECommon_Base::IterateCUDA(void)
 			//0. prime the SD solver
 			for (int idx = 0; idx < podeSolver->pODE.size(); idx++) {
 
+				if (podeSolver->pODE[idx]->pMesh->Is_Dormant()) continue;
+
 				podeSolver->pODE[idx]->pmeshODECUDA->RunSD_Start();
 			}
 
 			for (int idx = 0; idx < patom_odeSolver->pODE.size(); idx++) {
+
+				if (patom_odeSolver->pODE[idx]->paMesh->Is_Dormant()) continue;
 
 				patom_odeSolver->pODE[idx]->pameshODECUDA->RunSD_Start();
 			}

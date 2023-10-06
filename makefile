@@ -69,7 +69,7 @@ compile: $(OBJ_FILES) $(CUOBJ_FILES)
   
 install:
 	nvcc -arch=sm_$(arch) -dlink -w $(CUOBJ_DIR)/*.o -o $(CUOBJ_DIR)/rdc_link.o
-	g++ $(OBJ_DIR)/*.o $(CUOBJ_DIR)/*.o -fopenmp -lpython$(python) -ltbb -lfftw3 -lX11 -L/usr/local/cuda-$(cuda)/targets/x86_64-linux/lib/ -lcudart -lcufft -lcudadevrt -o BorisLin
+	g++ $(OBJ_DIR)/*.o $(CUOBJ_DIR)/*.o -fopenmp -lpython$(python) -ltbb -lfftw3 -lX11 -L/usr/local/cuda-$(cuda)/targets/x86_64-linux/lib/ -L/usr/local/cuda-$(cuda)/targets/x86_64-linux/lib/stubs/ -L/usr/lib/x86_64-linux-gnu/ -lnvidia-ml -lcudart -lcufft -lcudadevrt -o BorisLin
 	#rm -f $(OBJ_FILES) $(CUOBJ_FILES) $(CUOBJ_DIR)/rdc_link.o
 	@echo Done
  

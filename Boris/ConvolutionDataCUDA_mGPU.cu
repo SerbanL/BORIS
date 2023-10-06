@@ -2534,9 +2534,18 @@ void ConvolutionDataCUDA::inverse_fft_2D_mGPU_ystep(cu_arr<cuBComplex*>& xIFFT_D
 	//do not interleave transpose_xy operations in mGPU mode
 	//transpose_xy operation in a single call
 
-	cufftC2C(plan2D_y, cuS_x, cuS_x, CUFFT_INVERSE);
-	cufftC2C(plan2D_y, cuS_y, cuS_y, CUFFT_INVERSE);
-	cufftC2C(plan2D_y, cuS_z, cuS_z, CUFFT_INVERSE);
+	if (!additional_spaces) {
+
+		cufftC2C(plan2D_y, cuS_x, cuS_x, CUFFT_INVERSE);
+		cufftC2C(plan2D_y, cuS_y, cuS_y, CUFFT_INVERSE);
+		cufftC2C(plan2D_y, cuS_z, cuS_z, CUFFT_INVERSE);
+	}
+	else {
+
+		cufftC2C(plan2D_y, cuS2_x, cuS_x, CUFFT_INVERSE);
+		cufftC2C(plan2D_y, cuS2_y, cuS_y, CUFFT_INVERSE);
+		cufftC2C(plan2D_y, cuS2_z, cuS_z, CUFFT_INVERSE);
+	}
 
 	//now transpose from cuS spaces to cuSquart spaces in current xRegion and yRegion
 	//cuSquart spaces extend for the full N.x/2 + 1 size, and must receive data from other devices
@@ -2556,9 +2565,18 @@ void ConvolutionDataCUDA::inverse_fft_2D_mGPU_ystep(cu_arr<cuBHalf*>& xIFFT_Data
 	//do not interleave transpose_xy operations in mGPU mode
 	//transpose_xy operation in a single call
 
-	cufftC2C(plan2D_y, cuS_x, cuS_x, CUFFT_INVERSE);
-	cufftC2C(plan2D_y, cuS_y, cuS_y, CUFFT_INVERSE);
-	cufftC2C(plan2D_y, cuS_z, cuS_z, CUFFT_INVERSE);
+	if (!additional_spaces) {
+
+		cufftC2C(plan2D_y, cuS_x, cuS_x, CUFFT_INVERSE);
+		cufftC2C(plan2D_y, cuS_y, cuS_y, CUFFT_INVERSE);
+		cufftC2C(plan2D_y, cuS_z, cuS_z, CUFFT_INVERSE);
+	}
+	else {
+
+		cufftC2C(plan2D_y, cuS2_x, cuS_x, CUFFT_INVERSE);
+		cufftC2C(plan2D_y, cuS2_y, cuS_y, CUFFT_INVERSE);
+		cufftC2C(plan2D_y, cuS2_z, cuS_z, CUFFT_INVERSE);
+	}
 
 	//now transpose from cuS spaces to cuSquart spaces in current xRegion and yRegion
 	//cuSquart spaces extend for the full N.x/2 + 1 size, and must receive data from other devices
@@ -2735,14 +2753,28 @@ void ConvolutionDataCUDA::inverse_fft_3D_mGPU_zysteps(cu_arr<cuBComplex*>& xIFFT
 	//do not interleave transpose_xy operations in mGPU mode
 	//transpose_xy operation in a single call
 
-	cufftC2C(plan3D_z, cuS_x, cuS_x, CUFFT_INVERSE);
-	cufftC2C(plan3D_y, cuS_x, cuS_x, CUFFT_INVERSE);
+	if (!additional_spaces) {
 
-	cufftC2C(plan3D_z, cuS_y, cuS_y, CUFFT_INVERSE);
-	cufftC2C(plan3D_y, cuS_y, cuS_y, CUFFT_INVERSE);
+		cufftC2C(plan3D_z, cuS_x, cuS_x, CUFFT_INVERSE);
+		cufftC2C(plan3D_y, cuS_x, cuS_x, CUFFT_INVERSE);
 
-	cufftC2C(plan3D_z, cuS_z, cuS_z, CUFFT_INVERSE);
-	cufftC2C(plan3D_y, cuS_z, cuS_z, CUFFT_INVERSE);
+		cufftC2C(plan3D_z, cuS_y, cuS_y, CUFFT_INVERSE);
+		cufftC2C(plan3D_y, cuS_y, cuS_y, CUFFT_INVERSE);
+
+		cufftC2C(plan3D_z, cuS_z, cuS_z, CUFFT_INVERSE);
+		cufftC2C(plan3D_y, cuS_z, cuS_z, CUFFT_INVERSE);
+	}
+	else {
+
+		cufftC2C(plan3D_z, cuS2_x, cuS_x, CUFFT_INVERSE);
+		cufftC2C(plan3D_y, cuS_x, cuS_x, CUFFT_INVERSE);
+
+		cufftC2C(plan3D_z, cuS2_y, cuS_y, CUFFT_INVERSE);
+		cufftC2C(plan3D_y, cuS_y, cuS_y, CUFFT_INVERSE);
+
+		cufftC2C(plan3D_z, cuS2_z, cuS_z, CUFFT_INVERSE);
+		cufftC2C(plan3D_y, cuS_z, cuS_z, CUFFT_INVERSE);
+	}
 
 	//now transpose from cuS spaces to cuSquart spaces in current xRegion and yRegion
 	//cuSquart spaces extend for the full N.x/2 + 1 size, and must receive data from other devices
@@ -2759,14 +2791,28 @@ void ConvolutionDataCUDA::inverse_fft_3D_mGPU_zysteps(cu_arr<cuBHalf*>& xIFFT_Da
 	//do not interleave transpose_xy operations in mGPU mode
 	//transpose_xy operation in a single call
 
-	cufftC2C(plan3D_z, cuS_x, cuS_x, CUFFT_INVERSE);
-	cufftC2C(plan3D_y, cuS_x, cuS_x, CUFFT_INVERSE);
+	if (!additional_spaces) {
 
-	cufftC2C(plan3D_z, cuS_y, cuS_y, CUFFT_INVERSE);
-	cufftC2C(plan3D_y, cuS_y, cuS_y, CUFFT_INVERSE);
+		cufftC2C(plan3D_z, cuS_x, cuS_x, CUFFT_INVERSE);
+		cufftC2C(plan3D_y, cuS_x, cuS_x, CUFFT_INVERSE);
 
-	cufftC2C(plan3D_z, cuS_z, cuS_z, CUFFT_INVERSE);
-	cufftC2C(plan3D_y, cuS_z, cuS_z, CUFFT_INVERSE);
+		cufftC2C(plan3D_z, cuS_y, cuS_y, CUFFT_INVERSE);
+		cufftC2C(plan3D_y, cuS_y, cuS_y, CUFFT_INVERSE);
+
+		cufftC2C(plan3D_z, cuS_z, cuS_z, CUFFT_INVERSE);
+		cufftC2C(plan3D_y, cuS_z, cuS_z, CUFFT_INVERSE);
+	}
+	else {
+
+		cufftC2C(plan3D_z, cuS2_x, cuS_x, CUFFT_INVERSE);
+		cufftC2C(plan3D_y, cuS_x, cuS_x, CUFFT_INVERSE);
+
+		cufftC2C(plan3D_z, cuS2_y, cuS_y, CUFFT_INVERSE);
+		cufftC2C(plan3D_y, cuS_y, cuS_y, CUFFT_INVERSE);
+
+		cufftC2C(plan3D_z, cuS2_z, cuS_z, CUFFT_INVERSE);
+		cufftC2C(plan3D_y, cuS_z, cuS_z, CUFFT_INVERSE);
+	}
 	
 	//now transpose from cuS spaces to cuSquart spaces in current xRegion and yRegion
 	//cuSquart spaces extend for the full N.x/2 + 1 size, and must receive data from other devices
@@ -2786,9 +2832,18 @@ void ConvolutionDataCUDA::inverse_fft_q2D_mGPU_ystep(cu_arr<cuBComplex*>& xIFFT_
 	//do not interleave transpose_xy operations in mGPU mode
 	//transpose_xy operation in a single call
 
-	cufftC2C(plan3D_y, cuS_x, cuS_x, CUFFT_INVERSE);
-	cufftC2C(plan3D_y, cuS_y, cuS_y, CUFFT_INVERSE);
-	cufftC2C(plan3D_y, cuS_z, cuS_z, CUFFT_INVERSE);
+	if (!additional_spaces) {
+
+		cufftC2C(plan3D_y, cuS_x, cuS_x, CUFFT_INVERSE);
+		cufftC2C(plan3D_y, cuS_y, cuS_y, CUFFT_INVERSE);
+		cufftC2C(plan3D_y, cuS_z, cuS_z, CUFFT_INVERSE);
+	}
+	else {
+
+		cufftC2C(plan3D_y, cuS2_x, cuS_x, CUFFT_INVERSE);
+		cufftC2C(plan3D_y, cuS2_y, cuS_y, CUFFT_INVERSE);
+		cufftC2C(plan3D_y, cuS2_z, cuS_z, CUFFT_INVERSE);
+	}
 
 	//now transpose from cuS spaces to cuSquart spaces in current xRegion and yRegion
 	//cuSquart spaces extend for the full N.x/2 + 1 size, and must receive data from other devices
@@ -2809,9 +2864,18 @@ void ConvolutionDataCUDA::inverse_fft_q2D_mGPU_ystep(cu_arr<cuBHalf*>& xIFFT_Dat
 	//do not interleave transpose_xy operations in mGPU mode
 	//transpose_xy operation in a single call
 
-	cufftC2C(plan3D_y, cuS_x, cuS_x, CUFFT_INVERSE);
-	cufftC2C(plan3D_y, cuS_y, cuS_y, CUFFT_INVERSE);
-	cufftC2C(plan3D_y, cuS_z, cuS_z, CUFFT_INVERSE);
+	if (!additional_spaces) {
+
+		cufftC2C(plan3D_y, cuS_x, cuS_x, CUFFT_INVERSE);
+		cufftC2C(plan3D_y, cuS_y, cuS_y, CUFFT_INVERSE);
+		cufftC2C(plan3D_y, cuS_z, cuS_z, CUFFT_INVERSE);
+	}
+	else {
+
+		cufftC2C(plan3D_y, cuS2_x, cuS_x, CUFFT_INVERSE);
+		cufftC2C(plan3D_y, cuS2_y, cuS_y, CUFFT_INVERSE);
+		cufftC2C(plan3D_y, cuS2_z, cuS_z, CUFFT_INVERSE);
+	}
 
 	//now transpose from cuS spaces to cuSquart spaces in current xRegion and yRegion
 	//cuSquart spaces extend for the full N.x/2 + 1 size, and must receive data from other devices

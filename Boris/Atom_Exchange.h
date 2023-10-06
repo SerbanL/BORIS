@@ -3,16 +3,17 @@
 #include "BorisLib.h"
 #include "Modules.h"
 
-
-
 class Atom_Mesh;
 
 #if defined(MODULE_COMPILATION_EXCHANGE) && ATOMISTIC == 1
+
+#include "ExchangeBase.h"
 
 //Heisenberg exchange for an atomistic simple cubic mesh
 
 class Atom_Exchange :
 	public Modules,
+	public ExchangeBase,
 	public ProgramState<Atom_Exchange, std::tuple<>, std::tuple<>>
 {
 private:

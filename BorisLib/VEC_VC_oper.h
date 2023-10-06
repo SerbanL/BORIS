@@ -168,10 +168,10 @@ void VEC_VC<VType>::renormalize(PType new_norm)
 
 //copy values from copy_this but keep current dimensions - if necessary map values from copy_this to local dimensions; from flags only copy the shape but not the boundary condition values or anything else - these are reset
 template <typename VType>
-void VEC_VC<VType>::copy_values(const VEC_VC<VType>& copy_this, Rect dstRect, Rect srcRect)
+void VEC_VC<VType>::copy_values(const VEC<VType>& copy_this, Rect dstRect, Rect srcRect, double multiplier, bool recalculate_flags)
 {
 	//copy values
-	VEC<VType>::copy_values(copy_this, dstRect, srcRect);
+	VEC<VType>::copy_values(copy_this, dstRect, srcRect, multiplier);
 
 	//copy shape
 
@@ -179,32 +179,25 @@ void VEC_VC<VType>::copy_values(const VEC_VC<VType>& copy_this, Rect dstRect, Re
 	if (srcRect.IsNull()) srcRect = copy_this.rect - copy_this.rect.s;
 
 	Box cells_box_dst = VEC<VType>::box_from_rect_max(dstRect + VEC<VType>::rect.s);
-	Box cells_box_src = copy_this.box_from_rect_max(srcRect + copy_this.rect.s);
-
 	SZ3 dst_n = cells_box_dst.size();
-	SZ3 src_n = cells_box_src.size();
-
-	DBL3 sourceIdx = (DBL3)src_n / dst_n;
-
-	//now map shape from copy_this.ngbrFlags to ngbrFlags
+	DBL3 lRatio = dstRect.size() / srcRect.size();
 
 #pragma omp parallel for
 	for (int j = 0; j < dst_n.j; j++) {
 		for (int k = 0; k < dst_n.k; k++) {
 			for (int i = 0; i < dst_n.i; i++) {
 
-				int idx_box_dst = i + j * dst_n.x + k * dst_n.x*dst_n.y;
+				int idx_out = (i + cells_box_dst.s.i) + (j + cells_box_dst.s.j) * VEC<VType>::n.x + (k + cells_box_dst.s.k) * VEC<VType>::n.x * VEC<VType>::n.y;
 
-				int _x = (int)floor(i * sourceIdx.x);
-				int _y = (int)floor(j * sourceIdx.y);
-				int _z = (int)floor(k * sourceIdx.z);
+				//destination cell rectangle
+				Rect dst_cell_rect_rel = VEC<VType>::get_cellrect(idx_out) - VEC<VType>::rect.s - dstRect.s;
 
-				int idx_out = (i + cells_box_dst.s.i) + (j + cells_box_dst.s.j) * VEC<VType>::n.x + (k + cells_box_dst.s.k) * VEC<VType>::n.x*VEC<VType>::n.y;
-				int idx_in = (_x + cells_box_src.s.i) + (_y + cells_box_src.s.j) * copy_this.n.x + (_z + cells_box_src.s.k) * (copy_this.n.x*copy_this.n.y);
+				//now map this to source rectangle
+				Rect src_cell_rect_rel = Rect(dst_cell_rect_rel.s & lRatio, dst_cell_rect_rel.e & lRatio) + srcRect.s;
 
-				if (idx_out < VEC<VType>::n.dim() && idx_in < copy_this.n.dim()) {
+				if (idx_out < VEC<VType>::n.dim()) {
 
-					if (copy_this.is_empty(idx_in)) mark_empty(idx_out);
+					if (copy_this.is_empty(src_cell_rect_rel + copy_this.rect.s)) mark_empty(idx_out);
 					else mark_not_empty(idx_out);
 				}
 			}
@@ -212,110 +205,116 @@ void VEC_VC<VType>::copy_values(const VEC_VC<VType>& copy_this, Rect dstRect, Re
 	}
 
 	//recalculate neighbor flags
-	set_ngbrFlags();
+	if (recalculate_flags) set_ngbrFlags();
 }
 
-//copy values from copy_this but keep current dimensions - if necessary map values from copy_this to local dimensions. Points with zero values are set as empty.
+//copy values from copy_this but keep current dimensions - if necessary map values from copy_this to local dimensions; from flags only copy the shape but not the boundary condition values or anything else - these are reset
 template <typename VType>
-void VEC_VC<VType>::copy_values(const VEC<VType>& copy_this, Rect dstRect, Rect srcRect)
+void VEC_VC<VType>::copy_values(const VEC_VC<VType>& copy_this, Rect dstRect, Rect srcRect, double multiplier, bool recalculate_flags)
 {
-	VEC<VType>::copy_values(copy_this, dstRect, srcRect);
+	//copy values
+	VEC<VType>::copy_values(copy_this, dstRect, srcRect, multiplier);
 
-	//mark zero points as empty before setting flags; otherwise they are not empty -> sets shape
+	//copy shape
+
+	if (dstRect.IsNull()) dstRect = VEC<VType>::rect - VEC<VType>::rect.s;
+	if (srcRect.IsNull()) srcRect = copy_this.rect - copy_this.rect.s;
+
+	Box cells_box_dst = VEC<VType>::box_from_rect_max(dstRect + VEC<VType>::rect.s);
+	SZ3 dst_n = cells_box_dst.size();
+	DBL3 lRatio = dstRect.size() / srcRect.size();
+
 #pragma omp parallel for
-	for (int idx = 0; idx < VEC<VType>::n.dim(); idx++) {
+	for (int j = 0; j < dst_n.j; j++) {
+		for (int k = 0; k < dst_n.k; k++) {
+			for (int i = 0; i < dst_n.i; i++) {
 
-		if (VEC<VType>::is_empty(idx)) mark_empty(idx);
-		else mark_not_empty(idx);
-	}
+				int idx_out = (i + cells_box_dst.s.i) + (j + cells_box_dst.s.j) * VEC<VType>::n.x + (k + cells_box_dst.s.k) * VEC<VType>::n.x * VEC<VType>::n.y;
 
-	//recalculate neighbor flags : current shape is maintained.
-	set_ngbrFlags();
-}
+				//destination cell rectangle
+				Rect dst_cell_rect_rel = VEC<VType>::get_cellrect(idx_out) - VEC<VType>::rect.s - dstRect.s;
 
-//shift all the values in this VEC by the given delta (units same as VEC<VType>::h)
-template <typename VType>
-void VEC_VC<VType>::shift(const DBL3& delta, const Rect& shift_rect)
-{
-	Box shift_box = VEC<VType>::box_from_rect_min(shift_rect);
+				//now map this to source rectangle
+				Rect src_cell_rect_rel = Rect(dst_cell_rect_rel.s & lRatio, dst_cell_rect_rel.e & lRatio) + srcRect.s;
 
-	int i_start, j_start, k_start, i_end, j_end, k_end, i_delta, j_delta, k_delta;
+				if (idx_out < VEC<VType>::n.dim()) {
 
-	if (delta.x < 0) { i_start = shift_box.s.x; i_end = shift_box.e.x; i_delta = 1; }
-	else { i_start = shift_box.e.x - 1; i_end = shift_box.s.x - 1; i_delta = -1; }
-
-	if (delta.y < 0) { j_start = shift_box.s.y; j_end = shift_box.e.y; j_delta = 1; }
-	else { j_start = shift_box.e.y - 1; j_end = shift_box.s.y - 1; j_delta = -1; }
-
-	if (delta.z < 0) { k_start = shift_box.s.z; k_end = shift_box.e.z; k_delta = 1; }
-	else { k_start = shift_box.e.z - 1; k_end = shift_box.s.z - 1; k_delta = -1; }
-
-	for (int k = k_start; k != k_end; k += k_delta) {
-		for (int j = j_start; j != j_end; j += j_delta) {
-			for (int i = i_start; i != i_end; i += i_delta) {
-
-				int cell_idx = i + j * VEC<VType>::n.x + k * VEC<VType>::n.x*VEC<VType>::n.y;
-
-				DBL3 position = DBL3(VEC<VType>::h.x * ((double)i + 0.5), VEC<VType>::h.y * ((double)j + 0.5), VEC<VType>::h.z * ((double)k + 0.5)) - delta;
-
-				if (VEC<VType>::rect.contains(position) && (ngbrFlags[cell_idx] & NF_NOTEMPTY)) {
-
-					VEC<VType>::quantity[cell_idx] = weighted_average(position, VEC<VType>::h);
+					if (copy_this.is_empty(src_cell_rect_rel + copy_this.rect.s)) mark_empty(idx_out);
+					else mark_not_empty(idx_out);
 				}
 			}
 		}
 	}
+
+	//recalculate neighbor flags
+	if (recalculate_flags) set_ngbrFlags();
 }
 
-//shift all the values in this VEC by the given delta (units same as VEC<VType>::h)
 template <typename VType>
-void VEC_VC<VType>::shift_keepmag(const DBL3& delta, const Rect& shift_rect)
+void VEC_VC<VType>::copy_values_thermalize(const VEC_VC<VType>& copy_this, std::function<VType(VType, int, int)>& thermalize_func, Rect dstRect, Rect srcRect, bool recalculate_flags)
 {
-	Box shift_box = VEC<VType>::box_from_rect_min(shift_rect);
+	//copy values
+	VEC<VType>::copy_values_thermalize(copy_this, thermalize_func, dstRect, srcRect);
 
-	int i_start, j_start, k_start, i_end, j_end, k_end, i_delta, j_delta, k_delta;
+	//copy shape
 
-	if (delta.x < 0) { i_start = shift_box.s.x; i_end = shift_box.e.x; i_delta = 1; }
-	else { i_start = shift_box.e.x - 1; i_end = shift_box.s.x - 1; i_delta = -1; }
+	if (dstRect.IsNull()) dstRect = VEC<VType>::rect - VEC<VType>::rect.s;
+	if (srcRect.IsNull()) srcRect = copy_this.rect - copy_this.rect.s;
 
-	if (delta.y < 0) { j_start = shift_box.s.y; j_end = shift_box.e.y; j_delta = 1; }
-	else { j_start = shift_box.e.y - 1; j_end = shift_box.s.y - 1; j_delta = -1; }
+	Box cells_box_src = copy_this.box_from_rect_max(srcRect + copy_this.rect.s);
+	SZ3 src_n = cells_box_src.size();
 
-	if (delta.z < 0) { k_start = shift_box.s.z; k_end = shift_box.e.z; k_delta = 1; }
-	else { k_start = shift_box.e.z - 1; k_end = shift_box.s.z - 1; k_delta = -1; }
+	DBL3 lRatio = dstRect.size() / srcRect.size();
 
-	for (int k = k_start; k != k_end; k += k_delta) {
-		for (int j = j_start; j != j_end; j += j_delta) {
-			for (int i = i_start; i != i_end; i += i_delta) {
+	//now map shape from copy_this.ngbrFlags to ngbrFlags
+	//go over source cells (not destination cells  as in copy_values)
+#pragma omp parallel for
+	for (int j = 0; j < src_n.j; j++) {
+		for (int k = 0; k < src_n.k; k++) {
+			for (int i = 0; i < src_n.i; i++) {
 
-				int cell_idx = i + j * VEC<VType>::n.x + k * VEC<VType>::n.x*VEC<VType>::n.y;
+				int idx_src = (i + cells_box_src.s.i) + (j + cells_box_src.s.j) * copy_this.n.x + (k + cells_box_src.s.k) * copy_this.n.x * copy_this.n.y;
 
-				DBL3 position = DBL3(VEC<VType>::h.x * ((double)i + 0.5), VEC<VType>::h.y * ((double)j + 0.5), VEC<VType>::h.z * ((double)k + 0.5)) - delta;
+				//source cell rectangle in absolute coordinates
+				Rect src_cell_rect_abs = copy_this.get_cellrect(idx_src);
 
-				if (VEC<VType>::rect.contains(position) && (ngbrFlags[cell_idx] & NF_NOTEMPTY)) {
+				//source cell rectangle relative to srcRect in copy_this VEC
+				Rect src_cell_rect_rel = src_cell_rect_abs - copy_this.rect.s - srcRect.s;
 
-					//for vectorial quantities (e.g. DBL3) the operator * is a scalar product.
-					double old_magnitude_squared = (double)(VEC<VType>::quantity[cell_idx] * VEC<VType>::quantity[cell_idx]);
+				//map to a rectangle in this VEC, with relative coordinates
+				Rect dst_cell_rect_rel = Rect(src_cell_rect_rel.s & lRatio, src_cell_rect_rel.e & lRatio) + dstRect.s;
 
-					VType new_value = weighted_average(position, VEC<VType>::h);
+				//box of cells for destination
+				Box dst_box = VEC<VType>::box_from_rect_max(dst_cell_rect_rel + VEC<VType>::rect.s);
 
-					double new_magnitude_squared = (double)(new_value * new_value);
+				//go through all destination cells contained in the current copy_this cell
 
-					if (new_magnitude_squared) {
+				bool empty = copy_this.is_empty(src_cell_rect_abs);
 
-						VEC<VType>::quantity[cell_idx] = new_value * sqrt(old_magnitude_squared / new_magnitude_squared);
+				for (int jbox = dst_box.s.j; jbox < dst_box.e.j; jbox++) {
+					for (int kbox = dst_box.s.k; kbox < dst_box.e.k; kbox++) {
+						for (int ibox = dst_box.s.i; ibox < dst_box.e.i; ibox++) {
+
+							int idx_dst = ibox + jbox * VEC<VType>::n.x + kbox * VEC<VType>::n.x * VEC<VType>::n.y;
+
+							if (empty) mark_empty(idx_dst);
+							else mark_not_empty(idx_dst);
+						}
 					}
 				}
 			}
 		}
 	}
+
+	//recalculate neighbor flags
+	if (recalculate_flags) set_ngbrFlags();
 }
 
 //shift all the values in this VEC by the given delta (units same as VEC<VType>::h)
 template <typename VType>
-void VEC_VC<VType>::shift_x(double delta, const Rect& shift_rect)
+void VEC_VC<VType>::shift_x(double delta, const Rect& shift_rect, bool recalculate_flags)
 {
-	if (fabs(shift_debt.x + delta) < VEC<VType>::h.x) {
+	if ((int)round(fabs(shift_debt.x + delta) / VEC<VType>::h.x) == 0) {
 
 		//total shift not enough : bank it and return
 		shift_debt.x += delta;
@@ -323,7 +322,7 @@ void VEC_VC<VType>::shift_x(double delta, const Rect& shift_rect)
 	}
 
 	//only shift an integer number of cells : there might be a sub-cellsize remainder so just bank it to be used next time
-	int cells_shift = (int)((shift_debt.x + delta) / VEC<VType>::h.x);
+	int cells_shift = (int)round((shift_debt.x + delta) / VEC<VType>::h.x);
 	shift_debt.x -= VEC<VType>::h.x * cells_shift - delta;
 
 	Box shift_box = VEC<VType>::box_from_rect_min(shift_rect);
@@ -335,13 +334,14 @@ void VEC_VC<VType>::shift_x(double delta, const Rect& shift_rect)
 			for (int j = shift_box.s.y; j < shift_box.e.y; j++) {
 				for (int k = shift_box.s.z; k < shift_box.e.z; k++) {
 
-					int cell_idx = i + j * VEC<VType>::n.x + k * VEC<VType>::n.x*VEC<VType>::n.y;
+					int cell_idx = i + j * VEC<VType>::n.x + k * VEC<VType>::n.x * VEC<VType>::n.y;
 					int shift_cell_idx = cell_idx - cells_shift;
 
-					if ((ngbrFlags[cell_idx] & NF_NOTEMPTY) && (ngbrFlags[shift_cell_idx] & NF_NOTEMPTY)) {
-						
-						VEC<VType>::quantity[cell_idx] = VEC<VType>::quantity[shift_cell_idx];
-					}
+					VEC<VType>::quantity[cell_idx] = VEC<VType>::quantity[shift_cell_idx];
+
+					//important to shift shape as well
+					if (is_empty(shift_cell_idx)) mark_empty(cell_idx);
+					else mark_not_empty(cell_idx);
 				}
 			}
 		}
@@ -353,24 +353,28 @@ void VEC_VC<VType>::shift_x(double delta, const Rect& shift_rect)
 			for (int j = shift_box.s.y; j < shift_box.e.y; j++) {
 				for (int k = shift_box.s.z; k < shift_box.e.z; k++) {
 
-					int cell_idx = i + j * VEC<VType>::n.x + k * VEC<VType>::n.x*VEC<VType>::n.y;
+					int cell_idx = i + j * VEC<VType>::n.x + k * VEC<VType>::n.x * VEC<VType>::n.y;
 					int shift_cell_idx = cell_idx - cells_shift;
 
-					if ((ngbrFlags[cell_idx] & NF_NOTEMPTY) && (ngbrFlags[shift_cell_idx] & NF_NOTEMPTY)) {
+					VEC<VType>::quantity[cell_idx] = VEC<VType>::quantity[shift_cell_idx];
 
-						VEC<VType>::quantity[cell_idx] = VEC<VType>::quantity[shift_cell_idx];
-					}
+					//important to shift shape as well
+					if (is_empty(shift_cell_idx)) mark_empty(cell_idx);
+					else mark_not_empty(cell_idx);
 				}
 			}
 		}
 	}
+
+	//shape could have changed, so must recalculate shape flags
+	if (recalculate_flags) set_ngbrFlags();
 }
 
 //shift all the values in this VEC by the given delta (units same as VEC<VType>::h)
 template <typename VType>
-void VEC_VC<VType>::shift_y(double delta, const Rect& shift_rect)
+void VEC_VC<VType>::shift_y(double delta, const Rect& shift_rect, bool recalculate_flags)
 {
-	if (fabs(shift_debt.y + delta) < VEC<VType>::h.y) {
+	if ((int)round(fabs(shift_debt.y + delta) / VEC<VType>::h.y) == 0) {
 
 		//total shift not enough : bank it and return
 		shift_debt.y += delta;
@@ -378,7 +382,7 @@ void VEC_VC<VType>::shift_y(double delta, const Rect& shift_rect)
 	}
 
 	//only shift an integer number of cells : there might be a sub-cellsize remainder so just bank it to be used next time
-	int cells_shift = (int)((shift_debt.y + delta) / VEC<VType>::h.y);
+	int cells_shift = (int)round((shift_debt.y + delta) / VEC<VType>::h.y);
 	shift_debt.y -= VEC<VType>::h.y * cells_shift - delta;
 
 	Box shift_box = VEC<VType>::box_from_rect_min(shift_rect);
@@ -390,13 +394,14 @@ void VEC_VC<VType>::shift_y(double delta, const Rect& shift_rect)
 			for (int i = shift_box.s.x; i < shift_box.e.x; i++) {
 				for (int k = shift_box.s.z; k < shift_box.e.z; k++) {
 
-					int cell_idx = i + j * VEC<VType>::n.x + k * VEC<VType>::n.x*VEC<VType>::n.y;
+					int cell_idx = i + j * VEC<VType>::n.x + k * VEC<VType>::n.x * VEC<VType>::n.y;
 					int shift_cell_idx = cell_idx - cells_shift * VEC<VType>::n.x;
 
-					if ((ngbrFlags[cell_idx] & NF_NOTEMPTY) && (ngbrFlags[shift_cell_idx] & NF_NOTEMPTY)) {
+					VEC<VType>::quantity[cell_idx] = VEC<VType>::quantity[shift_cell_idx];
 
-						VEC<VType>::quantity[cell_idx] = VEC<VType>::quantity[shift_cell_idx];
-					}
+					//important to shift shape as well
+					if (is_empty(shift_cell_idx)) mark_empty(cell_idx);
+					else mark_not_empty(cell_idx);
 				}
 			}
 		}
@@ -408,15 +413,19 @@ void VEC_VC<VType>::shift_y(double delta, const Rect& shift_rect)
 			for (int i = shift_box.s.x; i < shift_box.e.x; i++) {
 				for (int k = shift_box.s.z; k < shift_box.e.z; k++) {
 
-					int cell_idx = i + j * VEC<VType>::n.x + k * VEC<VType>::n.x*VEC<VType>::n.y;
+					int cell_idx = i + j * VEC<VType>::n.x + k * VEC<VType>::n.x * VEC<VType>::n.y;
 					int shift_cell_idx = cell_idx - cells_shift * VEC<VType>::n.x;
 
-					if ((ngbrFlags[cell_idx] & NF_NOTEMPTY) && (ngbrFlags[shift_cell_idx] & NF_NOTEMPTY)) {
+					VEC<VType>::quantity[cell_idx] = VEC<VType>::quantity[shift_cell_idx];
 
-						VEC<VType>::quantity[cell_idx] = VEC<VType>::quantity[shift_cell_idx];
-					}
+					//important to shift shape as well
+					if (is_empty(shift_cell_idx)) mark_empty(cell_idx);
+					else mark_not_empty(cell_idx);
 				}
 			}
 		}
 	}
+
+	//shape could have changed, so must recalculate shape flags
+	if (recalculate_flags) set_ngbrFlags();
 }

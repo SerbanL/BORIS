@@ -29,7 +29,7 @@ private:
 	Mesh * pMesh;
 
 	//the formula used to calculate conductivity dependence on angle (copy of flag from  InsulatorMesh)
-	TMR_ TMR_type;
+	TMR_ TMR_type = TMR_SLONCZEWSKI;
 
 #if COMPILECUDA == 1
 	friend TMRCUDA;

@@ -7,6 +7,7 @@
 
 #include "BorisCUDALib.h"
 #include "ModulesCUDA.h"
+#include "ExchangeBaseCUDA.h"
 
 class Atom_MeshCUDA;
 class Atom_DMExchange;
@@ -17,16 +18,14 @@ class Atom_DMExchange;
 template <typename VType> class VEC;
 
 class Atom_DMExchangeCUDA :
-	public ModulesCUDA
+	public ModulesCUDA,
+	public ExchangeBaseCUDA
 {
 
 private:
 
 	//pointer to CUDA version of mesh object holding the effective field module holding this CUDA module
 	Atom_MeshCUDA* paMeshCUDA;
-
-	//pointer to CPU version of module
-	Atom_DMExchange* pAtom_DMExchange;
 
 public:
 
@@ -43,6 +42,11 @@ public:
 	void UpdateConfiguration_Values(UPDATECONFIG_ cfgMessage) {}
 
 	void UpdateField(void);
+
+	//-------------------
+
+	//calculate exchange field at coupled cells in this mesh; accumulate energy density contribution in energy
+	void CalculateExchangeCoupling(mcu_val<cuBReal>& energy);
 
 	//-------------------Torque methods
 

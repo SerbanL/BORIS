@@ -45,8 +45,6 @@ __device__ cuReal3 ManagedAtom_DiffEqCubicCUDA::SLLG(int idx)
 
 __device__ cuReal3 ManagedAtom_DiffEqCubicCUDA::SLLGSTT(int idx)
 {
-	//Currently same as SLLG : TO DO
-
 	//gamma_e is the electron gyromagnetic ratio, which is negative
 
 	//LLG in explicit form : dm/dt = [gamma_e/(1+alpha^2)] * [m*B + alpha * m*(m*B) / mu_s]

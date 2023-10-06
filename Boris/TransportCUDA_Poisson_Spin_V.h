@@ -29,9 +29,6 @@ class TransportCUDA_Spin_V_Funcs {
 
 public:
 
-	//spin transport solver type (see Transport_Defs.h) : copy of stsolve in TransportCUDA, but on the gpu so we can use it in device code
-	int stsolve;
-
 	//micromagnetic version : managed mesh for access to all required mesh VECs and material parameters (if nullptr then not used)
 	ManagedMeshCUDA* pcuMesh;
 
@@ -45,6 +42,9 @@ public:
 	//for Poisson equations for V some values are fixed during relaxation, so pre-calculate them and store here to re-use.
 	//points to cuVEC in TransportCUDA or Atom_TransportCUDA
 	cuVEC<cuBReal>* pdelsq_V_fixed;
+
+	//spin transport solver type (see Transport_Defs.h) : copy of stsolve in TransportCUDA, but on the gpu so we can use it in device code
+	int stsolve;
 
 public:
 

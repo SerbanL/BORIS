@@ -148,7 +148,7 @@ double viDMExchange::UpdateField(void)
 
 						double delsq_Msq = 2 * pMesh->M[idx] * (pMesh->M.dxx_neu(idx) + pMesh->M.dyy_neu(idx) + pMesh->M.dzz_neu(idx)) + 2 * (dMdx * dMdx + dMdy * dMdy + dMdz * dMdz);
 						double Mnorm = pMesh->M[idx].norm();
-						Hexch_A = Aconst * (pMesh->M.delsq_neu(idx) - pMesh->M[idx] * delsq_Msq / (2 * Mnorm*Mnorm));
+						if (IsNZ(Mnorm)) Hexch_A = Aconst * (pMesh->M.delsq_neu(idx) - pMesh->M[idx] * delsq_Msq / (2 * Mnorm*Mnorm));
 					}
 					else {
 
@@ -195,7 +195,7 @@ double viDMExchange::UpdateField(void)
 
 						double delsq_Msq = 2 * pMesh->M[idx] * (pMesh->M.dxx_nneu(idx, bnd_nneu) + pMesh->M.dyy_nneu(idx, bnd_nneu) + pMesh->M.dzz_nneu(idx, bnd_nneu)) + 2 * (dMdx * dMdx + dMdy * dMdy + dMdz * dMdz);
 						double Mnorm = pMesh->M[idx].norm();
-						Hexch_A = Aconst * (pMesh->M.delsq_nneu(idx, bnd_nneu) - pMesh->M[idx] * delsq_Msq / (2 * Mnorm*Mnorm));
+						if (IsNZ(Mnorm)) Hexch_A = Aconst * (pMesh->M.delsq_nneu(idx, bnd_nneu) - pMesh->M[idx] * delsq_Msq / (2 * Mnorm*Mnorm));
 					}
 					else {
 
@@ -271,10 +271,10 @@ double viDMExchange::UpdateField(void)
 					DBL3 delsq_M_A = pMesh->M.delsq_neu(idx);
 					DBL3 delsq_M_B = pMesh->M2.delsq_neu(idx);
 
-					DBL2 M = DBL2(pMesh->M[idx].norm(), pMesh->M2[idx].norm());
+					DBL2 Mmag = DBL2(pMesh->M[idx].norm(), pMesh->M2[idx].norm());
 
-					Hexch_A = Aconst.i * delsq_M_A + (-4 * Ah.i * (pMesh->M[idx] ^ (pMesh->M[idx] ^ pMesh->M2[idx])) / (M.i*M.i) + Anh.i * delsq_M_B) / (MU0*Ms_AFM.i*Ms_AFM.j);
-					Hexch_A2 = Aconst.j * delsq_M_B + (-4 * Ah.j * (pMesh->M2[idx] ^ (pMesh->M2[idx] ^ pMesh->M[idx])) / (M.j*M.j) + Anh.j * delsq_M_A) / (MU0*Ms_AFM.i*Ms_AFM.j);
+					if (IsNZ(Mmag.i)) Hexch_A = Aconst.i * delsq_M_A + (-4 * Ah.i * (pMesh->M[idx] ^ (pMesh->M[idx] ^ pMesh->M2[idx])) / (Mmag.i*Mmag.i) + Anh.i * delsq_M_B) / (MU0*Ms_AFM.i*Ms_AFM.j);
+					if (IsNZ(Mmag.j)) Hexch_A2 = Aconst.j * delsq_M_B + (-4 * Ah.j * (pMesh->M2[idx] ^ (pMesh->M2[idx] ^ pMesh->M[idx])) / (Mmag.j*Mmag.j) + Anh.j * delsq_M_A) / (MU0*Ms_AFM.i*Ms_AFM.j);
 
 					//2. Dzyaloshinskii-Moriya interfacial exchange contribution
 
@@ -370,13 +370,13 @@ double viDMExchange::UpdateField(void)
 					DBL3 delsq_M_A = pMesh->M.delsq_nneu(idx, bndA_nneu);
 					DBL3 delsq_M_B = pMesh->M2.delsq_nneu(idx, bndB_nneu);
 
-					DBL2 M = DBL2(pMesh->M[idx].norm(), pMesh->M2[idx].norm());
+					DBL2 Mmag = DBL2(pMesh->M[idx].norm(), pMesh->M2[idx].norm());
 
 					//1. direct exchange contribution + AFM contribution
 
 					//cells marked with cmbnd are calculated using exchange coupling to other ferromagnetic meshes - see below; the delsq_nneu evaluates to zero in the CMBND coupling direction.
-					Hexch_A = Aconst.i * delsq_M_A + (-4 * Ah.i * (pMesh->M[idx] ^ (pMesh->M[idx] ^ pMesh->M2[idx])) / (M.i*M.i) + Anh.i * delsq_M_B) / (MU0*Ms_AFM.i*Ms_AFM.j);
-					Hexch_A2 = Aconst.j * delsq_M_B + (-4 * Ah.j * (pMesh->M2[idx] ^ (pMesh->M2[idx] ^ pMesh->M[idx])) / (M.j*M.j) + Anh.j * delsq_M_A) / (MU0*Ms_AFM.i*Ms_AFM.j);
+					if (IsNZ(Mmag.i)) Hexch_A = Aconst.i * delsq_M_A + (-4 * Ah.i * (pMesh->M[idx] ^ (pMesh->M[idx] ^ pMesh->M2[idx])) / (Mmag.i*Mmag.i) + Anh.i * delsq_M_B) / (MU0*Ms_AFM.i*Ms_AFM.j);
+					if (IsNZ(Mmag.j)) Hexch_A2 = Aconst.j * delsq_M_B + (-4 * Ah.j * (pMesh->M2[idx] ^ (pMesh->M2[idx] ^ pMesh->M[idx])) / (Mmag.j*Mmag.j) + Anh.j * delsq_M_A) / (MU0*Ms_AFM.i*Ms_AFM.j);
 
 					//2. Dzyaloshinskii-Moriya interfacial exchange contribution
 

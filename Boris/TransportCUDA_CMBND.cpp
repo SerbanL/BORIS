@@ -43,6 +43,9 @@ __host__ void TransportCUDA_CMBND_Sec::construct_cu_obj(void)
 	nullgpuptr(ppcuMesh);
 	nullgpuptr(ppcuaMesh);
 
+	set_gpu_value(is_thermoelectric_mesh, false);
+	set_gpu_value(is_open_potential, false);
+
 	set_gpu_value(num_devices, (int)0);
 	set_gpu_value(curr_device, (int)0);
 }

@@ -31,7 +31,10 @@ void Atom_ZeemanCUDA::set_Atom_ZeemanCUDA_pointers(void)
 
 //----------------------- Computation
 
-__global__ void Atom_ZeemanCUDA_UpdateField_Cubic(ManagedAtom_MeshCUDA& cuMesh, cuReal3& Ha, cuVEC<cuReal3>& Havec, cuVEC<cuReal3>& globalField, ManagedModulesCUDA& cuModule, bool do_reduction)
+__global__ void Atom_ZeemanCUDA_UpdateField_Cubic(
+	ManagedAtom_MeshCUDA& cuMesh, 
+	cuReal3& Ha, cuVEC<cuReal3>& Havec, cuVEC<cuReal3>& globalField, 
+	ManagedModulesCUDA& cuModule, bool do_reduction)
 {
 	cuVEC_VC<cuReal3>& M1 = *cuMesh.pM1;
 	cuVEC<cuReal3>& Heff1 = *cuMesh.pHeff1;
@@ -44,16 +47,12 @@ __global__ void Atom_ZeemanCUDA_UpdateField_Cubic(ManagedAtom_MeshCUDA& cuMesh, 
 
 		cuReal3 Hext = cuReal3();
 
-		if (Havec.linear_size()) Hext = Havec[idx];
-		else {
+		cuBReal cHA = *cuMesh.pcHA;
+		cuMesh.update_parameters_mcoarse(idx, *cuMesh.pcHA, cHA);
 
-			cuBReal cHA = *cuMesh.pcHA;
-			cuMesh.update_parameters_mcoarse(idx, *cuMesh.pcHA, cHA);
-
-			Hext = cHA * Ha;
-		}
-
-		if (globalField.linear_size()) Hext += globalField[idx];
+		Hext = cHA * Ha;
+		if (Havec.linear_size()) Hext += Havec[idx];
+		if (globalField.linear_size()) Hext += globalField[idx] * cHA;
 
 		Heff1[idx] = Hext;
 
@@ -77,7 +76,7 @@ __global__ void Atom_ZeemanCUDA_UpdateField_Equation_Cubic(
 	ManagedFunctionCUDA<cuBReal, cuBReal, cuBReal, cuBReal>& H_equation_y,
 	ManagedFunctionCUDA<cuBReal, cuBReal, cuBReal, cuBReal>& H_equation_z,
 	cuBReal time,
-	cuVEC<cuReal3>& globalField,
+	cuVEC<cuReal3>& Havec, cuVEC<cuReal3>& globalField,
 	ManagedModulesCUDA& cuModule, bool do_reduction)
 {
 	cuVEC_VC<cuReal3>& M1 = *cuMesh.pM1;
@@ -101,7 +100,8 @@ __global__ void Atom_ZeemanCUDA_UpdateField_Equation_Cubic(
 			H_equation_z.evaluate(relpos.x, relpos.y, relpos.z, time));
 
 		Hext = cHA * H;
-		if (globalField.linear_size()) Hext += globalField[idx];
+		if (Havec.linear_size()) Hext += Havec[idx];
+		if (globalField.linear_size()) Hext += globalField[idx] * cHA;
 
 		Heff1[idx] = Hext;
 
@@ -138,7 +138,9 @@ void Atom_ZeemanCUDA::UpdateField(void)
 				for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
 					Atom_ZeemanCUDA_UpdateField_Cubic <<< (paMeshCUDA->M1.device_size(mGPU) + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> 
-						(paMeshCUDA->cuaMesh.get_deviceobject(mGPU), Ha(mGPU), Havec.get_deviceobject(mGPU), globalField.get_deviceobject(mGPU), cuModule.get_deviceobject(mGPU), true);
+						(paMeshCUDA->cuaMesh.get_deviceobject(mGPU), 
+						Ha(mGPU), Havec.get_deviceobject(mGPU), globalField.get_deviceobject(mGPU), 
+						cuModule.get_deviceobject(mGPU), true);
 				}
 			}
 			else {
@@ -146,7 +148,9 @@ void Atom_ZeemanCUDA::UpdateField(void)
 				for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
 					Atom_ZeemanCUDA_UpdateField_Cubic <<< (paMeshCUDA->M1.device_size(mGPU) + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> 
-						(paMeshCUDA->cuaMesh.get_deviceobject(mGPU), Ha(mGPU), Havec.get_deviceobject(mGPU), globalField.get_deviceobject(mGPU), cuModule.get_deviceobject(mGPU), false);
+						(paMeshCUDA->cuaMesh.get_deviceobject(mGPU), 
+						Ha(mGPU), Havec.get_deviceobject(mGPU), globalField.get_deviceobject(mGPU), 
+						cuModule.get_deviceobject(mGPU), false);
 				}
 			}
 		}
@@ -170,7 +174,7 @@ void Atom_ZeemanCUDA::UpdateField(void)
 						(paMeshCUDA->cuaMesh.get_deviceobject(mGPU),
 						H_equation.get_x(mGPU), H_equation.get_y(mGPU), H_equation.get_z(mGPU),
 						paMeshCUDA->GetStageTime(),
-						globalField.get_deviceobject(mGPU),
+						Havec.get_deviceobject(mGPU), globalField.get_deviceobject(mGPU),
 						cuModule.get_deviceobject(mGPU), true);
 				}
 			}
@@ -182,7 +186,7 @@ void Atom_ZeemanCUDA::UpdateField(void)
 					(paMeshCUDA->cuaMesh.get_deviceobject(mGPU),
 					H_equation.get_x(mGPU), H_equation.get_y(mGPU), H_equation.get_z(mGPU),
 					paMeshCUDA->GetStageTime(),
-					globalField.get_deviceobject(mGPU),
+					Havec.get_deviceobject(mGPU), globalField.get_deviceobject(mGPU),
 					cuModule.get_deviceobject(mGPU), false);
 				}
 			}
@@ -200,6 +204,34 @@ BError Atom_ZeemanCUDA::SetFieldEquation(const std::vector<std::vector< std::vec
 	if (Havec.size_cpu().dim()) Havec.clear();
 
 	return error;
+}
+
+__global__ void SetFromGlobalField_Atom_Zeeman_Kernel(cuVEC<cuReal3>& globalField, cuVEC<cuReal3>& SMesh_globalField)
+{
+	int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (idx < globalField.linear_size()) {
+
+		cuReal3 abs_pos = globalField.cellidx_to_position(idx) + globalField.rect.s;
+
+		if (SMesh_globalField.rect.contains(abs_pos)) {
+
+			globalField[idx] = SMesh_globalField[abs_pos - SMesh_globalField.rect.s];
+		}
+		else {
+
+			globalField[idx] = cuReal3();
+		}
+	}
+}
+
+void Atom_ZeemanCUDA::SetGlobalField(mcu_VEC(cuReal3)& SMesh_globalField)
+{
+	for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
+
+		SetFromGlobalField_Atom_Zeeman_Kernel <<< (paMeshCUDA->M1.device_size(mGPU) + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
+			(globalField.get_deviceobject(mGPU), SMesh_globalField.get_deviceobject(mGPU));
+	}
 }
 
 #endif

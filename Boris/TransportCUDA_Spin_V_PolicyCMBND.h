@@ -57,7 +57,7 @@ public:
 
 	//////////////////////////////////////////////////////////////////////////////////
 	//
-	// TransportCUDA_Spin_V_PolicyCMBND Methods
+	// TransportCUDA_Spin_V_PolicyCMBND_Pri Methods
 
 	BError set_pointers(MeshCUDA* pMeshCUDA, TransportBaseCUDA* pTransportBaseCUDA)
 	{

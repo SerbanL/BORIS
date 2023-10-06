@@ -79,8 +79,17 @@ public:
 
 	BError SetFieldVEC_FromOVF2(std::string fileName);
 
+	BError SetFieldVEC_FromVEC(VEC<DBL3>& Hext);
+
+#if COMPILECUDA == 1
+	BError SetFieldVEC_FromVEC_CUDA(mcu_VEC(cuReal3)& Hext);
+#endif
+
 	//if base temperature changes we need to adjust Tb in H_equation if it's used.
 	void SetBaseTemperature(double Temperature);
+
+	//Set globalField from SMesh::globalField (without mesh transfer, simply read values)
+	void SetGlobalField(void);
 
 	//-------------------Torque methods
 
@@ -135,8 +144,17 @@ public:
 
 	BError SetFieldVEC_FromOVF2(std::string fileName) { return BError(); }
 
+	BError SetFieldVEC_FromVEC(VEC<DBL3>& Hext);
+
+#if COMPILECUDA == 1
+	BError SetFieldVEC_FromVEC_CUDA(mcu_VEC(cuReal3)& Hext);
+#endif
+
 	//if base temperature changes we need to adjust Tb in H_equation if it's used.
 	void SetBaseTemperature(double Temperature) {}
+
+	//Set globalField from SMesh::globalField (without mesh transfer, simply read values)
+	void SetGlobalField(void) {}
 };
 
 #endif

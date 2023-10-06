@@ -3,8 +3,6 @@
 #include "BorisLib.h"
 #include "Modules.h"
 
-
-
 class Mesh;
 class FMesh;
 class SuperMesh;
@@ -17,10 +15,6 @@ class SuperMesh;
 #if COMPILECUDA == 1
 #include "OerstedCUDA.h"
 #endif
-
-////////////////////////////////////////////////////////////////////////////////////////////////
-//
-// Full Demag using pre-calculated demag tensor
 
 class Oersted : 
 	public Modules,
@@ -69,7 +63,7 @@ public:
 	VEC<DBL3>& GetOerstedField(void) { return sm_Vals; }
 
 #if COMPILECUDA == 1
-	cu_obj<cuVEC<cuReal3>>& GetOerstedFieldCUDA(void) { return dynamic_cast<OerstedCUDA*>(pModuleCUDA)->GetOerstedField(); }
+	mcu_VEC(cuReal3)& GetOerstedFieldCUDA(void) { return dynamic_cast<OerstedCUDA*>(pModuleCUDA)->GetOerstedField(); }
 #endif
 };
 

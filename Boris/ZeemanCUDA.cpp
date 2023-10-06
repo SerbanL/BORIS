@@ -46,18 +46,10 @@ BError ZeemanCUDA::InitializeGlobalField(void)
 
 		if (!globalField.resize(pMeshCUDA->h, pMeshCUDA->meshRect)) return error(BERROR_OUTOFGPUMEMORY_CRIT);
 		
-		//MCUDA
-		/*
-		cu_arr<cuVEC<cuReal3>> pVal_from;
-		cu_arr<cuVEC<cuReal3>> pVal_to;
-		
-		pVal_from.push_back((cuVEC<cuReal3>*&)pZeeman->pSMesh->GetGlobalFieldCUDA().get_managed_object());
-
 		//Now copy mesh transfer object to cuda version
-		if (!globalField.copy_transfer_info(pVal_from, pVal_to, pZeeman->globalField.get_transfer())) return error(BERROR_OUTOFGPUMEMORY_CRIT);
-
-		globalField.transfer_in(pZeeman->globalField.linear_size(), pZeeman->globalField.size_transfer_in());
-		*/
+		if (!globalField.copy_transfer_info<cuVEC<cuReal3>, cuVEC<cuReal3>, Transfer<DBL3>>
+			({ &pZeeman->pSMesh->GetGlobalFieldCUDA() }, {}, pZeeman->globalField.get_transfer())) return error(BERROR_OUTOFGPUMEMORY_CRIT);
+		globalField.transfer_in();
 	}
 	else globalField.clear();
 
@@ -149,6 +141,24 @@ BError ZeemanCUDA::SetFieldVEC(VEC<DBL3>& Havec_cpu)
 	BError error(CLASS_STR(ZeemanCUDA));
 
 	if (!Havec.set_from_cpuvec(Havec_cpu)) error_on_create(BERROR_OUTOFGPUMEMORY_NCRIT);
+
+	return error;
+}
+
+BError ZeemanCUDA::SetFieldVEC_FromcuVEC(mcu_VEC(cuReal3)& Hext)
+{
+	BError error(CLASS_STR(ZeemanCUDA));
+
+	if (!Havec.resize((cuReal3)pMeshCUDA->h, (cuRect)pMeshCUDA->meshRect)) {
+
+		Havec.clear();
+		return error(BERROR_OUTOFGPUMEMORY_NCRIT);
+	}
+
+	//now copy from Hext into Havec
+	Box cells_box_dst = Havec.box_from_rect_max_cpu(pMeshCUDA->meshRect);
+	Box cells_box_src = Hext.box_from_rect_max_cpu(pMeshCUDA->meshRect);
+	Havec.copy_values(Hext, cells_box_dst, cells_box_src);
 
 	return error;
 }

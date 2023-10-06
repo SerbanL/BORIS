@@ -18,6 +18,7 @@ BError TransportCUDA_Spin_V_CMBND_Pri::set_pointers(MeshCUDA* pMeshCUDA, Transpo
 	BError error(__FUNCTION__);
 
 	if (set_gpu_value(pcuMesh, pMeshCUDA->cuMesh.get_managed_object(idx_device)) != cudaSuccess) error(BERROR_GPUERROR_CRIT);
+	
 	if (set_gpu_value(pdM_dt, pTransportBaseCUDA->dM_dt.get_managed_object(idx_device)) != cudaSuccess) error(BERROR_GPUERROR_CRIT);
 
 	if (set_gpu_value(stsolve, pTransportBaseCUDA->Get_STSolveType()) != cudaSuccess) error(BERROR_GPUERROR_CRIT);
@@ -30,6 +31,7 @@ BError TransportCUDA_Spin_V_CMBND_Pri::set_pointers(Atom_MeshCUDA* paMeshCUDA, T
 	BError error(__FUNCTION__);
 
 	if (set_gpu_value(pcuaMesh, paMeshCUDA->cuaMesh.get_managed_object(idx_device)) != cudaSuccess) error(BERROR_GPUERROR_CRIT);
+	
 	if (set_gpu_value(pdM_dt, pTransportBaseCUDA->dM_dt.get_managed_object(idx_device)) != cudaSuccess) error(BERROR_GPUERROR_CRIT);
 
 	if (set_gpu_value(stsolve, pTransportBaseCUDA->Get_STSolveType()) != cudaSuccess) error(BERROR_GPUERROR_CRIT);

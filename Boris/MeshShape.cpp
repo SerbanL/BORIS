@@ -4,49 +4,67 @@
 
 //----------------------------------- OTHER MESH SHAPE CONTROL
 
-BError Mesh::copy_mesh_data(MeshBase& copy_this)
+BError Mesh::copy_mesh_data(MeshBase& copy_this, Rect dstRect, Rect srcRect)
 {
 	BError error(__FUNCTION__);
-
-	Mesh* pcopy_this = dynamic_cast<Mesh*>(&copy_this);
-
-	if (pcopy_this == nullptr || meshType != pcopy_this->GetMeshType()) return error(BERROR_INCORRECTVALUE);
 
 #if COMPILECUDA == 1
 	//if CUDA on then first transfer data to cpu as there may be a mismatch
 	if (pMeshCUDA) {
 
-		error = pcopy_this->pMeshCUDA->copy_shapes_to_cpu();
+		error = pMeshCUDA->copy_shapes_to_cpu();
+		copy_this.pMeshBaseCUDA->copy_shapes_to_cpu();
 	}
 #endif
 
 	//1a. shape magnetization
-	if (M.linear_size() && pcopy_this->M.linear_size()) {
+	if (M.linear_size()) {
 
-		//if Roughness module is enabled then apply shape via the Roughness module instead
-		if (IsModuleSet(MOD_ROUGHNESS) && pcopy_this->IsModuleSet(MOD_ROUGHNESS)) {
+		//micromagnetic to micromagnetic mesh
+		if (!copy_this.is_atomistic()) {
 
-			error = dynamic_cast<Roughness*>(pMod(MOD_ROUGHNESS))->copy_roughness(dynamic_cast<Roughness*>(pcopy_this->pMod(MOD_ROUGHNESS)));
+			Mesh* pcopy_this = dynamic_cast<Mesh*>(&copy_this);
+			if (pcopy_this == nullptr || meshType != pcopy_this->GetMeshType()) return error(BERROR_INCORRECTVALUE);
 
-			if (error) return error;
+			//if Roughness module is enabled then apply shape via the Roughness module instead
+			if (IsModuleSet(MOD_ROUGHNESS) && pcopy_this->IsModuleSet(MOD_ROUGHNESS)) {
+
+				error = dynamic_cast<Roughness*>(pMod(MOD_ROUGHNESS))->copy_roughness(dynamic_cast<Roughness*>(pcopy_this->pMod(MOD_ROUGHNESS)));
+				if (error) return error;
+			}
+			else {
+
+				M.copy_values(pcopy_this->M, dstRect, srcRect);
+
+				//1b. shape magnetization in AF meshes
+				if (M2.linear_size() && pcopy_this->M2.linear_size()) {
+
+					M2.copy_values(pcopy_this->M2, dstRect, srcRect);
+				}
+			}
 		}
+
+		//atomistic to micromagnetic (ferromagnetic) mesh
 		else {
 
-			M.copy_values(pcopy_this->M);
+			Atom_Mesh* pcopy_this = dynamic_cast<Atom_Mesh*>(&copy_this);
+			if (pcopy_this == nullptr || meshType != MESH_FERROMAGNETIC) return error(BERROR_INCORRECTVALUE);
 
-			//1b. shape magnetization in AF meshes
-			if (M2.linear_size() && pcopy_this->M2.linear_size()) {
+			//used to convert moment to magnetization in each atomistic unit cell
+			double conversion = MUB / pcopy_this->M1.h.dim();
 
-				M2.copy_values(pcopy_this->M2);
-			}
+			M.copy_values(pcopy_this->M1, dstRect, srcRect, conversion);
 		}
 	}
 
 	//2. shape electrical conductivity
-	if (elC.linear_size() && pcopy_this->elC.linear_size()) elC.copy_values(pcopy_this->elC);
+	if (elC.linear_size() && copy_this.elC.linear_size()) elC.copy_values(copy_this.elC, dstRect, srcRect);
 
 	//3. shape temperature
-	if (Temp.linear_size() && pcopy_this->Temp.linear_size()) Temp.copy_values(pcopy_this->Temp);
+	if (Temp.linear_size() && copy_this.Temp.linear_size()) Temp.copy_values(copy_this.Temp, dstRect, srcRect);
+
+	//4. shape mechanical displacement
+	if (u_disp.linear_size() && copy_this.u_disp.linear_size()) u_disp.copy_values(copy_this.u_disp, dstRect, srcRect);
 
 #if COMPILECUDA == 1
 	//if CUDA on then load back to gpu

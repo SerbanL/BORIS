@@ -82,6 +82,14 @@ public:
 #if COMPILECUDA == 1
 	void PrepareNewIterationCUDA(void) {}
 #endif
+
+	//----------------------------------- ALGORITHMS
+
+	//implement track shifting - called during PrepareNewIteration if this is a dormant mesh with track shifting configured (non-zero trackWindow_velocity and idTrackShiftMesh vector not empty)
+	void Track_Shift_Algorithm(void) {}
+
+	//setup track shifting algoithm for the holder mesh, with simulation window mesh, to be moved at set velocity and clipping during a simulation
+	BError Setup_Track_Shifting(std::vector<int> sim_meshIds, DBL3 velocity, DBL3 clipping) { return BError(); }
 };
 
 #else
@@ -119,6 +127,14 @@ public:
 #if COMPILECUDA == 1
 	void PrepareNewIterationCUDA(void) {}
 #endif
+
+	//----------------------------------- ALGORITHMS
+
+	//implement track shifting - called during PrepareNewIteration if this is a dormant mesh with track shifting configured (non-zero trackWindow_velocity and idTrackShiftMesh vector not empty)
+	void Track_Shift_Algorithm(void) {}
+
+	//setup track shifting algoithm for the holder mesh, with simulation window mesh, to be moved at set velocity and clipping during a simulation
+	BError Setup_Track_Shifting(std::vector<int> sim_meshIds, DBL3 velocity, DBL3 clipping) { return BError(); }
 };
 
 #endif

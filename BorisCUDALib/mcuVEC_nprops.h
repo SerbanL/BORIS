@@ -31,7 +31,7 @@ cuVAL2<PType> mcuVEC<VType, MType>::get_minmax(cuRect rectangle)
 
 	for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
-		cuVAL2<PType> minmax_ = mng(mGPU)->get_minmax(pn_d[mGPU].dim(), (rectangle.IsNull() ? cuRect() : rectangle.get_intersection(prect_d[mGPU]) - prect_d[mGPU].s));
+		cuVAL2<PType> minmax_ = mng(mGPU)->get_minmax(pn_d[mGPU].dim(), (rectangle.IsNull() ? cuRect() : rectangle.get_intersection(prect_d[mGPU] - rect.s) + rect.s - prect_d[mGPU].s));
 
 		if (minmax_.i < minmax.i) minmax.i = minmax_.i;
 		if (minmax_.j > minmax.j) minmax.j = minmax_.j;
@@ -67,7 +67,7 @@ cuVAL2<PType> mcuVEC<VType, MType>::get_minmax_component_x(cuRect rectangle)
 
 	for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
-		cuVAL2<PType> minmax_ = mng(mGPU)->get_minmax_component_x(pn_d[mGPU].dim(), (rectangle.IsNull() ? cuRect() : rectangle.get_intersection(prect_d[mGPU]) - prect_d[mGPU].s));
+		cuVAL2<PType> minmax_ = mng(mGPU)->get_minmax_component_x(pn_d[mGPU].dim(), (rectangle.IsNull() ? cuRect() : rectangle.get_intersection(prect_d[mGPU] - rect.s) + rect.s - prect_d[mGPU].s));
 
 		if (minmax_.i < minmax.i) minmax.i = minmax_.i;
 		if (minmax_.j > minmax.j) minmax.j = minmax_.j;
@@ -103,7 +103,7 @@ cuVAL2<PType> mcuVEC<VType, MType>::get_minmax_component_y(cuRect rectangle)
 
 	for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
-		cuVAL2<PType> minmax_ = mng(mGPU)->get_minmax_component_y(pn_d[mGPU].dim(), (rectangle.IsNull() ? cuRect() : rectangle.get_intersection(prect_d[mGPU]) - prect_d[mGPU].s));
+		cuVAL2<PType> minmax_ = mng(mGPU)->get_minmax_component_y(pn_d[mGPU].dim(), (rectangle.IsNull() ? cuRect() : rectangle.get_intersection(prect_d[mGPU] - rect.s) + rect.s - prect_d[mGPU].s));
 
 		if (minmax_.i < minmax.i) minmax.i = minmax_.i;
 		if (minmax_.j > minmax.j) minmax.j = minmax_.j;
@@ -139,7 +139,7 @@ cuVAL2<PType> mcuVEC<VType, MType>::get_minmax_component_z(cuRect rectangle)
 
 	for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
-		cuVAL2<PType> minmax_ = mng(mGPU)->get_minmax_component_z(pn_d[mGPU].dim(), (rectangle.IsNull() ? cuRect() : rectangle.get_intersection(prect_d[mGPU]) - prect_d[mGPU].s));
+		cuVAL2<PType> minmax_ = mng(mGPU)->get_minmax_component_z(pn_d[mGPU].dim(), (rectangle.IsNull() ? cuRect() : rectangle.get_intersection(prect_d[mGPU] - rect.s) + rect.s - prect_d[mGPU].s));
 
 		if (minmax_.i < minmax.i) minmax.i = minmax_.i;
 		if (minmax_.j > minmax.j) minmax.j = minmax_.j;

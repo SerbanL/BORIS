@@ -76,3 +76,59 @@ void SuperMesh::ShiftGlobalField(DBL3 shift)
 
 	UpdateConfiguration(UPDATECONFIG_SMESH_GLOBALFIELD);
 }
+
+//if globalField_velocity is not zero, then implement global field shifting
+void SuperMesh::GlobalFieldShifting_Algorithm(void)
+{
+	//if global field velocity set then shift it first
+	if (globalField_velocity != DBL3()) {
+
+		//current time so we can calculate required shift
+		double globalField_current_time = GetTime();
+
+		//if current time less than stored previous time then something is wrong (e.g. ode was reset - reset shifting debt as well)
+		if (globalField_current_time < globalField_last_time) {
+
+			globalField_last_time = globalField_current_time;
+			globalField_shift_debt = DBL3();
+		}
+
+		//add to total amount of shifting which hasn't yet been executed (the shift debt)
+		globalField_shift_debt += (globalField_current_time - globalField_last_time) * globalField_velocity;
+
+		//clip the shift to execute if required
+		DBL3 shift = DBL3(
+			globalField_shift_clip.x > 0.0 ? 0.0 : globalField_shift_debt.x,
+			globalField_shift_clip.y > 0.0 ? 0.0 : globalField_shift_debt.y,
+			globalField_shift_clip.z > 0.0 ? 0.0 : globalField_shift_debt.z);
+
+		if (globalField_shift_clip.x > 0.0 && fabs(globalField_shift_debt.x) > globalField_shift_clip.x)
+			shift.x = floor(fabs(globalField_shift_debt.x) / globalField_shift_clip.x) * globalField_shift_clip.x * get_sign(globalField_shift_debt.x);
+
+		if (globalField_shift_clip.y > 0.0 && fabs(globalField_shift_debt.y) > globalField_shift_clip.y)
+			shift.y = floor(fabs(globalField_shift_debt.y) / globalField_shift_clip.y) * globalField_shift_clip.y * get_sign(globalField_shift_debt.y);
+
+		if (globalField_shift_clip.z > 0.0 && fabs(globalField_shift_debt.z) > globalField_shift_clip.z)
+			shift.z = floor(fabs(globalField_shift_debt.z) / globalField_shift_clip.z) * globalField_shift_clip.z * get_sign(globalField_shift_debt.z);
+
+		//execute shift if needed
+		if (shift != DBL3()) {
+
+			globalField.shift_rect_start(shift);
+			globalField_shift_debt -= shift;
+		}
+
+		globalField_last_time = globalField_current_time;
+
+#if COMPILECUDA == 1
+		//same shift if CUDA switched on
+		if (pSMeshCUDA && shift != DBL3()) GetGlobalFieldCUDA().shift_rect_start(shift);
+#endif
+
+		//now set it in Zeeman modules
+		for (int idx = 0; idx < pMesh.size(); idx++) {
+
+			pMesh[idx]->CallModuleMethod(&ZeemanBase::SetGlobalField);
+		}
+	}
+}

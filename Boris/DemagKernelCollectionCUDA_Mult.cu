@@ -21,28 +21,28 @@
 ///////////////////////////////////////// 2D
 
 //Self demag kernel multiplication - real and use symmetries
-//N = (N.x/2 + 1, N.y, 1)
+//N = (N_xRegion.x/2 + 1, N_xRegion.y, 1)
 __global__ void cu_KernelMultiplication_2D_Self(
 	cuKerType& kernel,
 	cuBComplex* cuSx, cuBComplex* cuSy, cuBComplex* cuSz, 
 	cuBComplex* cuS2x, cuBComplex* cuS2y, cuBComplex* cuS2z,
-	cuSZ3& N)
+	cuSZ3& N_xRegion)
 {
-	//above N.y/2 use kernel symmetries to recover kernel values
-	//diagonal components are even about the N.y/2 point
-	//off-diagonal values are odd about the N.y/2 point
+	//above N_xRegion.y/2 use kernel symmetries to recover kernel values
+	//diagonal components are even about the N_xRegion.y/2 point
+	//off-diagonal values are odd about the N_xRegion.y/2 point
 
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-	if (idx < (N.x / 2 + 1) * N.y) {
+	if (idx < N_xRegion.dim()) {
 
 		cuReIm FMx = cuSx[idx];
 		cuReIm FMy = cuSy[idx];
 		cuReIm FMz = cuSz[idx];
 
-		int j = (idx / (N.x / 2 + 1)) % N.y;
+		int j = (idx / N_xRegion.x) % N_xRegion.y;
 
-		if (j <= N.y / 2) {
+		if (j <= N_xRegion.y / 2) {
 
 			cuS2x[idx] = (kernel.Kdiag_real[idx].x  * FMx) + (kernel.K2D_odiag[idx] * FMy);
 			cuS2y[idx] = (kernel.K2D_odiag[idx] * FMx) + (kernel.Kdiag_real[idx].y  * FMy);
@@ -50,9 +50,8 @@ __global__ void cu_KernelMultiplication_2D_Self(
 		}
 		else {
 
-			int i = idx % (N.x / 2 + 1);
-
-			int ker_idx = i + (N.y - j) * (N.x / 2 + 1);
+			int i = idx % N_xRegion.x;
+			int ker_idx = i + (N_xRegion.y - j) * N_xRegion.x;
 
 			cuS2x[idx] = (kernel.Kdiag_real[ker_idx].x  * FMx) + (-kernel.K2D_odiag[ker_idx] * FMy);
 			cuS2y[idx] = (-kernel.K2D_odiag[ker_idx] * FMx) + (kernel.Kdiag_real[ker_idx].y  * FMy);
@@ -66,37 +65,36 @@ __global__ void cu_KernelMultiplication_2D_Self_add(
 	cuKerType& kernel,
 	cuBComplex* cuSx, cuBComplex* cuSy, cuBComplex* cuSz,
 	cuBComplex* cuS2x, cuBComplex* cuS2y, cuBComplex* cuS2z,
-	cuSZ3& N)
+	cuSZ3& N_xRegion)
 {
-	//above N.y/2 use kernel symmetries to recover kernel values
-	//diagonal components are even about the N.y/2 point
-	//off-diagonal values are odd about the N.y/2 point
+	//above N_xRegion.y/2 use kernel symmetries to recover kernel values
+	//diagonal components are even about the N_xRegion.y/2 point
+	//off-diagonal values are odd about the N_xRegion.y/2 point
 
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
-
-	if (idx < (N.x / 2 + 1) * N.y) {
+	
+	if (idx < N_xRegion.dim()) {
 
 		cuReIm FMx = cuSx[idx];
 		cuReIm FMy = cuSy[idx];
 		cuReIm FMz = cuSz[idx];
 
-		int j = (idx / (N.x / 2 + 1)) % N.y;
+		int j = (idx / N_xRegion.x) % N_xRegion.y;
 
-		if (j <= N.y / 2) {
+		if (j <= N_xRegion.y / 2) {
 
-			cuS2x[idx] = (cuReIm)cuS2x[idx] + (kernel.Kdiag_real[idx].x  * FMx) + (kernel.K2D_odiag[idx] * FMy);
-			cuS2y[idx] = (cuReIm)cuS2y[idx] + (kernel.K2D_odiag[idx] * FMx) + (kernel.Kdiag_real[idx].y  * FMy);
-			cuS2z[idx] = (cuReIm)cuS2z[idx] + (kernel.Kdiag_real[idx].z  * FMz);
+			cuS2x[idx] = (cuReIm)cuS2x[idx] + (kernel.Kdiag_real[idx].x * FMx) + (kernel.K2D_odiag[idx] * FMy);
+			cuS2y[idx] = (cuReIm)cuS2y[idx] + (kernel.K2D_odiag[idx] * FMx) + (kernel.Kdiag_real[idx].y * FMy);
+			cuS2z[idx] = (cuReIm)cuS2z[idx] + (kernel.Kdiag_real[idx].z * FMz);
 		}
 		else {
 
-			int i = idx % (N.x / 2 + 1);
+			int i = idx % N_xRegion.x;
+			int ker_idx = i + (N_xRegion.y - j) * N_xRegion.x;
 
-			int ker_idx = i + (N.y - j) * (N.x / 2 + 1);
-
-			cuS2x[idx] = (cuReIm)cuS2x[idx] + (kernel.Kdiag_real[ker_idx].x  * FMx) + (-kernel.K2D_odiag[ker_idx] * FMy);
-			cuS2y[idx] = (cuReIm)cuS2y[idx] + (-kernel.K2D_odiag[ker_idx] * FMx) + (kernel.Kdiag_real[ker_idx].y  * FMy);
-			cuS2z[idx] = (cuReIm)cuS2z[idx] + (kernel.Kdiag_real[ker_idx].z  * FMz);
+			cuS2x[idx] = (cuReIm)cuS2x[idx] + (kernel.Kdiag_real[ker_idx].x * FMx) + (-kernel.K2D_odiag[ker_idx] * FMy);
+			cuS2y[idx] = (cuReIm)cuS2y[idx] + (-kernel.K2D_odiag[ker_idx] * FMx) + (kernel.Kdiag_real[ker_idx].y * FMy);
+			cuS2z[idx] = (cuReIm)cuS2z[idx] + (kernel.Kdiag_real[ker_idx].z * FMz);
 		}
 	}
 }
@@ -106,26 +104,26 @@ __global__ void cu_KernelMultiplication_2D_Self_transpose_xy(
 	cuKerType& kernel,
 	cuBComplex* cuSx, cuBComplex* cuSy, cuBComplex* cuSz,
 	cuBComplex* cuS2x, cuBComplex* cuS2y, cuBComplex* cuS2z,
-	cuSZ3& N)
+	cuSZ3& N_xRegion)
 {
-	//above N.y/2 use kernel symmetries to recover kernel values
-	//diagonal components are even about the N.y/2 point
-	//off-diagonal values are odd about the N.y/2 point
+	//above N_xRegion.y/2 use kernel symmetries to recover kernel values
+	//diagonal components are even about the N_xRegion.y/2 point
+	//off-diagonal values are odd about the N_xRegion.y/2 point
 
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-	if (idx < (N.x / 2 + 1) * N.y) {
+	if (idx < N_xRegion.dim()) {
 
 		cuReIm FMx = cuSx[idx];
 		cuReIm FMy = cuSy[idx];
 		cuReIm FMz = cuSz[idx];
 
-		int i = idx % N.y;
-		int j = (idx / N.y) % (N.x / 2 + 1);
+		int i = idx % N_xRegion.y;
+		int j = (idx / N_xRegion.y) % N_xRegion.x;
 
-		if (i <= N.y / 2) {
+		if (i <= N_xRegion.y / 2) {
 
-			int ker_idx = i + j * (N.y / 2 + 1);
+			int ker_idx = i + j * (N_xRegion.y / 2 + 1);
 
 			cuS2x[idx] = (kernel.Kdiag_real[ker_idx].x  * FMx) + (kernel.K2D_odiag[ker_idx] * FMy);
 			cuS2y[idx] = (kernel.K2D_odiag[ker_idx] * FMx) + (kernel.Kdiag_real[ker_idx].y  * FMy);
@@ -133,7 +131,7 @@ __global__ void cu_KernelMultiplication_2D_Self_transpose_xy(
 		}
 		else {
 
-			int ker_idx = (N.y - i) + j * (N.y / 2 + 1);
+			int ker_idx = (N_xRegion.y - i) + j * (N_xRegion.y / 2 + 1);
 
 			cuS2x[idx] = (kernel.Kdiag_real[ker_idx].x  * FMx) + (-kernel.K2D_odiag[ker_idx] * FMy);
 			cuS2y[idx] = (-kernel.K2D_odiag[ker_idx] * FMx) + (kernel.Kdiag_real[ker_idx].y  * FMy);
@@ -147,53 +145,53 @@ __global__ void cu_KernelMultiplication_2D_Self_transpose_xy_add(
 	cuKerType& kernel,
 	cuBComplex* cuSx, cuBComplex* cuSy, cuBComplex* cuSz,
 	cuBComplex* cuS2x, cuBComplex* cuS2y, cuBComplex* cuS2z,
-	cuSZ3& N)
+	cuSZ3& N_xRegion)
 {
-	//above N.y/2 use kernel symmetries to recover kernel values
-	//diagonal components are even about the N.y/2 point
-	//off-diagonal values are odd about the N.y/2 point
+	//above N_xRegion.y/2 use kernel symmetries to recover kernel values
+	//diagonal components are even about the N_xRegion.y/2 point
+	//off-diagonal values are odd about the N_xRegion.y/2 point
 
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-	if (idx < (N.x / 2 + 1) * N.y) {
+	if (idx < N_xRegion.dim()) {
 
 		cuReIm FMx = cuSx[idx];
 		cuReIm FMy = cuSy[idx];
 		cuReIm FMz = cuSz[idx];
 
-		int i = idx % N.y;
-		int j = (idx / N.y) % (N.x / 2 + 1);
+		int i = idx % N_xRegion.y;
+		int j = (idx / N_xRegion.y) % N_xRegion.x;
 
-		if (i <= N.y / 2) {
+		if (i <= N_xRegion.y / 2) {
 
-			int ker_idx = i + j * (N.y / 2 + 1);
+			int ker_idx = i + j * (N_xRegion.y / 2 + 1);
 
-			cuS2x[idx] = (cuReIm)cuS2x[idx] + (kernel.Kdiag_real[ker_idx].x  * FMx) + (kernel.K2D_odiag[ker_idx] * FMy);
-			cuS2y[idx] = (cuReIm)cuS2y[idx] + (kernel.K2D_odiag[ker_idx] * FMx) + (kernel.Kdiag_real[ker_idx].y  * FMy);
-			cuS2z[idx] = (cuReIm)cuS2z[idx] + (kernel.Kdiag_real[ker_idx].z  * FMz);
+			cuS2x[idx] = (cuReIm)cuS2x[idx] + (kernel.Kdiag_real[ker_idx].x * FMx) + (kernel.K2D_odiag[ker_idx] * FMy);
+			cuS2y[idx] = (cuReIm)cuS2y[idx] + (kernel.K2D_odiag[ker_idx] * FMx) + (kernel.Kdiag_real[ker_idx].y * FMy);
+			cuS2z[idx] = (cuReIm)cuS2z[idx] + (kernel.Kdiag_real[ker_idx].z * FMz);
 		}
 		else {
 
-			int ker_idx = (N.y - i) + j * (N.y / 2 + 1);
+			int ker_idx = (N_xRegion.y - i) + j * (N_xRegion.y / 2 + 1);
 
-			cuS2x[idx] = (cuReIm)cuS2x[idx] + (kernel.Kdiag_real[ker_idx].x  * FMx) + (-kernel.K2D_odiag[ker_idx] * FMy);
-			cuS2y[idx] = (cuReIm)cuS2y[idx] + (-kernel.K2D_odiag[ker_idx] * FMx) + (kernel.Kdiag_real[ker_idx].y  * FMy);
-			cuS2z[idx] = (cuReIm)cuS2z[idx] + (kernel.Kdiag_real[ker_idx].z  * FMz);
+			cuS2x[idx] = (cuReIm)cuS2x[idx] + (kernel.Kdiag_real[ker_idx].x * FMx) + (-kernel.K2D_odiag[ker_idx] * FMy);
+			cuS2y[idx] = (cuReIm)cuS2y[idx] + (-kernel.K2D_odiag[ker_idx] * FMx) + (kernel.Kdiag_real[ker_idx].y * FMy);
+			cuS2z[idx] = (cuReIm)cuS2z[idx] + (kernel.Kdiag_real[ker_idx].z * FMz);
 		}
 	}
 }
 
 //Self demag kernel multiplication - real and use symmetries
-//N = (N.x/2 + 1, N.y, 1)
+//N = (N_xRegion.x/2 + 1, N_xRegion.y, 1)
 __global__ void cu_KernelMultiplication_2D_zShifted(
 	cuKerType& kernel,
 	cuBComplex* cuSx, cuBComplex* cuSy, cuBComplex* cuSz,
 	cuBComplex* cuS2x, cuBComplex* cuS2y, cuBComplex* cuS2z,
-	cuSZ3& N)
+	cuSZ3& N_xRegion)
 {
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-	if (idx < (N.x / 2 + 1) * N.y) {
+	if (idx < N_xRegion.dim()) {
 
 		cuReIm FMx = cuSx[idx];
 		cuReIm FMy = cuSy[idx];
@@ -202,9 +200,9 @@ __global__ void cu_KernelMultiplication_2D_zShifted(
 		cuVEC<cuReal3>& Kdiag = kernel.Kdiag_real;
 		cuVEC<cuReal3>& Kodiag = kernel.Kodiag_real;
 
-		int j = (idx / (N.x / 2 + 1)) % N.y;
+		int j = (idx / N_xRegion.x) % N_xRegion.y;
 
-		if (j <= N.y / 2) {
+		if (j <= N_xRegion.y / 2) {
 
 			cuS2x[idx] = (cuReIm)cuS2x[idx] + (Kdiag[idx].x * FMx) + (Kodiag[idx].x * FMy) + !(Kodiag[idx].y * FMz);
 			cuS2y[idx] = (cuReIm)cuS2y[idx] + (Kodiag[idx].x * FMx) + (Kdiag[idx].y * FMy) + !(Kodiag[idx].z * FMz);
@@ -212,9 +210,9 @@ __global__ void cu_KernelMultiplication_2D_zShifted(
 		}
 		else {
 
-			int i = idx % (N.x / 2 + 1);
+			int i = idx % N_xRegion.x;
 
-			int ker_idx = i + (N.y - j) * (N.x / 2 + 1);
+			int ker_idx = i + (N_xRegion.y - j) * N_xRegion.x;
 
 			cuS2x[idx] = (cuReIm)cuS2x[idx] + (Kdiag[ker_idx].x * FMx) - (Kodiag[ker_idx].x * FMy) + !(Kodiag[ker_idx].y * FMz);
 			cuS2y[idx] = (cuReIm)cuS2y[idx] - (Kodiag[ker_idx].x * FMx) + (Kdiag[ker_idx].y * FMy) - !(Kodiag[ker_idx].z * FMz);
@@ -227,11 +225,11 @@ __global__ void cu_KernelMultiplication_2D_zShifted_transpose_xy(
 	cuKerType& kernel,
 	cuBComplex* cuSx, cuBComplex* cuSy, cuBComplex* cuSz,
 	cuBComplex* cuS2x, cuBComplex* cuS2y, cuBComplex* cuS2z,
-	cuSZ3& N)
+	cuSZ3& N_xRegion)
 {
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-	if (idx < (N.x / 2 + 1) * N.y) {
+	if (idx < N_xRegion.dim()) {
 
 		cuReIm FMx = cuSx[idx];
 		cuReIm FMy = cuSy[idx];
@@ -240,12 +238,12 @@ __global__ void cu_KernelMultiplication_2D_zShifted_transpose_xy(
 		cuVEC<cuReal3>& Kdiag = kernel.Kdiag_real;
 		cuVEC<cuReal3>& Kodiag = kernel.Kodiag_real;
 
-		int i = idx % N.y;
-		int j = (idx / N.y) % (N.x / 2 + 1);
+		int i = idx % N_xRegion.y;
+		int j = (idx / N_xRegion.y) % N_xRegion.x;
 
-		if (i <= N.y / 2) {
+		if (i <= N_xRegion.y / 2) {
 
-			int ker_idx = i + j * (N.y / 2 + 1);
+			int ker_idx = i + j * (N_xRegion.y / 2 + 1);
 
 			cuS2x[idx] = (cuReIm)cuS2x[idx] + (Kdiag[ker_idx].x * FMx) + (Kodiag[ker_idx].x * FMy) + !(Kodiag[ker_idx].y * FMz);
 			cuS2y[idx] = (cuReIm)cuS2y[idx] + (Kodiag[ker_idx].x * FMx) + (Kdiag[ker_idx].y * FMy) + !(Kodiag[ker_idx].z * FMz);
@@ -253,7 +251,7 @@ __global__ void cu_KernelMultiplication_2D_zShifted_transpose_xy(
 		}
 		else {
 
-			int ker_idx = (N.y - i) + j * (N.y / 2 + 1);
+			int ker_idx = (N_xRegion.y - i) + j * (N_xRegion.y / 2 + 1);
 
 			cuS2x[idx] = (cuReIm)cuS2x[idx] + (Kdiag[ker_idx].x * FMx) - (Kodiag[ker_idx].x * FMy) + !(Kodiag[ker_idx].y * FMz);
 			cuS2y[idx] = (cuReIm)cuS2y[idx] - (Kodiag[ker_idx].x * FMx) + (Kdiag[ker_idx].y * FMy) - !(Kodiag[ker_idx].z * FMz);
@@ -263,16 +261,16 @@ __global__ void cu_KernelMultiplication_2D_zShifted_transpose_xy(
 }
 
 //Self demag kernel multiplication - real and use symmetries, adjusting for inverse z shift
-//N = (N.x/2 + 1, N.y, 1)
+//N = (N_xRegion.x/2 + 1, N_xRegion.y, 1)
 __global__ void cu_KernelMultiplication_2D_inversezShifted(
 	cuKerType& kernel,
 	cuBComplex* cuSx, cuBComplex* cuSy, cuBComplex* cuSz,
 	cuBComplex* cuS2x, cuBComplex* cuS2y, cuBComplex* cuS2z,
-	cuSZ3& N)
+	cuSZ3& N_xRegion)
 {
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-	if (idx < (N.x / 2 + 1) * N.y) {
+	if (idx < N_xRegion.dim()) {
 
 		cuReIm FMx = cuSx[idx];
 		cuReIm FMy = cuSy[idx];
@@ -281,9 +279,9 @@ __global__ void cu_KernelMultiplication_2D_inversezShifted(
 		cuVEC<cuReal3>& Kdiag = kernel.Kdiag_real;
 		cuVEC<cuReal3>& Kodiag = kernel.Kodiag_real;
 
-		int j = (idx / (N.x / 2 + 1)) % N.y;
+		int j = (idx / N_xRegion.x) % N_xRegion.y;
 
-		if (j <= N.y / 2) {
+		if (j <= N_xRegion.y / 2) {
 
 			cuS2x[idx] = (cuReIm)cuS2x[idx] + (Kdiag[idx].x * FMx) + (Kodiag[idx].x * FMy) - !(Kodiag[idx].y * FMz);
 			cuS2y[idx] = (cuReIm)cuS2y[idx] + (Kodiag[idx].x * FMx) + (Kdiag[idx].y * FMy) - !(Kodiag[idx].z * FMz);
@@ -291,9 +289,9 @@ __global__ void cu_KernelMultiplication_2D_inversezShifted(
 		}
 		else {
 
-			int i = idx % (N.x / 2 + 1);
+			int i = idx % N_xRegion.x;
 
-			int ker_idx = i + (N.y - j) * (N.x / 2 + 1);
+			int ker_idx = i + (N_xRegion.y - j) * N_xRegion.x;
 
 			cuS2x[idx] = (cuReIm)cuS2x[idx] + (Kdiag[ker_idx].x * FMx) - (Kodiag[ker_idx].x * FMy) - !(Kodiag[ker_idx].y * FMz);
 			cuS2y[idx] = (cuReIm)cuS2y[idx] - (Kodiag[ker_idx].x * FMx) + (Kdiag[ker_idx].y * FMy) + !(Kodiag[ker_idx].z * FMz);
@@ -306,11 +304,11 @@ __global__ void cu_KernelMultiplication_2D_inversezShifted_transpose_xy(
 	cuKerType& kernel,
 	cuBComplex* cuSx, cuBComplex* cuSy, cuBComplex* cuSz,
 	cuBComplex* cuS2x, cuBComplex* cuS2y, cuBComplex* cuS2z,
-	cuSZ3& N)
+	cuSZ3& N_xRegion)
 {
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-	if (idx < (N.x / 2 + 1) * N.y) {
+	if (idx < N_xRegion.dim()) {
 
 		cuReIm FMx = cuSx[idx];
 		cuReIm FMy = cuSy[idx];
@@ -319,12 +317,12 @@ __global__ void cu_KernelMultiplication_2D_inversezShifted_transpose_xy(
 		cuVEC<cuReal3>& Kdiag = kernel.Kdiag_real;
 		cuVEC<cuReal3>& Kodiag = kernel.Kodiag_real;
 
-		int i = idx % N.y;
-		int j = (idx / N.y) % (N.x / 2 + 1);
+		int i = idx % N_xRegion.y;
+		int j = (idx / N_xRegion.y) % N_xRegion.x;
 
-		if (i <= N.y / 2) {
+		if (i <= N_xRegion.y / 2) {
 
-			int ker_idx = i + j * (N.y / 2 + 1);
+			int ker_idx = i + j * (N_xRegion.y / 2 + 1);
 
 			cuS2x[idx] = (cuReIm)cuS2x[idx] + (Kdiag[ker_idx].x * FMx) + (Kodiag[ker_idx].x * FMy) - !(Kodiag[ker_idx].y * FMz);
 			cuS2y[idx] = (cuReIm)cuS2y[idx] + (Kodiag[ker_idx].x * FMx) + (Kdiag[ker_idx].y * FMy) - !(Kodiag[ker_idx].z * FMz);
@@ -332,7 +330,7 @@ __global__ void cu_KernelMultiplication_2D_inversezShifted_transpose_xy(
 		}
 		else {
 
-			int ker_idx = (N.y - i) + j * (N.y / 2 + 1);
+			int ker_idx = (N_xRegion.y - i) + j * (N_xRegion.y / 2 + 1);
 
 			cuS2x[idx] = (cuReIm)cuS2x[idx] + (Kdiag[ker_idx].x * FMx) - (Kodiag[ker_idx].x * FMy) - !(Kodiag[ker_idx].y * FMz);
 			cuS2y[idx] = (cuReIm)cuS2y[idx] - (Kodiag[ker_idx].x * FMx) + (Kdiag[ker_idx].y * FMy) + !(Kodiag[ker_idx].z * FMz);
@@ -342,16 +340,16 @@ __global__ void cu_KernelMultiplication_2D_inversezShifted_transpose_xy(
 }
 
 //Self demag kernel multiplication - complex but use symmetries
-//N = (N.x/2 + 1, N.y, 1)
+//N = (N_xRegion.x/2 + 1, N_xRegion.y, 1)
 __global__ void cu_KernelMultiplication_2D_xShifted(
 	cuKerType& kernel,
 	cuBComplex* cuSx, cuBComplex* cuSy, cuBComplex* cuSz,
 	cuBComplex* cuS2x, cuBComplex* cuS2y, cuBComplex* cuS2z,
-	cuSZ3& N)
+	cuSZ3& N_xRegion)
 {
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-	if (idx < (N.x / 2 + 1) * N.y) {
+	if (idx < N_xRegion.dim()) {
 
 		cuReIm FMx = cuSx[idx];
 		cuReIm FMy = cuSy[idx];
@@ -360,9 +358,9 @@ __global__ void cu_KernelMultiplication_2D_xShifted(
 		cuVEC<cuReIm3>& Kdiag = kernel.Kdiag_cmpl;
 		cuVEC<cuReIm3>& Kodiag = kernel.Kodiag_cmpl;
 
-		int j = (idx / (N.x / 2 + 1)) % N.y;
+		int j = (idx / N_xRegion.x) % N_xRegion.y;
 
-		if (j <= N.y / 2) {
+		if (j <= N_xRegion.y / 2) {
 
 			cuS2x[idx] = (cuReIm)cuS2x[idx] + (Kdiag[idx].x * FMx) + (Kodiag[idx].x * FMy) + (Kodiag[idx].y * FMz);
 			cuS2y[idx] = (cuReIm)cuS2y[idx] + (Kodiag[idx].x * FMx) + (Kdiag[idx].y * FMy) + (Kodiag[idx].z * FMz);
@@ -370,9 +368,9 @@ __global__ void cu_KernelMultiplication_2D_xShifted(
 		}
 		else {
 
-			int i = idx % (N.x / 2 + 1);
+			int i = idx % N_xRegion.x;
 
-			int ker_idx = i + (N.y - j) * (N.x / 2 + 1);
+			int ker_idx = i + (N_xRegion.y - j) * N_xRegion.x;
 
 			cuS2x[idx] = (cuReIm)cuS2x[idx] + (Kdiag[ker_idx].x * FMx) - (Kodiag[ker_idx].x * FMy) + (Kodiag[ker_idx].y * FMz);
 			cuS2y[idx] = (cuReIm)cuS2y[idx] - (Kodiag[ker_idx].x * FMx) + (Kdiag[ker_idx].y * FMy) - (Kodiag[ker_idx].z * FMz);
@@ -385,11 +383,11 @@ __global__ void cu_KernelMultiplication_2D_xShifted_transpose_xy(
 	cuKerType& kernel,
 	cuBComplex* cuSx, cuBComplex* cuSy, cuBComplex* cuSz,
 	cuBComplex* cuS2x, cuBComplex* cuS2y, cuBComplex* cuS2z,
-	cuSZ3& N)
+	cuSZ3& N_xRegion)
 {
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-	if (idx < (N.x / 2 + 1) * N.y) {
+	if (idx < N_xRegion.dim()) {
 
 		cuReIm FMx = cuSx[idx];
 		cuReIm FMy = cuSy[idx];
@@ -398,12 +396,12 @@ __global__ void cu_KernelMultiplication_2D_xShifted_transpose_xy(
 		cuVEC<cuReIm3>& Kdiag = kernel.Kdiag_cmpl;
 		cuVEC<cuReIm3>& Kodiag = kernel.Kodiag_cmpl;
 
-		int i = idx % N.y;
-		int j = (idx / N.y) % (N.x / 2 + 1);
+		int i = idx % N_xRegion.y;
+		int j = (idx / N_xRegion.y) % N_xRegion.x;
 
-		if (i <= N.y / 2) {
+		if (i <= N_xRegion.y / 2) {
 
-			int ker_idx = i + j * (N.y / 2 + 1);
+			int ker_idx = i + j * (N_xRegion.y / 2 + 1);
 
 			cuS2x[idx] = (cuReIm)cuS2x[idx] + (Kdiag[ker_idx].x * FMx) + (Kodiag[ker_idx].x * FMy) + (Kodiag[ker_idx].y * FMz);
 			cuS2y[idx] = (cuReIm)cuS2y[idx] + (Kodiag[ker_idx].x * FMx) + (Kdiag[ker_idx].y * FMy) + (Kodiag[ker_idx].z * FMz);
@@ -411,7 +409,7 @@ __global__ void cu_KernelMultiplication_2D_xShifted_transpose_xy(
 		}
 		else {
 
-			int ker_idx = (N.y - i) + j * (N.y / 2 + 1);
+			int ker_idx = (N_xRegion.y - i) + j * (N_xRegion.y / 2 + 1);
 
 			cuS2x[idx] = (cuReIm)cuS2x[idx] + (Kdiag[ker_idx].x * FMx) - (Kodiag[ker_idx].x * FMy) + (Kodiag[ker_idx].y * FMz);
 			cuS2y[idx] = (cuReIm)cuS2y[idx] - (Kodiag[ker_idx].x * FMx) + (Kdiag[ker_idx].y * FMy) - (Kodiag[ker_idx].z * FMz);
@@ -421,16 +419,16 @@ __global__ void cu_KernelMultiplication_2D_xShifted_transpose_xy(
 }
 
 //Complex kernel multiplication with no symmetries used
-//N = (N.x/2 + 1, N.y, 1)
+//N = (N_xRegion.x/2 + 1, N_xRegion.y, 1)
 __global__ void cu_KernelMultiplication_2D_Regular(
 	cuKerType& kernel,
 	cuBComplex* cuSx, cuBComplex* cuSy, cuBComplex* cuSz,
 	cuBComplex* cuS2x, cuBComplex* cuS2y, cuBComplex* cuS2z,
-	cuSZ3& N)
+	cuSZ3& N_xRegion)
 {
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-	if (idx < (N.x / 2 + 1) * N.y) {
+	if (idx < N_xRegion.dim()) {
 
 		cuVEC<cuReIm3>& Kdiag = kernel.Kdiag_cmpl;
 		cuVEC<cuReIm3>& Kodiag = kernel.Kodiag_cmpl;
@@ -453,39 +451,39 @@ __global__ void cu_KernelMultiplication_2D_Regular(
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////// 3D
 
-//N = (N.x/2 + 1, N.y, N.z)
+//N = (N_xRegion.x/2 + 1, N_xRegion.y, N_xRegion.z)
 __global__ void cu_KernelMultiplication_3D_Self_transpose_xy(
 	cuKerType& kernel,
 	cuBComplex* cuSx, cuBComplex* cuSy, cuBComplex* cuSz, 
 	cuBComplex* cuS2x, cuBComplex* cuS2y, cuBComplex* cuS2z,
-	cuSZ3& N)
+	cuSZ3& N_xRegion)
 {
-	//above N.z/2 and N.y/2 use kernel symmetries to recover kernel values
-	//diagonal components are even about the N.z/2 and N.y/2 points
-	//Kxy is even about N.z/2 and odd about N.y/2
-	//Kxz is odd about N.z/2 and even about N.y/2
-	//Kyz is odd about N.z/2 and odd about N.y/2
+	//above N_xRegion.z/2 and N_xRegion.y/2 use kernel symmetries to recover kernel values
+	//diagonal components are even about the N_xRegion.z/2 and N_xRegion.y/2 points
+	//Kxy is even about N_xRegion.z/2 and odd about N_xRegion.y/2
+	//Kxz is odd about N_xRegion.z/2 and even about N_xRegion.y/2
+	//Kyz is odd about N_xRegion.z/2 and odd about N_xRegion.y/2
 
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-	if (idx < (N.x / 2 + 1) * N.y * N.z) {
+	if (idx < N_xRegion.dim()) {
 
 		cuReIm FMx = cuSx[idx];
 		cuReIm FMy = cuSy[idx];
 		cuReIm FMz = cuSz[idx];
 
-		int i = idx % N.y;
-		int j = (idx / N.y) % (N.x / 2 + 1);
-		int k = idx / ((N.x / 2 + 1) * N.y);
+		int i = idx % N_xRegion.y;
+		int j = (idx / N_xRegion.y) % N_xRegion.x;
+		int k = idx / (N_xRegion.x * N_xRegion.y);
 
 		cuVEC<cuReal3>& Kdiag = kernel.Kdiag_real;
 		cuVEC<cuReal3>& Kodiag = kernel.Kodiag_real;
 
-		if (k <= N.z / 2) {
+		if (k <= N_xRegion.z / 2) {
 
-			if (i <= N.y / 2) {
+			if (i <= N_xRegion.y / 2) {
 
-				int ker_idx = i + j * (N.y / 2 + 1) + k * (N.x / 2 + 1) * (N.y / 2 + 1);
+				int ker_idx = i + j * (N_xRegion.y / 2 + 1) + k * N_xRegion.x * (N_xRegion.y / 2 + 1);
 
 				cuS2x[idx] = (Kdiag[ker_idx].x * FMx) + (Kodiag[ker_idx].x * FMy) + (Kodiag[ker_idx].y * FMz);
 				cuS2y[idx] = (Kodiag[ker_idx].x * FMx) + (Kdiag[ker_idx].y * FMy) + (Kodiag[ker_idx].z * FMz);
@@ -493,7 +491,7 @@ __global__ void cu_KernelMultiplication_3D_Self_transpose_xy(
 			}
 			else {
 
-				int ker_idx = (N.y - i) + j * (N.y / 2 + 1) + k * (N.x / 2 + 1) * (N.y / 2 + 1);
+				int ker_idx = (N_xRegion.y - i) + j * (N_xRegion.y / 2 + 1) + k * N_xRegion.x * (N_xRegion.y / 2 + 1);
 
 				cuS2x[idx] = (Kdiag[ker_idx].x * FMx) + (-Kodiag[ker_idx].x * FMy) + (Kodiag[ker_idx].y * FMz);
 				cuS2y[idx] = (-Kodiag[ker_idx].x * FMx) + (Kdiag[ker_idx].y * FMy) + (-Kodiag[ker_idx].z * FMz);
@@ -502,9 +500,9 @@ __global__ void cu_KernelMultiplication_3D_Self_transpose_xy(
 		}
 		else {
 
-			if (i <= N.y / 2) {
+			if (i <= N_xRegion.y / 2) {
 
-				int ker_idx = i + j * (N.y / 2 + 1) + (N.z - k) * (N.x / 2 + 1) * (N.y / 2 + 1);
+				int ker_idx = i + j * (N_xRegion.y / 2 + 1) + (N_xRegion.z - k) * N_xRegion.x * N_xRegion.y;
 
 				cuS2x[idx] = (Kdiag[ker_idx].x * FMx) + (Kodiag[ker_idx].x * FMy) + (-Kodiag[ker_idx].y * FMz);
 				cuS2y[idx] = (Kodiag[ker_idx].x * FMx) + (Kdiag[ker_idx].y * FMy) + (-Kodiag[ker_idx].z * FMz);
@@ -512,7 +510,7 @@ __global__ void cu_KernelMultiplication_3D_Self_transpose_xy(
 			}
 			else {
 
-				int ker_idx = (N.y - i) + j * (N.y / 2 + 1) + (N.z - k) * (N.x / 2 + 1) * (N.y / 2 + 1);
+				int ker_idx = (N_xRegion.y - i) + j * (N_xRegion.y / 2 + 1) + (N_xRegion.z - k) * N_xRegion.x * (N_xRegion.y / 2 + 1);
 
 				cuS2x[idx] = (Kdiag[ker_idx].x * FMx) + (-Kodiag[ker_idx].x * FMy) + (-Kodiag[ker_idx].y * FMz);
 				cuS2y[idx] = (-Kodiag[ker_idx].x * FMx) + (Kdiag[ker_idx].y * FMy) + (Kodiag[ker_idx].z * FMz);
@@ -527,34 +525,34 @@ __global__ void cu_KernelMultiplication_3D_Self_transpose_xy_add(
 	cuKerType& kernel,
 	cuBComplex* cuSx, cuBComplex* cuSy, cuBComplex* cuSz,
 	cuBComplex* cuS2x, cuBComplex* cuS2y, cuBComplex* cuS2z,
-	cuSZ3& N)
+	cuSZ3& N_xRegion)
 {
-	//above N.z/2 and N.y/2 use kernel symmetries to recover kernel values
-	//diagonal components are even about the N.z/2 and N.y/2 points
-	//Kxy is even about N.z/2 and odd about N.y/2
-	//Kxz is odd about N.z/2 and even about N.y/2
-	//Kyz is odd about N.z/2 and odd about N.y/2
+	//above N_xRegion.z/2 and N_xRegion.y/2 use kernel symmetries to recover kernel values
+	//diagonal components are even about the N_xRegion.z/2 and N_xRegion.y/2 points
+	//Kxy is even about N_xRegion.z/2 and odd about N_xRegion.y/2
+	//Kxz is odd about N_xRegion.z/2 and even about N_xRegion.y/2
+	//Kyz is odd about N_xRegion.z/2 and odd about N_xRegion.y/2
 
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-	if (idx < (N.x / 2 + 1) * N.y * N.z) {
+	if (idx < N_xRegion.dim()) {
 
 		cuReIm FMx = cuSx[idx];
 		cuReIm FMy = cuSy[idx];
 		cuReIm FMz = cuSz[idx];
 
-		int i = idx % N.y;
-		int j = (idx / N.y) % (N.x / 2 + 1);
-		int k = idx / ((N.x / 2 + 1) * N.y);
+		int i = idx % N_xRegion.y;
+		int j = (idx / N_xRegion.y) % N_xRegion.x;
+		int k = idx / (N_xRegion.x * N_xRegion.y);
 
 		cuVEC<cuReal3>& Kdiag = kernel.Kdiag_real;
 		cuVEC<cuReal3>& Kodiag = kernel.Kodiag_real;
 
-		if (k <= N.z / 2) {
+		if (k <= N_xRegion.z / 2) {
 
-			if (i <= N.y / 2) {
+			if (i <= N_xRegion.y / 2) {
 
-				int ker_idx = i + j * (N.y / 2 + 1) + k * (N.x / 2 + 1) * (N.y / 2 + 1);
+				int ker_idx = i + j * (N_xRegion.y / 2 + 1) + k * N_xRegion.x * (N_xRegion.y / 2 + 1);
 
 				cuS2x[idx] = (cuReIm)cuS2x[idx] + (Kdiag[ker_idx].x * FMx) + (Kodiag[ker_idx].x * FMy) + (Kodiag[ker_idx].y * FMz);
 				cuS2y[idx] = (cuReIm)cuS2y[idx] + (Kodiag[ker_idx].x * FMx) + (Kdiag[ker_idx].y * FMy) + (Kodiag[ker_idx].z * FMz);
@@ -562,7 +560,7 @@ __global__ void cu_KernelMultiplication_3D_Self_transpose_xy_add(
 			}
 			else {
 
-				int ker_idx = (N.y - i) + j * (N.y / 2 + 1) + k * (N.x / 2 + 1) * (N.y / 2 + 1);
+				int ker_idx = (N_xRegion.y - i) + j * (N_xRegion.y / 2 + 1) + k * N_xRegion.x * (N_xRegion.y / 2 + 1);
 
 				cuS2x[idx] = (cuReIm)cuS2x[idx] + (Kdiag[ker_idx].x * FMx) + (-Kodiag[ker_idx].x * FMy) + (Kodiag[ker_idx].y * FMz);
 				cuS2y[idx] = (cuReIm)cuS2y[idx] + (-Kodiag[ker_idx].x * FMx) + (Kdiag[ker_idx].y * FMy) + (-Kodiag[ker_idx].z * FMz);
@@ -571,9 +569,9 @@ __global__ void cu_KernelMultiplication_3D_Self_transpose_xy_add(
 		}
 		else {
 
-			if (i <= N.y / 2) {
+			if (i <= N_xRegion.y / 2) {
 
-				int ker_idx = i + j * (N.y / 2 + 1) + (N.z - k) * (N.x / 2 + 1) * (N.y / 2 + 1);
+				int ker_idx = i + j * (N_xRegion.y / 2 + 1) + (N_xRegion.z - k) * N_xRegion.x * (N_xRegion.y / 2 + 1);
 
 				cuS2x[idx] = (cuReIm)cuS2x[idx] + (Kdiag[ker_idx].x * FMx) + (Kodiag[ker_idx].x * FMy) + (-Kodiag[ker_idx].y * FMz);
 				cuS2y[idx] = (cuReIm)cuS2y[idx] + (Kodiag[ker_idx].x * FMx) + (Kdiag[ker_idx].y * FMy) + (-Kodiag[ker_idx].z * FMz);
@@ -581,7 +579,7 @@ __global__ void cu_KernelMultiplication_3D_Self_transpose_xy_add(
 			}
 			else {
 
-				int ker_idx = (N.y - i) + j * (N.y / 2 + 1) + (N.z - k) * (N.x / 2 + 1) * (N.y / 2 + 1);
+				int ker_idx = (N_xRegion.y - i) + j * (N_xRegion.y / 2 + 1) + (N_xRegion.z - k) * N_xRegion.x * (N_xRegion.y / 2 + 1);
 
 				cuS2x[idx] = (cuReIm)cuS2x[idx] + (Kdiag[ker_idx].x * FMx) + (-Kodiag[ker_idx].x * FMy) + (-Kodiag[ker_idx].y * FMz);
 				cuS2y[idx] = (cuReIm)cuS2y[idx] + (-Kodiag[ker_idx].x * FMx) + (Kdiag[ker_idx].y * FMy) + (Kodiag[ker_idx].z * FMz);
@@ -592,12 +590,12 @@ __global__ void cu_KernelMultiplication_3D_Self_transpose_xy_add(
 }
 
 //z shifted for 3D : complex kernels, but use kernel symmetries
-//N = (N.x/2 + 1, N.y, N.z)
+//N = (N_xRegion.x/2 + 1, N_xRegion.y, N_xRegion.z)
 __global__ void cu_KernelMultiplication_3D_zShifted_transpose_xy(
 	cuKerType& kernel,
 	cuBComplex* cuSx, cuBComplex* cuSy, cuBComplex* cuSz,
 	cuBComplex* cuS2x, cuBComplex* cuS2y, cuBComplex* cuS2z,
-	cuSZ3& N)
+	cuSZ3& N_xRegion)
 {
 	//z shifted for 3D : can use kernels of reduced dimensions but must be complex
 	//
@@ -611,24 +609,24 @@ __global__ void cu_KernelMultiplication_3D_zShifted_transpose_xy(
 
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-	if (idx < (N.x / 2 + 1) * N.y * N.z) {
+	if (idx < N_xRegion.dim()) {
 
 		cuReIm FMx = cuSx[idx];
 		cuReIm FMy = cuSy[idx];
 		cuReIm FMz = cuSz[idx];
 
-		int i = idx % N.y;
-		int j = (idx / N.y) % (N.x / 2 + 1);
-		int k = idx / ((N.x / 2 + 1) * N.y);
+		int i = idx % N_xRegion.y;
+		int j = (idx / N_xRegion.y) % N_xRegion.x;
+		int k = idx / (N_xRegion.x * N_xRegion.y);
 
 		cuVEC<cuReIm3>& Kdiag = kernel.Kdiag_cmpl;
 		cuVEC<cuReIm3>& Kodiag = kernel.Kodiag_cmpl;
 
-		if (k <= N.z / 2) {
+		if (k <= N_xRegion.z / 2) {
 
-			if (i <= N.y / 2) {
+			if (i <= N_xRegion.y / 2) {
 
-				int ker_idx = i + j * (N.y / 2 + 1) + k * (N.x / 2 + 1) * (N.y / 2 + 1);
+				int ker_idx = i + j * (N_xRegion.y / 2 + 1) + k * N_xRegion.x * (N_xRegion.y / 2 + 1);
 				
 				//lower z, lower y
 				cuS2x[idx] = (cuReIm)cuS2x[idx] + (Kdiag[ker_idx].x * FMx) + (Kodiag[ker_idx].x * FMy) + (Kodiag[ker_idx].y * FMz);
@@ -637,7 +635,7 @@ __global__ void cu_KernelMultiplication_3D_zShifted_transpose_xy(
 			}
 			else {
 
-				int ker_idx = (N.y - i) + j * (N.y / 2 + 1) + k * (N.x / 2 + 1) * (N.y / 2 + 1);
+				int ker_idx = (N_xRegion.y - i) + j * (N_xRegion.y / 2 + 1) + k * N_xRegion.x * (N_xRegion.y / 2 + 1);
 
 				//lower z, upper y
 				cuS2x[idx] = (cuReIm)cuS2x[idx] + (Kdiag[ker_idx].x * FMx) - (Kodiag[ker_idx].x * FMy) + (Kodiag[ker_idx].y * FMz);
@@ -647,9 +645,9 @@ __global__ void cu_KernelMultiplication_3D_zShifted_transpose_xy(
 		}
 		else {
 
-			if (i <= N.y / 2) {
+			if (i <= N_xRegion.y / 2) {
 
-				int ker_idx = i + j * (N.y / 2 + 1) + (N.z - k) * (N.x / 2 + 1) * (N.y / 2 + 1);
+				int ker_idx = i + j * (N_xRegion.y / 2 + 1) + (N_xRegion.z - k) * N_xRegion.x * (N_xRegion.y / 2 + 1);
 
 				//upper z, lower y
 				cuS2x[idx] = (cuReIm)cuS2x[idx] + ((~Kdiag[ker_idx].x) * FMx) + ((~Kodiag[ker_idx].x) * FMy) - ((~Kodiag[ker_idx].y) * FMz);
@@ -658,7 +656,7 @@ __global__ void cu_KernelMultiplication_3D_zShifted_transpose_xy(
 			}
 			else {
 
-				int ker_idx = (N.y - i) + j * (N.y / 2 + 1) + (N.z - k) * (N.x / 2 + 1) * (N.y / 2 + 1);
+				int ker_idx = (N_xRegion.y - i) + j * (N_xRegion.y / 2 + 1) + (N_xRegion.z - k) * N_xRegion.x * (N_xRegion.y / 2 + 1);
 
 				//upper z, upper y
 				cuS2x[idx] = (cuReIm)cuS2x[idx] + ((~Kdiag[ker_idx].x) * FMx) - ((~Kodiag[ker_idx].x) * FMy) - ((~Kodiag[ker_idx].y) * FMz);
@@ -670,12 +668,12 @@ __global__ void cu_KernelMultiplication_3D_zShifted_transpose_xy(
 }
 
 //x shifted for 3D : complex kernels, but use kernel symmetries
-//N = (N.x/2 + 1, N.y, N.z)
+//N = (N_xRegion.x/2 + 1, N_xRegion.y, N_xRegion.z)
 __global__ void cu_KernelMultiplication_3D_xShifted_transpose_xy(
 	cuKerType& kernel,
 	cuBComplex* cuSx, cuBComplex* cuSy, cuBComplex* cuSz,
 	cuBComplex* cuS2x, cuBComplex* cuS2y, cuBComplex* cuS2z,
-	cuSZ3& N)
+	cuSZ3& N_xRegion)
 {
 	//x shifted for 3D : can use kernels of reduced dimensions but must be complex
 	//
@@ -687,24 +685,24 @@ __global__ void cu_KernelMultiplication_3D_xShifted_transpose_xy(
 
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-	if (idx < (N.x / 2 + 1) * N.y * N.z) {
+	if (idx < N_xRegion.dim()) {
 
 		cuReIm FMx = cuSx[idx];
 		cuReIm FMy = cuSy[idx];
 		cuReIm FMz = cuSz[idx];
 
-		int i = idx % N.y;
-		int j = (idx / N.y) % (N.x / 2 + 1);
-		int k = idx / ((N.x / 2 + 1) * N.y);
+		int i = idx % N_xRegion.y;
+		int j = (idx / N_xRegion.y) % N_xRegion.x;
+		int k = idx / (N_xRegion.x * N_xRegion.y);
 
 		cuVEC<cuReIm3>& Kdiag = kernel.Kdiag_cmpl;
 		cuVEC<cuReIm3>& Kodiag = kernel.Kodiag_cmpl;
 
-		if (k <= N.z / 2) {
+		if (k <= N_xRegion.z / 2) {
 
-			if (i <= N.y / 2) {
+			if (i <= N_xRegion.y / 2) {
 
-				int ker_idx = i + j * (N.y / 2 + 1) + k * (N.x / 2 + 1) * (N.y / 2 + 1);
+				int ker_idx = i + j * (N_xRegion.y / 2 + 1) + k * N_xRegion.x * (N_xRegion.y / 2 + 1);
 
 				//lower z, lower y
 				cuS2x[idx] = (cuReIm)cuS2x[idx] + (Kdiag[ker_idx].x * FMx) + (Kodiag[ker_idx].x * FMy) + (Kodiag[ker_idx].y * FMz);
@@ -713,7 +711,7 @@ __global__ void cu_KernelMultiplication_3D_xShifted_transpose_xy(
 			}
 			else {
 
-				int ker_idx = (N.y - i) + j * (N.y / 2 + 1) + k * (N.x / 2 + 1) * (N.y / 2 + 1);
+				int ker_idx = (N_xRegion.y - i) + j * (N_xRegion.y / 2 + 1) + k * N_xRegion.x * (N_xRegion.y / 2 + 1);
 
 				//lower z, upper y
 				cuS2x[idx] = (cuReIm)cuS2x[idx] + (Kdiag[ker_idx].x * FMx) - (Kodiag[ker_idx].x * FMy) + (Kodiag[ker_idx].y * FMz);
@@ -723,9 +721,9 @@ __global__ void cu_KernelMultiplication_3D_xShifted_transpose_xy(
 		}
 		else {
 
-			if (i <= N.y / 2) {
+			if (i <= N_xRegion.y / 2) {
 
-				int ker_idx = i + j * (N.y / 2 + 1) + (N.z - k) * (N.x / 2 + 1) * (N.y / 2 + 1);
+				int ker_idx = i + j * (N_xRegion.y / 2 + 1) + (N_xRegion.z - k) * N_xRegion.x * (N_xRegion.y / 2 + 1);
 
 				//upper z, lower y
 				cuS2x[idx] = (cuReIm)cuS2x[idx] + (Kdiag[ker_idx].x * FMx) + (Kodiag[ker_idx].x * FMy) - (Kodiag[ker_idx].y * FMz);
@@ -734,7 +732,7 @@ __global__ void cu_KernelMultiplication_3D_xShifted_transpose_xy(
 			}
 			else {
 
-				int ker_idx = (N.y - i) + j * (N.y / 2 + 1) + (N.z - k) * (N.x / 2 + 1) * (N.y / 2 + 1);
+				int ker_idx = (N_xRegion.y - i) + j * (N_xRegion.y / 2 + 1) + (N_xRegion.z - k) * N_xRegion.x * (N_xRegion.y / 2 + 1);
 
 				//upper z, upper y
 				cuS2x[idx] = (cuReIm)cuS2x[idx] + (Kdiag[ker_idx].x * FMx) - (Kodiag[ker_idx].x * FMy) - (Kodiag[ker_idx].y * FMz);
@@ -746,16 +744,16 @@ __global__ void cu_KernelMultiplication_3D_xShifted_transpose_xy(
 }
 
 //Complex kernel multiplication with no symmetries used
-//N = (N.x/2 + 1, N.y, N.z)
+//N = (N_xRegion.x/2 + 1, N_xRegion.y, N_xRegion.z)
 __global__ void cu_KernelMultiplication_3D_Regular(
 	cuKerType& kernel,
 	cuBComplex* cuSx, cuBComplex* cuSy, cuBComplex* cuSz,
 	cuBComplex* cuS2x, cuBComplex* cuS2y, cuBComplex* cuS2z,
-	cuSZ3& N)
+	cuSZ3& N_xRegion)
 {
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-	if (idx < (N.x / 2 + 1) * N.y * N.z) {
+	if (idx < N_xRegion.dim()) {
 
 		cuVEC<cuReIm3>& Kdiag = kernel.Kdiag_cmpl;
 		cuVEC<cuReIm3>& Kodiag = kernel.Kodiag_cmpl;
@@ -778,28 +776,28 @@ __global__ void cu_KernelMultiplication_3D_Regular(
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////// Q2D - SELF DEMAG
 
-//N = (N.x/2 + 1, N.y, 4)
+//N = (N_xRegion.x/2 + 1, N_xRegion.y, 4)
 //xy is transposed
 //Real kernels : this is a self demag version which sets output (unless set_output is false), but ifft not performed yet
 __global__ void cu_MultiDemag_ConvProd_q2D_4_transpose_xy(
 	cuVEC<cuReal3>& Kdiag, cuVEC<cuReal3>& Kodiag,
 	cuBComplex* cuSx_in, cuBComplex* cuSy_in, cuBComplex* cuSz_in,
 	cuBComplex* cuSx_out, cuBComplex* cuSy_out, cuBComplex* cuSz_out,
-	cuSZ3& N, bool set_output = true)
+	cuSZ3& N_xRegion, bool set_output = true)
 {
-	//above N.z/2 and N.y/2 use kernel symmetries to recover kernel values
-	//diagonal components are even about the N.z/2 and N.y/2 points
-	//Kxy is even about N.z/2 and odd about N.y/2
-	//Kxz is odd about N.z/2 and even about N.y/2
-	//Kyz is odd about N.z/2 and odd about N.y/2
+	//above N_xRegion.z/2 and N_xRegion.y/2 use kernel symmetries to recover kernel values
+	//diagonal components are even about the N_xRegion.z/2 and N_xRegion.y/2 points
+	//Kxy is even about N_xRegion.z/2 and odd about N_xRegion.y/2
+	//Kxz is odd about N_xRegion.z/2 and even about N_xRegion.y/2
+	//Kyz is odd about N_xRegion.z/2 and odd about N_xRegion.y/2
 
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-	//N.z = 4, and this kernel was called with (N.x/2 + 1) * N.y points: handle all z points in one go
-	int planecount = (N.x / 2 + 1) * N.y;
+	//N_xRegion.z = 4, and this kernel was called with (N_xRegion.x/2 + 1) * N_xRegion.y points: handle all z points in one go
+	int planecount = N_xRegion.x * N_xRegion.y;
 
-	//kernels packed into planes of (N.y / 2 + 1) * (N.x / 2 + 1) size
-	int kerplanecount = (N.x / 2 + 1) * (N.y / 2 + 1);
+	//kernels packed into planes of (N_xRegion.y / 2 + 1) * N_xRegion.x size
+	int kerplanecount = N_xRegion.x * (N_xRegion.y / 2 + 1);
 
 	if (idx < planecount) {
 
@@ -818,12 +816,12 @@ __global__ void cu_MultiDemag_ConvProd_q2D_4_transpose_xy(
 		//kernel multiplication
 		cuReIm3 F0, F1, F2, F3;
 
-		int i = idx % N.y;
-		int j = (idx / N.y) % (N.x / 2 + 1);
+		int i = idx % N_xRegion.y;
+		int j = (idx / N_xRegion.y) % N_xRegion.x;
 
-		if (i <= N.y / 2) {
+		if (i <= N_xRegion.y / 2) {
 
-			int ker_baseidx = i + j * (N.y / 2 + 1);
+			int ker_baseidx = i + j * (N_xRegion.y / 2 + 1);
 
 			F0.x = (Kdiag[ker_baseidx].x * X0.x) + (Kodiag[ker_baseidx].x * X0.y) + (Kodiag[ker_baseidx].y * X0.z);
 			F0.y = (Kodiag[ker_baseidx].x * X0.x) + (Kdiag[ker_baseidx].y * X0.y) + (Kodiag[ker_baseidx].z * X0.z);
@@ -843,7 +841,7 @@ __global__ void cu_MultiDemag_ConvProd_q2D_4_transpose_xy(
 		}
 		else {
 
-			int ker_baseidx = (N.y - i) + j * (N.y / 2 + 1);
+			int ker_baseidx = (N_xRegion.y - i) + j * (N_xRegion.y / 2 + 1);
 
 			F0.x = (Kdiag[ker_baseidx].x * X0.x) + (-Kodiag[ker_baseidx].x * X0.y) + (Kodiag[ker_baseidx].y * X0.z);
 			F0.y = (-Kodiag[ker_baseidx].x * X0.x) + (Kdiag[ker_baseidx].y * X0.y) + (-Kodiag[ker_baseidx].z * X0.z);
@@ -903,28 +901,28 @@ __global__ void cu_MultiDemag_ConvProd_q2D_4_transpose_xy(
 	}
 }
 
-//N = (N.x/2 + 1, N.y, 8)
+//N = (N_xRegion.x/2 + 1, N_xRegion.y, 8)
 //xy is transposed
 //Real kernels : this is a self demag version which sets output (unless set_output is false), but ifft not performed yet
 __global__ void cu_MultiDemag_ConvProd_q2D_8_transpose_xy(
 	cuVEC<cuReal3>& Kdiag, cuVEC<cuReal3>& Kodiag,
 	cuBComplex* cuSx_in, cuBComplex* cuSy_in, cuBComplex* cuSz_in,
 	cuBComplex* cuSx_out, cuBComplex* cuSy_out, cuBComplex* cuSz_out,
-	cuSZ3& N, bool set_output = true)
+	cuSZ3& N_xRegion, cuSZ3& n, bool set_output = true)
 {
-	//above N.z/2 and N.y/2 use kernel symmetries to recover kernel values
-	//diagonal components are even about the N.z/2 and N.y/2 points
-	//Kxy is even about N.z/2 and odd about N.y/2
-	//Kxz is odd about N.z/2 and even about N.y/2
-	//Kyz is odd about N.z/2 and odd about N.y/2
+	//above N_xRegion.z/2 and N_xRegion.y/2 use kernel symmetries to recover kernel values
+	//diagonal components are even about the N_xRegion.z/2 and N_xRegion.y/2 points
+	//Kxy is even about N_xRegion.z/2 and odd about N_xRegion.y/2
+	//Kxz is odd about N_xRegion.z/2 and even about N_xRegion.y/2
+	//Kyz is odd about N_xRegion.z/2 and odd about N_xRegion.y/2
 
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-	//N.z = 8, and this kernel was called with (N.x/2 + 1) * N.y points: handle all z points in one go
-	int planecount = (N.x / 2 + 1) * N.y;
+	//N_xRegion.z = 8, and this kernel was called with (N_xRegion.x/2 + 1) * N_xRegion.y points: handle all z points in one go
+	int planecount = N_xRegion.x * N_xRegion.y;
 
-	//kernels packed into planes of (N.y / 2 + 1) * (N.x / 2 + 1) size
-	int kerplanecount = (N.x / 2 + 1) * (N.y / 2 + 1);
+	//kernels packed into planes of (N_xRegion.y / 2 + 1) * N_xRegion.x size
+	int kerplanecount = N_xRegion.x * (N_xRegion.y / 2 + 1);
 
 	if (idx < planecount) {
 
@@ -934,7 +932,7 @@ __global__ void cu_MultiDemag_ConvProd_q2D_8_transpose_xy(
 		cuReIm3 x0 = cuReIm3(cuSx_in[idx], cuSy_in[idx], cuSz_in[idx]);
 		cuReIm3 x1 = cuReIm3(cuSx_in[idx + planecount], cuSy_in[idx + planecount], cuSz_in[idx + planecount]);
 		cuReIm3 x2 = cuReIm3(cuSx_in[idx + 2 * planecount], cuSy_in[idx + 2 * planecount], cuSz_in[idx + 2 * planecount]);
-		cuReIm3 x3 = cuReIm3(cuSx_in[idx + 3 * planecount], cuSy_in[idx + 3 * planecount], cuSz_in[idx + 3 * planecount]);
+		cuReIm3 x3 = (n.z > 3 ? cuReIm3(cuSx_in[idx + 3 * planecount], cuSy_in[idx + 3 * planecount], cuSz_in[idx + 3 * planecount]) : cuReIm3());
 
 		//Radix-4 step
 		cuReIm3 X0 = x0 + x2;
@@ -969,12 +967,12 @@ __global__ void cu_MultiDemag_ConvProd_q2D_8_transpose_xy(
 
 		cuReIm3 F0, F1, F2, F3, F4, F5, F6, F7;
 
-		int i = idx % N.y;
-		int j = (idx / N.y) % (N.x / 2 + 1);
+		int i = idx % N_xRegion.y;
+		int j = (idx / N_xRegion.y) % N_xRegion.x;
 
-		if (i <= N.y / 2) {
+		if (i <= N_xRegion.y / 2) {
 
-			int ker_baseidx = i + j * (N.y / 2 + 1);
+			int ker_baseidx = i + j * (N_xRegion.y / 2 + 1);
 
 			F0.x = (Kdiag[ker_baseidx].x * X0.x) + (Kodiag[ker_baseidx].x * X0.y) + (Kodiag[ker_baseidx].y * X0.z);
 			F0.y = (Kodiag[ker_baseidx].x * X0.x) + (Kdiag[ker_baseidx].y * X0.y) + (Kodiag[ker_baseidx].z * X0.z);
@@ -1010,7 +1008,7 @@ __global__ void cu_MultiDemag_ConvProd_q2D_8_transpose_xy(
 		}
 		else {
 
-			int ker_baseidx = (N.y - i) + j * (N.y / 2 + 1);
+			int ker_baseidx = (N_xRegion.y - i) + j * (N_xRegion.y / 2 + 1);
 
 			F0.x = (Kdiag[ker_baseidx].x * X0.x) + (-Kodiag[ker_baseidx].x * X0.y) + (Kodiag[ker_baseidx].y * X0.z);
 			F0.y = (-Kodiag[ker_baseidx].x * X0.x) + (Kdiag[ker_baseidx].y * X0.y) + (-Kodiag[ker_baseidx].z * X0.z);
@@ -1120,28 +1118,28 @@ __global__ void cu_MultiDemag_ConvProd_q2D_8_transpose_xy(
 	}
 }
 
-//N = (N.x/2 + 1, N.y, 16)
+//N = (N_xRegion.x/2 + 1, N_xRegion.y, 16)
 //xy is transposed
 //Real kernels : this is a self demag version which sets output (unless set_output is false), but ifft not performed yet
 __global__ void cu_MultiDemag_ConvProd_q2D_16_transpose_xy(
 	cuVEC<cuReal3>& Kdiag, cuVEC<cuReal3>& Kodiag,
 	cuBComplex* cuSx_in, cuBComplex* cuSy_in, cuBComplex* cuSz_in,
 	cuBComplex* cuSx_out, cuBComplex* cuSy_out, cuBComplex* cuSz_out,
-	cuSZ3& N, bool set_output = true)
+	cuSZ3& N_xRegion, cuSZ3& n, bool set_output = true)
 {
-	//above N.z/2 and N.y/2 use kernel symmetries to recover kernel values
-	//diagonal components are even about the N.z/2 and N.y/2 points
-	//Kxy is even about N.z/2 and odd about N.y/2
-	//Kxz is odd about N.z/2 and even about N.y/2
-	//Kyz is odd about N.z/2 and odd about N.y/2
+	//above N_xRegion.z/2 and N_xRegion.y/2 use kernel symmetries to recover kernel values
+	//diagonal components are even about the N_xRegion.z/2 and N_xRegion.y/2 points
+	//Kxy is even about N_xRegion.z/2 and odd about N_xRegion.y/2
+	//Kxz is odd about N_xRegion.z/2 and even about N_xRegion.y/2
+	//Kyz is odd about N_xRegion.z/2 and odd about N_xRegion.y/2
 
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-	//N.z = 16, and this kernel was called with (N.x/2 + 1) * N.y points: handle all z points in one go
-	int planecount = (N.x / 2 + 1) * N.y;
+	//N_xRegion.z = 16, and this kernel was called with (N_xRegion.x/2 + 1) * N_xRegion.y points: handle all z points in one go
+	int planecount = N_xRegion.x * N_xRegion.y;
 
-	//kernels packed into planes of (N.y / 2 + 1) * (N.x / 2 + 1) size
-	int kerplanecount = (N.x / 2 + 1) * (N.y / 2 + 1);
+	//kernels packed into planes of (N_xRegion.y / 2 + 1) * N_xRegion.x size
+	int kerplanecount = N_xRegion.x * (N_xRegion.y / 2 + 1);
 
 	if (idx < planecount) {
 
@@ -1151,9 +1149,9 @@ __global__ void cu_MultiDemag_ConvProd_q2D_16_transpose_xy(
 		cuReIm3 x2 = cuReIm3(cuSx_in[idx + 2 * planecount], cuSy_in[idx + 2 * planecount], cuSz_in[idx + 2 * planecount]);
 		cuReIm3 x3 = cuReIm3(cuSx_in[idx + 3 * planecount], cuSy_in[idx + 3 * planecount], cuSz_in[idx + 3 * planecount]);
 		cuReIm3 x4 = cuReIm3(cuSx_in[idx + 4 * planecount], cuSy_in[idx + 4 * planecount], cuSz_in[idx + 4 * planecount]);
-		cuReIm3 x5 = cuReIm3(cuSx_in[idx + 5 * planecount], cuSy_in[idx + 5 * planecount], cuSz_in[idx + 5 * planecount]);
-		cuReIm3 x6 = cuReIm3(cuSx_in[idx + 6 * planecount], cuSy_in[idx + 6 * planecount], cuSz_in[idx + 6 * planecount]);
-		cuReIm3 x7 = cuReIm3(cuSx_in[idx + 7 * planecount], cuSy_in[idx + 7 * planecount], cuSz_in[idx + 7 * planecount]);
+		cuReIm3 x5 = (n.z > 5 ? cuReIm3(cuSx_in[idx + 5 * planecount], cuSy_in[idx + 5 * planecount], cuSz_in[idx + 5 * planecount]) : cuReIm3());
+		cuReIm3 x6 = (n.z > 6 ? cuReIm3(cuSx_in[idx + 6 * planecount], cuSy_in[idx + 6 * planecount], cuSz_in[idx + 6 * planecount]) : cuReIm3());
+		cuReIm3 x7 = (n.z > 7 ? cuReIm3(cuSx_in[idx + 7 * planecount], cuSy_in[idx + 7 * planecount], cuSz_in[idx + 7 * planecount]) : cuReIm3());
 
 #define a	(cuBReal)9.238795325113E-01
 #define b	(cuBReal)3.826834323651E-01
@@ -1226,12 +1224,12 @@ __global__ void cu_MultiDemag_ConvProd_q2D_16_transpose_xy(
 
 		cuReIm3 F0, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12, F13, F14, F15;
 
-		int i = idx % N.y;
-		int j = (idx / N.y) % (N.x / 2 + 1);
+		int i = idx % N_xRegion.y;
+		int j = (idx / N_xRegion.y) % N_xRegion.x;
 
-		if (i <= N.y / 2) {
+		if (i <= N_xRegion.y / 2) {
 
-			int ker_baseidx = i + j * (N.y / 2 + 1);
+			int ker_baseidx = i + j * (N_xRegion.y / 2 + 1);
 
 			F0.x = (Kdiag[ker_baseidx].x * X0.x) + (Kodiag[ker_baseidx].x * X0.y) + (Kodiag[ker_baseidx].y * X0.z);
 			F0.y = (Kodiag[ker_baseidx].x * X0.x) + (Kdiag[ker_baseidx].y * X0.y) + (Kodiag[ker_baseidx].z * X0.z);
@@ -1299,7 +1297,7 @@ __global__ void cu_MultiDemag_ConvProd_q2D_16_transpose_xy(
 		}
 		else {
 
-			int ker_baseidx = (N.y - i) + j * (N.y / 2 + 1);
+			int ker_baseidx = (N_xRegion.y - i) + j * (N_xRegion.y / 2 + 1);
 
 			F0.x = (Kdiag[ker_baseidx].x * X0.x) + (-Kodiag[ker_baseidx].x * X0.y) + (Kodiag[ker_baseidx].y * X0.z);
 			F0.y = (-Kodiag[ker_baseidx].x * X0.x) + (Kdiag[ker_baseidx].y * X0.y) + (-Kodiag[ker_baseidx].z * X0.z);
@@ -1507,33 +1505,49 @@ __global__ void cu_MultiDemag_ConvProd_q2D_16_transpose_xy(
 	}
 }
 
-//N = (N.x/2 + 1, N.y, 32)
+//N = (N_xRegion.x/2 + 1, N_xRegion.y, 32)
 //xy is transposed
 //Real kernels : this is a self demag version which sets output (unless set_output is false), but ifft not performed yet
 __global__ void cu_MultiDemag_ConvProd_q2D_32_transpose_xy(
 	cuVEC<cuReal3>& Kdiag, cuVEC<cuReal3>& Kodiag,
 	cuBComplex* cuSx_in, cuBComplex* cuSy_in, cuBComplex* cuSz_in,
 	cuBComplex* cuSx_out, cuBComplex* cuSy_out, cuBComplex* cuSz_out,
-	cuSZ3& N, bool set_output = true)
+	cuSZ3& N_xRegion, cuSZ3& n, bool set_output = true)
 {
-	//above N.z/2 and N.y/2 use kernel symmetries to recover kernel values
-	//diagonal components are even about the N.z/2 and N.y/2 points
-	//Kxy is even about N.z/2 and odd about N.y/2
-	//Kxz is odd about N.z/2 and even about N.y/2
-	//Kyz is odd about N.z/2 and odd about N.y/2
+	//above N_xRegion.z/2 and N_xRegion.y/2 use kernel symmetries to recover kernel values
+	//diagonal components are even about the N_xRegion.z/2 and N_xRegion.y/2 points
+	//Kxy is even about N_xRegion.z/2 and odd about N_xRegion.y/2
+	//Kxz is odd about N_xRegion.z/2 and even about N_xRegion.y/2
+	//Kyz is odd about N_xRegion.z/2 and odd about N_xRegion.y/2
 
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-	//N.z = 32, and this kernel was called with (N.x/2 + 1) * N.y points: handle all z points in one go
-	int planecount = (N.x / 2 + 1) * N.y;
+	//N_xRegion.z = 32, and this kernel was called with (N_xRegion.x/2 + 1) * N_xRegion.y points: handle all z points in one go
+	int planecount = N_xRegion.x * N_xRegion.y;
 
-	//kernels packed into planes of (N.y / 2 + 1) * (N.x / 2 + 1) size
-	int kerplanecount = (N.x / 2 + 1) * (N.y / 2 + 1);
+	//kernels packed into planes of (N_xRegion.y / 2 + 1) * N_xRegion.x size
+	int kerplanecount = N_xRegion.x * (N_xRegion.y / 2 + 1);
 
 	if (idx < planecount) {
 
 		//input data
-#define x(n)	(cuReIm3(cuSx_in[idx + (n) * planecount], cuSy_in[idx + (n) * planecount], cuSz_in[idx + (n) * planecount]))
+		__shared__ cuReIm3 x[16];
+		x[0] = cuReIm3(cuSx_in[idx + 0 * planecount], cuSy_in[idx + 0 * planecount], cuSz_in[idx + 0 * planecount]);
+		x[1] = cuReIm3(cuSx_in[idx + 1 * planecount], cuSy_in[idx + 1 * planecount], cuSz_in[idx + 1 * planecount]);
+		x[2] = cuReIm3(cuSx_in[idx + 2 * planecount], cuSy_in[idx + 2 * planecount], cuSz_in[idx + 2 * planecount]);
+		x[3] = cuReIm3(cuSx_in[idx + 3 * planecount], cuSy_in[idx + 3 * planecount], cuSz_in[idx + 3 * planecount]);
+		x[4] = cuReIm3(cuSx_in[idx + 4 * planecount], cuSy_in[idx + 4 * planecount], cuSz_in[idx + 4 * planecount]);
+		x[5] = cuReIm3(cuSx_in[idx + 5 * planecount], cuSy_in[idx + 5 * planecount], cuSz_in[idx + 5 * planecount]);
+		x[6] = cuReIm3(cuSx_in[idx + 6 * planecount], cuSy_in[idx + 6 * planecount], cuSz_in[idx + 6 * planecount]);
+		x[7] = cuReIm3(cuSx_in[idx + 7 * planecount], cuSy_in[idx + 7 * planecount], cuSz_in[idx + 7 * planecount]);
+		x[8] = cuReIm3(cuSx_in[idx + 8 * planecount], cuSy_in[idx + 8 * planecount], cuSz_in[idx + 8 * planecount]);
+		x[9] = (n.z > 9 ? cuReIm3(cuSx_in[idx + 9 * planecount], cuSy_in[idx + 9 * planecount], cuSz_in[idx + 9 * planecount]) : cuReIm3());
+		x[10] = (n.z > 10 ? cuReIm3(cuSx_in[idx + 10 * planecount], cuSy_in[idx + 10 * planecount], cuSz_in[idx + 10 * planecount]) : cuReIm3());
+		x[11] = (n.z > 11 ? cuReIm3(cuSx_in[idx + 11 * planecount], cuSy_in[idx + 11 * planecount], cuSz_in[idx + 11 * planecount]) : cuReIm3());
+		x[12] = (n.z > 12 ? cuReIm3(cuSx_in[idx + 12 * planecount], cuSy_in[idx + 12 * planecount], cuSz_in[idx + 12 * planecount]) : cuReIm3());
+		x[13] = (n.z > 13 ? cuReIm3(cuSx_in[idx + 13 * planecount], cuSy_in[idx + 13 * planecount], cuSz_in[idx + 13 * planecount]) : cuReIm3());
+		x[14] = (n.z > 14 ? cuReIm3(cuSx_in[idx + 14 * planecount], cuSy_in[idx + 14 * planecount], cuSz_in[idx + 14 * planecount]) : cuReIm3());
+		x[15] = (n.z > 15 ? cuReIm3(cuSx_in[idx + 15 * planecount], cuSy_in[idx + 15 * planecount], cuSz_in[idx + 15 * planecount]) : cuReIm3());
 
 		//no performance gain to be had from setting these as X0, X1, ... etc.
 		//unrolling loops does make a slight difference though - probably last case for which you want to unroll loops
@@ -1552,54 +1566,52 @@ __global__ void cu_MultiDemag_ConvProd_q2D_32_transpose_xy(
 #define g	(cuBReal)0.707106781186548
 
 		//j = 0
-		X[0] = (x(0) + x(8));
-		X[8] = (x(0) - x(8));
-		X[16] = (x(0) - !x(8));
-		X[24] = (x(0) + !x(8));
+		X[0] = (x[0] + x[8]);
+		X[8] = (x[0] - x[8]);
+		X[16] = (x[0] - !x[8]);
+		X[24] = (x[0] + !x[8]);
 
 		//j = 1
-		X[1] = (x(1) + x(9));
-		X[9] = (x(1) - x(9)) * cuReIm(c, -d);
-		X[17] = (x(1) - !x(9)) * cuReIm(a, -b);
-		X[25] = (x(1) + !x(9)) * cuReIm(e, -f);
+		X[1] = (x[1] + x[9]);
+		X[9] = (x[1] - x[9]) * cuReIm(c, -d);
+		X[17] = (x[1] - !x[9]) * cuReIm(a, -b);
+		X[25] = (x[1] + !x[9]) * cuReIm(e, -f);
 
 		//j = 2
-		X[2] = (x(2) + x(10));
-		X[10] = (x(2) - x(10)) * cuReIm(g, -g);
-		X[18] = (x(2) - !x(10)) * cuReIm(c, -d);
-		X[26] = (x(2) + !x(10)) * cuReIm(d, -c);
+		X[2] = (x[2] + x[10]);
+		X[10] = (x[2] - x[10]) * cuReIm(g, -g);
+		X[18] = (x[2] - !x[10]) * cuReIm(c, -d);
+		X[26] = (x[2] + !x[10]) * cuReIm(d, -c);
 
 		//j = 3
-		X[3] = (x(3) + x(11));
-		X[11] = (x(3) - x(11)) * cuReIm(d, -c);
-		X[19] = (x(3) - !x(11)) * cuReIm(e, -f);
-		X[27] = (x(3) + !x(11)) * cuReIm(-b, -a);
+		X[3] = (x[3] + x[11]);
+		X[11] = (x[3] - x[11]) * cuReIm(d, -c);
+		X[19] = (x[3] - !x[11]) * cuReIm(e, -f);
+		X[27] = (x[3] + !x[11]) * cuReIm(-b, -a);
 
 		//j = 4
-		X[4] = (x(4) + x(12));
-		X[12] = !(x(12) - x(4));
-		X[20] = (x(4) - !x(12)) * cuReIm(g, -g);
-		X[28] = (x(4) + !x(12)) * cuReIm(-g, -g);
+		X[4] = (x[4] + x[12]);
+		X[12] = !(x[12] - x[4]);
+		X[20] = (x[4] - !x[12]) * cuReIm(g, -g);
+		X[28] = (x[4] + !x[12]) * cuReIm(-g, -g);
 
 		//j = 5
-		X[5] = (x(5) + x(13));
-		X[13] = (x(5) - x(13)) * cuReIm(-d, -c);
-		X[21] = (x(5) - !x(13)) * cuReIm(f, -e);
-		X[29] = (x(5) + !x(13)) * cuReIm(-a, -b);
+		X[5] = (x[5] + x[13]);
+		X[13] = (x[5] - x[13]) * cuReIm(-d, -c);
+		X[21] = (x[5] - !x[13]) * cuReIm(f, -e);
+		X[29] = (x[5] + !x[13]) * cuReIm(-a, -b);
 
 		//j = 6
-		X[6] = (x(6) + x(14));
-		X[14] = (x(6) - x(14)) * cuReIm(-g, -g);
-		X[22] = (x(6) - !x(14)) * cuReIm(d, -c);
-		X[30] = (x(6) + !x(14)) * cuReIm(-c, d);
+		X[6] = (x[6] + x[14]);
+		X[14] = (x[6] - x[14]) * cuReIm(-g, -g);
+		X[22] = (x[6] - !x[14]) * cuReIm(d, -c);
+		X[30] = (x[6] + !x[14]) * cuReIm(-c, d);
 
 		//j = 7
-		X[7] = (x(7) + x(15));
-		X[15] = (x(7) - x(15)) * cuReIm(-c, -d);
-		X[23] = (x(7) - !x(15)) * cuReIm(b, -a);
-		X[31] = (x(7) + !x(15)) * cuReIm(-f, e);
-
-#undef x
+		X[7] = (x[7] + x[15]);
+		X[15] = (x[7] - x[15]) * cuReIm(-c, -d);
+		X[23] = (x[7] - !x[15]) * cuReIm(b, -a);
+		X[31] = (x[7] + !x[15]) * cuReIm(-f, e);
 
 		//final radix4 stage
 
@@ -1753,14 +1765,14 @@ __global__ void cu_MultiDemag_ConvProd_q2D_32_transpose_xy(
 		//output is shuffled now, i.e. it is ordered as:
 		//0, 16, 8, 24, 4, 20, 12, 28, 2, 18, 10, 26, 6, 22, 14, 30, 1, 17, 9, 25, 5, 21, 13, 29, 3, 19, 11, 27, 7, 23, 15, 31
 
-		int i = idx % N.y;
-		int j = (idx / N.y) % (N.x / 2 + 1);
+		int i = idx % N_xRegion.y;
+		int j = (idx / N_xRegion.y) % N_xRegion.x;
 
 		cuReIm3 F[32];
 
-		if (i <= N.y / 2) {
+		if (i <= N_xRegion.y / 2) {
 
-			int ker_baseidx = i + j * (N.y / 2 + 1);
+			int ker_baseidx = i + j * (N_xRegion.y / 2 + 1);
 
 			F[0].x = (Kdiag[ker_baseidx].x * X[0].x) + (Kodiag[ker_baseidx].x * X[0].y) + (Kodiag[ker_baseidx].y * X[0].z);
 			F[0].y = (Kodiag[ker_baseidx].x * X[0].x) + (Kdiag[ker_baseidx].y * X[0].y) + (Kodiag[ker_baseidx].z * X[0].z);
@@ -1892,7 +1904,7 @@ __global__ void cu_MultiDemag_ConvProd_q2D_32_transpose_xy(
 		}
 		else {
 
-			int ker_baseidx = (N.y - i) + j * (N.y / 2 + 1);
+			int ker_baseidx = (N_xRegion.y - i) + j * (N_xRegion.y / 2 + 1);
 
 			F[0].x = (Kdiag[ker_baseidx].x * X[0].x) + (-Kodiag[ker_baseidx].x * X[0].y) + (Kodiag[ker_baseidx].y * X[0].z);
 			F[0].y = (-Kodiag[ker_baseidx].x * X[0].x) + (Kdiag[ker_baseidx].y * X[0].y) + (-Kodiag[ker_baseidx].z * X[0].z);
@@ -2304,14 +2316,14 @@ __global__ void cu_MultiDemag_ConvProd_q2D_32_transpose_xy(
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////// Q2D - Z SHIFTED
 
-//N = (N.x/2 + 1, N.y, 4)
+//N = (N_xRegion.x/2 + 1, N_xRegion.y, 4)
 //xy is transposed
 //Complex kernels : this is a z shifted demag version using kernel symmetries, which accumulates in output, but ifft not performed yet
 __global__ void cu_MultiDemag_ConvProd_q2D_4_transpose_xy_zshifted(
 	cuVEC<cuReIm3>& Kdiag, cuVEC<cuReIm3>& Kodiag,
 	cuBComplex* cuSx_in, cuBComplex* cuSy_in, cuBComplex* cuSz_in,
 	cuBComplex* cuSx_out, cuBComplex* cuSy_out, cuBComplex* cuSz_out,
-	cuSZ3& N)
+	cuSZ3& N_xRegion)
 {
 	//z shifted for 3D : can use kernels of reduced dimensions but must be complex
 	//
@@ -2325,11 +2337,11 @@ __global__ void cu_MultiDemag_ConvProd_q2D_4_transpose_xy_zshifted(
 
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-	//N.z = 4, and this kernel was called with (N.x/2 + 1) * N.y points: handle all z points in one go
-	int planecount = (N.x / 2 + 1) * N.y;
+	//N_xRegion.z = 4, and this kernel was called with (N_xRegion.x/2 + 1) * N_xRegion.y points: handle all z points in one go
+	int planecount = N_xRegion.x * N_xRegion.y;
 
-	//kernels packed into planes of (N.y / 2 + 1) * (N.x / 2 + 1) size
-	int kerplanecount = (N.x / 2 + 1) * (N.y / 2 + 1);
+	//kernels packed into planes of (N_xRegion.y / 2 + 1) * N_xRegion.x size
+	int kerplanecount = N_xRegion.x * (N_xRegion.y / 2 + 1);
 
 	if (idx < planecount) {
 
@@ -2348,12 +2360,12 @@ __global__ void cu_MultiDemag_ConvProd_q2D_4_transpose_xy_zshifted(
 		//kernel multiplication
 		cuReIm3 F0, F1, F2, F3;
 
-		int i = idx % N.y;
-		int j = (idx / N.y) % (N.x / 2 + 1);
+		int i = idx % N_xRegion.y;
+		int j = (idx / N_xRegion.y) % N_xRegion.x;
 
-		if (i <= N.y / 2) {
+		if (i <= N_xRegion.y / 2) {
 
-			int ker_baseidx = i + j * (N.y / 2 + 1);
+			int ker_baseidx = i + j * (N_xRegion.y / 2 + 1);
 
 			//lower z, lower y
 			F0.x = (Kdiag[ker_baseidx].x * X0.x) + (Kodiag[ker_baseidx].x * X0.y) + (Kodiag[ker_baseidx].y * X0.z);
@@ -2375,7 +2387,7 @@ __global__ void cu_MultiDemag_ConvProd_q2D_4_transpose_xy_zshifted(
 		}
 		else {
 
-			int ker_baseidx = (N.y - i) + j * (N.y / 2 + 1);
+			int ker_baseidx = (N_xRegion.y - i) + j * (N_xRegion.y / 2 + 1);
 
 			//lower z, upper y
 			F0.x = (Kdiag[ker_baseidx].x * X0.x) - (Kodiag[ker_baseidx].x * X0.y) + (Kodiag[ker_baseidx].y * X0.z);
@@ -2416,14 +2428,14 @@ __global__ void cu_MultiDemag_ConvProd_q2D_4_transpose_xy_zshifted(
 	}
 }
 
-//N = (N.x/2 + 1, N.y, 8)
+//N = (N_xRegion.x/2 + 1, N_xRegion.y, 8)
 //xy is transposed
 //Complex kernels : this is a z shifted demag version using kernel symmetries, which accumulates in output, but ifft not performed yet
 __global__ void cu_MultiDemag_ConvProd_q2D_8_transpose_xy_zshifted(
 	cuVEC<cuReIm3>& Kdiag, cuVEC<cuReIm3>& Kodiag,
 	cuBComplex* cuSx_in, cuBComplex* cuSy_in, cuBComplex* cuSz_in,
 	cuBComplex* cuSx_out, cuBComplex* cuSy_out, cuBComplex* cuSz_out,
-	cuSZ3& N)
+	cuSZ3& N_xRegion, cuSZ3& n)
 {
 	//z shifted for 3D : can use kernels of reduced dimensions but must be complex
 	//
@@ -2437,11 +2449,11 @@ __global__ void cu_MultiDemag_ConvProd_q2D_8_transpose_xy_zshifted(
 
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-	//N.z = 8, and this kernel was called with (N.x/2 + 1) * N.y points: handle all z points in one go
-	int planecount = (N.x / 2 + 1) * N.y;
+	//N_xRegion.z = 8, and this kernel was called with (N_xRegion.x/2 + 1) * N_xRegion.y points: handle all z points in one go
+	int planecount = N_xRegion.x * N_xRegion.y;
 
-	//kernels packed into planes of (N.y / 2 + 1) * (N.x / 2 + 1) size
-	int kerplanecount = (N.x / 2 + 1) * (N.y / 2 + 1);
+	//kernels packed into planes of (N_xRegion.y / 2 + 1) * N_xRegion.x size
+	int kerplanecount = N_xRegion.x * (N_xRegion.y / 2 + 1);
 
 	if (idx < planecount) {
 
@@ -2451,7 +2463,7 @@ __global__ void cu_MultiDemag_ConvProd_q2D_8_transpose_xy_zshifted(
 		cuReIm3 x0 = cuReIm3(cuSx_in[idx], cuSy_in[idx], cuSz_in[idx]);
 		cuReIm3 x1 = cuReIm3(cuSx_in[idx + planecount], cuSy_in[idx + planecount], cuSz_in[idx + planecount]);
 		cuReIm3 x2 = cuReIm3(cuSx_in[idx + 2 * planecount], cuSy_in[idx + 2 * planecount], cuSz_in[idx + 2 * planecount]);
-		cuReIm3 x3 = cuReIm3(cuSx_in[idx + 3 * planecount], cuSy_in[idx + 3 * planecount], cuSz_in[idx + 3 * planecount]);
+		cuReIm3 x3 = (n.z > 3 ? cuReIm3(cuSx_in[idx + 3 * planecount], cuSy_in[idx + 3 * planecount], cuSz_in[idx + 3 * planecount]) : cuReIm3());
 
 		//Radix-4 step
 		cuReIm3 X0 = x0 + x2;
@@ -2486,12 +2498,12 @@ __global__ void cu_MultiDemag_ConvProd_q2D_8_transpose_xy_zshifted(
 
 		cuReIm3 F0, F1, F2, F3, F4, F5, F6, F7;
 
-		int i = idx % N.y;
-		int j = (idx / N.y) % (N.x / 2 + 1);
+		int i = idx % N_xRegion.y;
+		int j = (idx / N_xRegion.y) % N_xRegion.x;
 		
-		if (i <= N.y / 2) {
+		if (i <= N_xRegion.y / 2) {
 			
-			int ker_baseidx = i + j * (N.y / 2 + 1);
+			int ker_baseidx = i + j * (N_xRegion.y / 2 + 1);
 
 			//lower z, lower y
 			F0.x = (Kdiag[ker_baseidx].x * X0.x) + (Kodiag[ker_baseidx].x * X0.y) + (Kodiag[ker_baseidx].y * X0.z);
@@ -2529,7 +2541,7 @@ __global__ void cu_MultiDemag_ConvProd_q2D_8_transpose_xy_zshifted(
 		}
 		else {
 
-			int ker_baseidx = (N.y - i) + j * (N.y / 2 + 1);
+			int ker_baseidx = (N_xRegion.y - i) + j * (N_xRegion.y / 2 + 1);
 
 			//lower z, upper y
 			F0.x = (Kdiag[ker_baseidx].x * X0.x) - (Kodiag[ker_baseidx].x * X0.y) + (Kodiag[ker_baseidx].y * X0.z);
@@ -2604,14 +2616,14 @@ __global__ void cu_MultiDemag_ConvProd_q2D_8_transpose_xy_zshifted(
 	}
 }
 
-//N = (N.x/2 + 1, N.y, 16)
+//N = (N_xRegion.x/2 + 1, N_xRegion.y, 16)
 //xy is transposed
 //Complex kernels : this is a z shifted demag version using kernel symmetries, which accumulates in output, but ifft not performed yet
 __global__ void cu_MultiDemag_ConvProd_q2D_16_transpose_xy_zshifted(
 	cuVEC<cuReIm3>& Kdiag, cuVEC<cuReIm3>& Kodiag,
 	cuBComplex* cuSx_in, cuBComplex* cuSy_in, cuBComplex* cuSz_in,
 	cuBComplex* cuSx_out, cuBComplex* cuSy_out, cuBComplex* cuSz_out,
-	cuSZ3& N)
+	cuSZ3& N_xRegion, cuSZ3& n)
 {
 	//z shifted for 3D : can use kernels of reduced dimensions but must be complex
 	//
@@ -2625,11 +2637,11 @@ __global__ void cu_MultiDemag_ConvProd_q2D_16_transpose_xy_zshifted(
 
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-	//N.z = 16, and this kernel was called with (N.x/2 + 1) * N.y points: handle all z points in one go
-	int planecount = (N.x / 2 + 1) * N.y;
+	//N_xRegion.z = 16, and this kernel was called with (N_xRegion.x/2 + 1) * N_xRegion.y points: handle all z points in one go
+	int planecount = N_xRegion.x * N_xRegion.y;
 
-	//kernels packed into planes of (N.y / 2 + 1) * (N.x / 2 + 1) size
-	int kerplanecount = (N.x / 2 + 1) * (N.y / 2 + 1);
+	//kernels packed into planes of (N_xRegion.y / 2 + 1) * N_xRegion.x size
+	int kerplanecount = N_xRegion.x * (N_xRegion.y / 2 + 1);
 
 	if (idx < planecount) {
 
@@ -2639,9 +2651,9 @@ __global__ void cu_MultiDemag_ConvProd_q2D_16_transpose_xy_zshifted(
 		cuReIm3 x2 = cuReIm3(cuSx_in[idx + 2 * planecount], cuSy_in[idx + 2 * planecount], cuSz_in[idx + 2 * planecount]);
 		cuReIm3 x3 = cuReIm3(cuSx_in[idx + 3 * planecount], cuSy_in[idx + 3 * planecount], cuSz_in[idx + 3 * planecount]);
 		cuReIm3 x4 = cuReIm3(cuSx_in[idx + 4 * planecount], cuSy_in[idx + 4 * planecount], cuSz_in[idx + 4 * planecount]);
-		cuReIm3 x5 = cuReIm3(cuSx_in[idx + 5 * planecount], cuSy_in[idx + 5 * planecount], cuSz_in[idx + 5 * planecount]);
-		cuReIm3 x6 = cuReIm3(cuSx_in[idx + 6 * planecount], cuSy_in[idx + 6 * planecount], cuSz_in[idx + 6 * planecount]);
-		cuReIm3 x7 = cuReIm3(cuSx_in[idx + 7 * planecount], cuSy_in[idx + 7 * planecount], cuSz_in[idx + 7 * planecount]);
+		cuReIm3 x5 = (n.z > 5 ? cuReIm3(cuSx_in[idx + 5 * planecount], cuSy_in[idx + 5 * planecount], cuSz_in[idx + 5 * planecount]) : cuReIm3());
+		cuReIm3 x6 = (n.z > 6 ? cuReIm3(cuSx_in[idx + 6 * planecount], cuSy_in[idx + 6 * planecount], cuSz_in[idx + 6 * planecount]) : cuReIm3());
+		cuReIm3 x7 = (n.z > 7 ? cuReIm3(cuSx_in[idx + 7 * planecount], cuSy_in[idx + 7 * planecount], cuSz_in[idx + 7 * planecount]) : cuReIm3());
 
 #define a	(cuBReal)9.238795325113E-01
 #define b	(cuBReal)3.826834323651E-01
@@ -2714,12 +2726,12 @@ __global__ void cu_MultiDemag_ConvProd_q2D_16_transpose_xy_zshifted(
 
 		cuReIm3 F0, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12, F13, F14, F15;
 
-		int i = idx % N.y;
-		int j = (idx / N.y) % (N.x / 2 + 1);
+		int i = idx % N_xRegion.y;
+		int j = (idx / N_xRegion.y) % N_xRegion.x;
 
-		if (i <= N.y / 2) {
+		if (i <= N_xRegion.y / 2) {
 
-			int ker_baseidx = i + j * (N.y / 2 + 1);
+			int ker_baseidx = i + j * (N_xRegion.y / 2 + 1);
 
 			//lower z, lower y
 			F0.x = (Kdiag[ker_baseidx].x * X0.x) + (Kodiag[ker_baseidx].x * X0.y) + (Kodiag[ker_baseidx].y * X0.z);
@@ -2789,7 +2801,7 @@ __global__ void cu_MultiDemag_ConvProd_q2D_16_transpose_xy_zshifted(
 		}
 		else {
 
-			int ker_baseidx = (N.y - i) + j * (N.y / 2 + 1);
+			int ker_baseidx = (N_xRegion.y - i) + j * (N_xRegion.y / 2 + 1);
 
 			//lower z, upper y
 			F0.x = (Kdiag[ker_baseidx].x * X0.x) - (Kodiag[ker_baseidx].x * X0.y) + (Kodiag[ker_baseidx].y * X0.z);
@@ -2930,14 +2942,14 @@ __global__ void cu_MultiDemag_ConvProd_q2D_16_transpose_xy_zshifted(
 	}
 }
 
-//N = (N.x/2 + 1, N.y, 32)
+//N = (N_xRegion.x/2 + 1, N_xRegion.y, 32)
 //xy is transposed
 //Complex kernels : this is a z shifted demag version using kernel symmetries, which accumulates in output, but ifft not performed yet
 __global__ void cu_MultiDemag_ConvProd_q2D_32_transpose_xy_zshifted(
 	cuVEC<cuReIm3>& Kdiag, cuVEC<cuReIm3>& Kodiag,
 	cuBComplex* cuSx_in, cuBComplex* cuSy_in, cuBComplex* cuSz_in,
 	cuBComplex* cuSx_out, cuBComplex* cuSy_out, cuBComplex* cuSz_out,
-	cuSZ3& N)
+	cuSZ3& N_xRegion, cuSZ3& n)
 {
 	//z shifted for 3D : can use kernels of reduced dimensions but must be complex
 	//
@@ -2951,16 +2963,32 @@ __global__ void cu_MultiDemag_ConvProd_q2D_32_transpose_xy_zshifted(
 
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-	//N.z = 32, and this kernel was called with (N.x/2 + 1) * N.y points: handle all z points in one go
-	int planecount = (N.x / 2 + 1) * N.y;
+	//N_xRegion.z = 32, and this kernel was called with (N_xRegion.x/2 + 1) * N_xRegion.y points: handle all z points in one go
+	int planecount = N_xRegion.x * N_xRegion.y;
 
-	//kernels packed into planes of (N.y / 2 + 1) * (N.x / 2 + 1) size
-	int kerplanecount = (N.x / 2 + 1) * (N.y / 2 + 1);
+	//kernels packed into planes of (N_xRegion.y / 2 + 1) * N_xRegion.x size
+	int kerplanecount = N_xRegion.x * (N_xRegion.y / 2 + 1);
 
 	if (idx < planecount) {
 
 		//input data
-#define x(n)	(cuReIm3(cuSx_in[idx + (n) * planecount], cuSy_in[idx + (n) * planecount], cuSz_in[idx + (n) * planecount]))
+		__shared__ cuReIm3 x[16];
+		x[0] = cuReIm3(cuSx_in[idx + 0 * planecount], cuSy_in[idx + 0 * planecount], cuSz_in[idx + 0 * planecount]);
+		x[1] = cuReIm3(cuSx_in[idx + 1 * planecount], cuSy_in[idx + 1 * planecount], cuSz_in[idx + 1 * planecount]);
+		x[2] = cuReIm3(cuSx_in[idx + 2 * planecount], cuSy_in[idx + 2 * planecount], cuSz_in[idx + 2 * planecount]);
+		x[3] = cuReIm3(cuSx_in[idx + 3 * planecount], cuSy_in[idx + 3 * planecount], cuSz_in[idx + 3 * planecount]);
+		x[4] = cuReIm3(cuSx_in[idx + 4 * planecount], cuSy_in[idx + 4 * planecount], cuSz_in[idx + 4 * planecount]);
+		x[5] = cuReIm3(cuSx_in[idx + 5 * planecount], cuSy_in[idx + 5 * planecount], cuSz_in[idx + 5 * planecount]);
+		x[6] = cuReIm3(cuSx_in[idx + 6 * planecount], cuSy_in[idx + 6 * planecount], cuSz_in[idx + 6 * planecount]);
+		x[7] = cuReIm3(cuSx_in[idx + 7 * planecount], cuSy_in[idx + 7 * planecount], cuSz_in[idx + 7 * planecount]);
+		x[8] = cuReIm3(cuSx_in[idx + 8 * planecount], cuSy_in[idx + 8 * planecount], cuSz_in[idx + 8 * planecount]);
+		x[9] = (n.z > 9 ? cuReIm3(cuSx_in[idx + 9 * planecount], cuSy_in[idx + 9 * planecount], cuSz_in[idx + 9 * planecount]) : cuReIm3());
+		x[10] = (n.z > 10 ? cuReIm3(cuSx_in[idx + 10 * planecount], cuSy_in[idx + 10 * planecount], cuSz_in[idx + 10 * planecount]) : cuReIm3());
+		x[11] = (n.z > 11 ? cuReIm3(cuSx_in[idx + 11 * planecount], cuSy_in[idx + 11 * planecount], cuSz_in[idx + 11 * planecount]) : cuReIm3());
+		x[12] = (n.z > 12 ? cuReIm3(cuSx_in[idx + 12 * planecount], cuSy_in[idx + 12 * planecount], cuSz_in[idx + 12 * planecount]) : cuReIm3());
+		x[13] = (n.z > 13 ? cuReIm3(cuSx_in[idx + 13 * planecount], cuSy_in[idx + 13 * planecount], cuSz_in[idx + 13 * planecount]) : cuReIm3());
+		x[14] = (n.z > 14 ? cuReIm3(cuSx_in[idx + 14 * planecount], cuSy_in[idx + 14 * planecount], cuSz_in[idx + 14 * planecount]) : cuReIm3());
+		x[15] = (n.z > 15 ? cuReIm3(cuSx_in[idx + 15 * planecount], cuSy_in[idx + 15 * planecount], cuSz_in[idx + 15 * planecount]) : cuReIm3());
 
 		//no performance gain to be had from setting these as X0, X1, ... etc.
 		//unrolling loops does make a slight difference though - probably last case for which you want to unroll loops
@@ -2979,54 +3007,52 @@ __global__ void cu_MultiDemag_ConvProd_q2D_32_transpose_xy_zshifted(
 #define g	(cuBReal)0.707106781186548
 
 		//j = 0
-		X[0] = (x(0) + x(8));
-		X[8] = (x(0) - x(8));
-		X[16] = (x(0) - !x(8));
-		X[24] = (x(0) + !x(8));
+		X[0] = (x[0] + x[8]);
+		X[8] = (x[0] - x[8]);
+		X[16] = (x[0] - !x[8]);
+		X[24] = (x[0] + !x[8]);
 
 		//j = 1
-		X[1] = (x(1) + x(9));
-		X[9] = (x(1) - x(9)) * cuReIm(c, -d);
-		X[17] = (x(1) - !x(9)) * cuReIm(a, -b);
-		X[25] = (x(1) + !x(9)) * cuReIm(e, -f);
+		X[1] = (x[1] + x[9]);
+		X[9] = (x[1] - x[9]) * cuReIm(c, -d);
+		X[17] = (x[1] - !x[9]) * cuReIm(a, -b);
+		X[25] = (x[1] + !x[9]) * cuReIm(e, -f);
 
 		//j = 2
-		X[2] = (x(2) + x(10));
-		X[10] = (x(2) - x(10)) * cuReIm(g, -g);
-		X[18] = (x(2) - !x(10)) * cuReIm(c, -d);
-		X[26] = (x(2) + !x(10)) * cuReIm(d, -c);
+		X[2] = (x[2] + x[10]);
+		X[10] = (x[2] - x[10]) * cuReIm(g, -g);
+		X[18] = (x[2] - !x[10]) * cuReIm(c, -d);
+		X[26] = (x[2] + !x[10]) * cuReIm(d, -c);
 
 		//j = 3
-		X[3] = (x(3) + x(11));
-		X[11] = (x(3) - x(11)) * cuReIm(d, -c);
-		X[19] = (x(3) - !x(11)) * cuReIm(e, -f);
-		X[27] = (x(3) + !x(11)) * cuReIm(-b, -a);
+		X[3] = (x[3] + x[11]);
+		X[11] = (x[3] - x[11]) * cuReIm(d, -c);
+		X[19] = (x[3] - !x[11]) * cuReIm(e, -f);
+		X[27] = (x[3] + !x[11]) * cuReIm(-b, -a);
 
 		//j = 4
-		X[4] = (x(4) + x(12));
-		X[12] = !(x(12) - x(4));
-		X[20] = (x(4) - !x(12)) * cuReIm(g, -g);
-		X[28] = (x(4) + !x(12)) * cuReIm(-g, -g);
+		X[4] = (x[4] + x[12]);
+		X[12] = !(x[12] - x[4]);
+		X[20] = (x[4] - !x[12]) * cuReIm(g, -g);
+		X[28] = (x[4] + !x[12]) * cuReIm(-g, -g);
 
 		//j = 5
-		X[5] = (x(5) + x(13));
-		X[13] = (x(5) - x(13)) * cuReIm(-d, -c);
-		X[21] = (x(5) - !x(13)) * cuReIm(f, -e);
-		X[29] = (x(5) + !x(13)) * cuReIm(-a, -b);
+		X[5] = (x[5] + x[13]);
+		X[13] = (x[5] - x[13]) * cuReIm(-d, -c);
+		X[21] = (x[5] - !x[13]) * cuReIm(f, -e);
+		X[29] = (x[5] + !x[13]) * cuReIm(-a, -b);
 
 		//j = 6
-		X[6] = (x(6) + x(14));
-		X[14] = (x(6) - x(14)) * cuReIm(-g, -g);
-		X[22] = (x(6) - !x(14)) * cuReIm(d, -c);
-		X[30] = (x(6) + !x(14)) * cuReIm(-c, d);
+		X[6] = (x[6] + x[14]);
+		X[14] = (x[6] - x[14]) * cuReIm(-g, -g);
+		X[22] = (x[6] - !x[14]) * cuReIm(d, -c);
+		X[30] = (x[6] + !x[14]) * cuReIm(-c, d);
 
 		//j = 7
-		X[7] = (x(7) + x(15));
-		X[15] = (x(7) - x(15)) * cuReIm(-c, -d);
-		X[23] = (x(7) - !x(15)) * cuReIm(b, -a);
-		X[31] = (x(7) + !x(15)) * cuReIm(-f, e);
-
-#undef x
+		X[7] = (x[7] + x[15]);
+		X[15] = (x[7] - x[15]) * cuReIm(-c, -d);
+		X[23] = (x[7] - !x[15]) * cuReIm(b, -a);
+		X[31] = (x[7] + !x[15]) * cuReIm(-f, e);
 
 		//final radix4 stage
 
@@ -3180,14 +3206,14 @@ __global__ void cu_MultiDemag_ConvProd_q2D_32_transpose_xy_zshifted(
 		//output is shuffled now, i.e. it is ordered as:
 		//0, 16, 8, 24, 4, 20, 12, 28, 2, 18, 10, 26, 6, 22, 14, 30, 1, 17, 9, 25, 5, 21, 13, 29, 3, 19, 11, 27, 7, 23, 15, 31
 
-		int i = idx % N.y;
-		int j = (idx / N.y) % (N.x / 2 + 1);
+		int i = idx % N_xRegion.y;
+		int j = (idx / N_xRegion.y) % N_xRegion.x;
 
 		cuReIm3 F[32];
 
-		if (i <= N.y / 2) {
+		if (i <= N_xRegion.y / 2) {
 
-			int ker_baseidx = i + j * (N.y / 2 + 1);
+			int ker_baseidx = i + j * (N_xRegion.y / 2 + 1);
 
 			//lower z, lower y
 			F[0].x = (Kdiag[ker_baseidx].x * X[0].x) + (Kodiag[ker_baseidx].x * X[0].y) + (Kodiag[ker_baseidx].y * X[0].z);
@@ -3321,7 +3347,7 @@ __global__ void cu_MultiDemag_ConvProd_q2D_32_transpose_xy_zshifted(
 		}
 		else {
 
-			int ker_baseidx = (N.y - i) + j * (N.y / 2 + 1);
+			int ker_baseidx = (N_xRegion.y - i) + j * (N_xRegion.y / 2 + 1);
 
 			//lower z, upper y
 			F[0].x = (Kdiag[ker_baseidx].x * X[0].x) - (Kodiag[ker_baseidx].x * X[0].y) + (Kodiag[ker_baseidx].y * X[0].z);
@@ -3602,14 +3628,14 @@ __global__ void cu_MultiDemag_ConvProd_q2D_32_transpose_xy_zshifted(
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////// Q2D - X SHIFTED
 
-//N = (N.x/2 + 1, N.y, 4)
+//N = (N_xRegion.x/2 + 1, N_xRegion.y, 4)
 //xy is transposed
 //Complex kernels : this is a x shifted demag version using kernel symmetries, which accumulates in output, but ifft not performed yet
 __global__ void cu_MultiDemag_ConvProd_q2D_4_transpose_xy_xshifted(
 	cuVEC<cuReIm3>& Kdiag, cuVEC<cuReIm3>& Kodiag,
 	cuBComplex* cuSx_in, cuBComplex* cuSy_in, cuBComplex* cuSz_in,
 	cuBComplex* cuSx_out, cuBComplex* cuSy_out, cuBComplex* cuSz_out,
-	cuSZ3& N)
+	cuSZ3& N_xRegion)
 {
 	//x shifted for 3D : can use kernels of reduced dimensions but must be complex
 	//
@@ -3621,11 +3647,11 @@ __global__ void cu_MultiDemag_ConvProd_q2D_4_transpose_xy_xshifted(
 
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-	//N.z = 4, and this kernel was called with (N.x/2 + 1) * N.y points: handle all z points in one go
-	int planecount = (N.x / 2 + 1) * N.y;
+	//N_xRegion.z = 4, and this kernel was called with (N_xRegion.x/2 + 1) * N_xRegion.y points: handle all z points in one go
+	int planecount = N_xRegion.x * N_xRegion.y;
 
-	//kernels packed into planes of (N.y / 2 + 1) * (N.x / 2 + 1) size
-	int kerplanecount = (N.x / 2 + 1) * (N.y / 2 + 1);
+	//kernels packed into planes of (N_xRegion.y / 2 + 1) * N_xRegion.x size
+	int kerplanecount = N_xRegion.x * (N_xRegion.y / 2 + 1);
 
 	if (idx < planecount) {
 
@@ -3644,12 +3670,12 @@ __global__ void cu_MultiDemag_ConvProd_q2D_4_transpose_xy_xshifted(
 		//kernel multiplication
 		cuReIm3 F0, F1, F2, F3;
 
-		int i = idx % N.y;
-		int j = (idx / N.y) % (N.x / 2 + 1);
+		int i = idx % N_xRegion.y;
+		int j = (idx / N_xRegion.y) % N_xRegion.x;
 
-		if (i <= N.y / 2) {
+		if (i <= N_xRegion.y / 2) {
 
-			int ker_baseidx = i + j * (N.y / 2 + 1);
+			int ker_baseidx = i + j * (N_xRegion.y / 2 + 1);
 
 			//lower z, lower y
 			F0.x = (Kdiag[ker_baseidx].x * X0.x) + (Kodiag[ker_baseidx].x * X0.y) + (Kodiag[ker_baseidx].y * X0.z);
@@ -3671,7 +3697,7 @@ __global__ void cu_MultiDemag_ConvProd_q2D_4_transpose_xy_xshifted(
 		}
 		else {
 
-			int ker_baseidx = (N.y - i) + j * (N.y / 2 + 1);
+			int ker_baseidx = (N_xRegion.y - i) + j * (N_xRegion.y / 2 + 1);
 
 			//lower z, upper y
 			F0.x = (Kdiag[ker_baseidx].x * X0.x) - (Kodiag[ker_baseidx].x * X0.y) + (Kodiag[ker_baseidx].y * X0.z);
@@ -3712,14 +3738,14 @@ __global__ void cu_MultiDemag_ConvProd_q2D_4_transpose_xy_xshifted(
 	}
 }
 
-//N = (N.x/2 + 1, N.y, 8)
+//N = (N_xRegion.x/2 + 1, N_xRegion.y, 8)
 //xy is transposed
 //Complex kernels : this is a x shifted demag version using kernel symmetries, which accumulates in output, but ifft not performed yet
 __global__ void cu_MultiDemag_ConvProd_q2D_8_transpose_xy_xshifted(
 	cuVEC<cuReIm3>& Kdiag, cuVEC<cuReIm3>& Kodiag,
 	cuBComplex* cuSx_in, cuBComplex* cuSy_in, cuBComplex* cuSz_in,
 	cuBComplex* cuSx_out, cuBComplex* cuSy_out, cuBComplex* cuSz_out,
-	cuSZ3& N)
+	cuSZ3& N_xRegion, cuSZ3& n)
 {
 	//x shifted for 3D : can use kernels of reduced dimensions but must be complex
 	//
@@ -3731,11 +3757,11 @@ __global__ void cu_MultiDemag_ConvProd_q2D_8_transpose_xy_xshifted(
 
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-	//N.z = 8, and this kernel was called with (N.x/2 + 1) * N.y points: handle all z points in one go
-	int planecount = (N.x / 2 + 1) * N.y;
+	//N_xRegion.z = 8, and this kernel was called with (N_xRegion.x/2 + 1) * N_xRegion.y points: handle all z points in one go
+	int planecount = N_xRegion.x * N_xRegion.y;
 
-	//kernels packed into planes of (N.y / 2 + 1) * (N.x / 2 + 1) size
-	int kerplanecount = (N.x / 2 + 1) * (N.y / 2 + 1);
+	//kernels packed into planes of (N_xRegion.y / 2 + 1) * N_xRegion.x size
+	int kerplanecount = N_xRegion.x * (N_xRegion.y / 2 + 1);
 
 	if (idx < planecount) {
 
@@ -3745,7 +3771,7 @@ __global__ void cu_MultiDemag_ConvProd_q2D_8_transpose_xy_xshifted(
 		cuReIm3 x0 = cuReIm3(cuSx_in[idx], cuSy_in[idx], cuSz_in[idx]);
 		cuReIm3 x1 = cuReIm3(cuSx_in[idx + planecount], cuSy_in[idx + planecount], cuSz_in[idx + planecount]);
 		cuReIm3 x2 = cuReIm3(cuSx_in[idx + 2 * planecount], cuSy_in[idx + 2 * planecount], cuSz_in[idx + 2 * planecount]);
-		cuReIm3 x3 = cuReIm3(cuSx_in[idx + 3 * planecount], cuSy_in[idx + 3 * planecount], cuSz_in[idx + 3 * planecount]);
+		cuReIm3 x3 = (n.z > 3 ? cuReIm3(cuSx_in[idx + 3 * planecount], cuSy_in[idx + 3 * planecount], cuSz_in[idx + 3 * planecount]) : cuReIm3());
 
 		//Radix-4 step
 		cuReIm3 X0 = x0 + x2;
@@ -3780,12 +3806,12 @@ __global__ void cu_MultiDemag_ConvProd_q2D_8_transpose_xy_xshifted(
 
 		cuReIm3 F0, F1, F2, F3, F4, F5, F6, F7;
 
-		int i = idx % N.y;
-		int j = (idx / N.y) % (N.x / 2 + 1);
+		int i = idx % N_xRegion.y;
+		int j = (idx / N_xRegion.y) % N_xRegion.x;
 
-		if (i <= N.y / 2) {
+		if (i <= N_xRegion.y / 2) {
 
-			int ker_baseidx = i + j * (N.y / 2 + 1);
+			int ker_baseidx = i + j * (N_xRegion.y / 2 + 1);
 
 			//lower z, lower y
 			F0.x = (Kdiag[ker_baseidx].x * X0.x) + (Kodiag[ker_baseidx].x * X0.y) + (Kodiag[ker_baseidx].y * X0.z);
@@ -3823,7 +3849,7 @@ __global__ void cu_MultiDemag_ConvProd_q2D_8_transpose_xy_xshifted(
 		}
 		else {
 
-			int ker_baseidx = (N.y - i) + j * (N.y / 2 + 1);
+			int ker_baseidx = (N_xRegion.y - i) + j * (N_xRegion.y / 2 + 1);
 
 			//lower z, upper y
 			F0.x = (Kdiag[ker_baseidx].x * X0.x) - (Kodiag[ker_baseidx].x * X0.y) + (Kodiag[ker_baseidx].y * X0.z);
@@ -3898,14 +3924,14 @@ __global__ void cu_MultiDemag_ConvProd_q2D_8_transpose_xy_xshifted(
 	}
 }
 
-//N = (N.x/2 + 1, N.y, 16)
+//N = (N_xRegion.x/2 + 1, N_xRegion.y, 16)
 //xy is transposed
 //Complex kernels : this is a x shifted demag version using kernel symmetries, which accumulates in output, but ifft not performed yet
 __global__ void cu_MultiDemag_ConvProd_q2D_16_transpose_xy_xshifted(
 	cuVEC<cuReIm3>& Kdiag, cuVEC<cuReIm3>& Kodiag,
 	cuBComplex* cuSx_in, cuBComplex* cuSy_in, cuBComplex* cuSz_in,
 	cuBComplex* cuSx_out, cuBComplex* cuSy_out, cuBComplex* cuSz_out,
-	cuSZ3& N)
+	cuSZ3& N_xRegion, cuSZ3& n)
 {
 	//x shifted for 3D : can use kernels of reduced dimensions but must be complex
 	//
@@ -3917,11 +3943,11 @@ __global__ void cu_MultiDemag_ConvProd_q2D_16_transpose_xy_xshifted(
 
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-	//N.z = 16, and this kernel was called with (N.x/2 + 1) * N.y points: handle all z points in one go
-	int planecount = (N.x / 2 + 1) * N.y;
+	//N_xRegion.z = 16, and this kernel was called with (N_xRegion.x/2 + 1) * N_xRegion.y points: handle all z points in one go
+	int planecount = N_xRegion.x * N_xRegion.y;
 
-	//kernels packed into planes of (N.y / 2 + 1) * (N.x / 2 + 1) size
-	int kerplanecount = (N.x / 2 + 1) * (N.y / 2 + 1);
+	//kernels packed into planes of (N_xRegion.y / 2 + 1) * N_xRegion.x size
+	int kerplanecount = N_xRegion.x * (N_xRegion.y / 2 + 1);
 
 	if (idx < planecount) {
 
@@ -3931,9 +3957,9 @@ __global__ void cu_MultiDemag_ConvProd_q2D_16_transpose_xy_xshifted(
 		cuReIm3 x2 = cuReIm3(cuSx_in[idx + 2 * planecount], cuSy_in[idx + 2 * planecount], cuSz_in[idx + 2 * planecount]);
 		cuReIm3 x3 = cuReIm3(cuSx_in[idx + 3 * planecount], cuSy_in[idx + 3 * planecount], cuSz_in[idx + 3 * planecount]);
 		cuReIm3 x4 = cuReIm3(cuSx_in[idx + 4 * planecount], cuSy_in[idx + 4 * planecount], cuSz_in[idx + 4 * planecount]);
-		cuReIm3 x5 = cuReIm3(cuSx_in[idx + 5 * planecount], cuSy_in[idx + 5 * planecount], cuSz_in[idx + 5 * planecount]);
-		cuReIm3 x6 = cuReIm3(cuSx_in[idx + 6 * planecount], cuSy_in[idx + 6 * planecount], cuSz_in[idx + 6 * planecount]);
-		cuReIm3 x7 = cuReIm3(cuSx_in[idx + 7 * planecount], cuSy_in[idx + 7 * planecount], cuSz_in[idx + 7 * planecount]);
+		cuReIm3 x5 = (n.z > 5 ? cuReIm3(cuSx_in[idx + 5 * planecount], cuSy_in[idx + 5 * planecount], cuSz_in[idx + 5 * planecount]) : cuReIm3());
+		cuReIm3 x6 = (n.z > 6 ? cuReIm3(cuSx_in[idx + 6 * planecount], cuSy_in[idx + 6 * planecount], cuSz_in[idx + 6 * planecount]) : cuReIm3());
+		cuReIm3 x7 = (n.z > 7 ? cuReIm3(cuSx_in[idx + 7 * planecount], cuSy_in[idx + 7 * planecount], cuSz_in[idx + 7 * planecount]) : cuReIm3());
 
 #define a	(cuBReal)9.238795325113E-01
 #define b	(cuBReal)3.826834323651E-01
@@ -4006,12 +4032,12 @@ __global__ void cu_MultiDemag_ConvProd_q2D_16_transpose_xy_xshifted(
 
 		cuReIm3 F0, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12, F13, F14, F15;
 
-		int i = idx % N.y;
-		int j = (idx / N.y) % (N.x / 2 + 1);
+		int i = idx % N_xRegion.y;
+		int j = (idx / N_xRegion.y) % N_xRegion.x;
 
-		if (i <= N.y / 2) {
+		if (i <= N_xRegion.y / 2) {
 
-			int ker_baseidx = i + j * (N.y / 2 + 1);
+			int ker_baseidx = i + j * (N_xRegion.y / 2 + 1);
 
 			//lower z, lower y
 			F0.x = (Kdiag[ker_baseidx].x * X0.x) + (Kodiag[ker_baseidx].x * X0.y) + (Kodiag[ker_baseidx].y * X0.z);
@@ -4081,7 +4107,7 @@ __global__ void cu_MultiDemag_ConvProd_q2D_16_transpose_xy_xshifted(
 		}
 		else {
 
-			int ker_baseidx = (N.y - i) + j * (N.y / 2 + 1);
+			int ker_baseidx = (N_xRegion.y - i) + j * (N_xRegion.y / 2 + 1);
 
 			//lower z, upper y
 			F0.x = (Kdiag[ker_baseidx].x * X0.x) - (Kodiag[ker_baseidx].x * X0.y) + (Kodiag[ker_baseidx].y * X0.z);
@@ -4222,14 +4248,14 @@ __global__ void cu_MultiDemag_ConvProd_q2D_16_transpose_xy_xshifted(
 	}
 }
 
-//N = (N.x/2 + 1, N.y, 32)
+//N = (N_xRegion.x/2 + 1, N_xRegion.y, 32)
 //xy is transposed
 //Complex kernels : this is a x shifted demag version using kernel symmetries, which accumulates in output, but ifft not performed yet
 __global__ void cu_MultiDemag_ConvProd_q2D_32_transpose_xy_xshifted(
 	cuVEC<cuReIm3>& Kdiag, cuVEC<cuReIm3>& Kodiag,
 	cuBComplex* cuSx_in, cuBComplex* cuSy_in, cuBComplex* cuSz_in,
 	cuBComplex* cuSx_out, cuBComplex* cuSy_out, cuBComplex* cuSz_out,
-	cuSZ3& N)
+	cuSZ3& N_xRegion, cuSZ3& n)
 {
 	//x shifted for 3D : can use kernels of reduced dimensions but must be complex
 	//
@@ -4241,16 +4267,32 @@ __global__ void cu_MultiDemag_ConvProd_q2D_32_transpose_xy_xshifted(
 
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-	//N.z = 32, and this kernel was called with (N.x/2 + 1) * N.y points: handle all z points in one go
-	int planecount = (N.x / 2 + 1) * N.y;
+	//N_xRegion.z = 32, and this kernel was called with (N_xRegion.x/2 + 1) * N_xRegion.y points: handle all z points in one go
+	int planecount = N_xRegion.x * N_xRegion.y;
 
-	//kernels packed into planes of (N.y / 2 + 1) * (N.x / 2 + 1) size
-	int kerplanecount = (N.x / 2 + 1) * (N.y / 2 + 1);
+	//kernels packed into planes of (N_xRegion.y / 2 + 1) * N_xRegion.x size
+	int kerplanecount = N_xRegion.x * (N_xRegion.y / 2 + 1);
 
 	if (idx < planecount) {
 
 		//input data
-#define x(n)	(cuReIm3(cuSx_in[idx + (n) * planecount], cuSy_in[idx + (n) * planecount], cuSz_in[idx + (n) * planecount]))
+		__shared__ cuReIm3 x[16];
+		x[0] = cuReIm3(cuSx_in[idx + 0 * planecount], cuSy_in[idx + 0 * planecount], cuSz_in[idx + 0 * planecount]);
+		x[1] = cuReIm3(cuSx_in[idx + 1 * planecount], cuSy_in[idx + 1 * planecount], cuSz_in[idx + 1 * planecount]);
+		x[2] = cuReIm3(cuSx_in[idx + 2 * planecount], cuSy_in[idx + 2 * planecount], cuSz_in[idx + 2 * planecount]);
+		x[3] = cuReIm3(cuSx_in[idx + 3 * planecount], cuSy_in[idx + 3 * planecount], cuSz_in[idx + 3 * planecount]);
+		x[4] = cuReIm3(cuSx_in[idx + 4 * planecount], cuSy_in[idx + 4 * planecount], cuSz_in[idx + 4 * planecount]);
+		x[5] = cuReIm3(cuSx_in[idx + 5 * planecount], cuSy_in[idx + 5 * planecount], cuSz_in[idx + 5 * planecount]);
+		x[6] = cuReIm3(cuSx_in[idx + 6 * planecount], cuSy_in[idx + 6 * planecount], cuSz_in[idx + 6 * planecount]);
+		x[7] = cuReIm3(cuSx_in[idx + 7 * planecount], cuSy_in[idx + 7 * planecount], cuSz_in[idx + 7 * planecount]);
+		x[8] = cuReIm3(cuSx_in[idx + 8 * planecount], cuSy_in[idx + 8 * planecount], cuSz_in[idx + 8 * planecount]);
+		x[9] = (n.z > 9 ? cuReIm3(cuSx_in[idx + 9 * planecount], cuSy_in[idx + 9 * planecount], cuSz_in[idx + 9 * planecount]) : cuReIm3());
+		x[10] = (n.z > 10 ? cuReIm3(cuSx_in[idx + 10 * planecount], cuSy_in[idx + 10 * planecount], cuSz_in[idx + 10 * planecount]) : cuReIm3());
+		x[11] = (n.z > 11 ? cuReIm3(cuSx_in[idx + 11 * planecount], cuSy_in[idx + 11 * planecount], cuSz_in[idx + 11 * planecount]) : cuReIm3());
+		x[12] = (n.z > 12 ? cuReIm3(cuSx_in[idx + 12 * planecount], cuSy_in[idx + 12 * planecount], cuSz_in[idx + 12 * planecount]) : cuReIm3());
+		x[13] = (n.z > 13 ? cuReIm3(cuSx_in[idx + 13 * planecount], cuSy_in[idx + 13 * planecount], cuSz_in[idx + 13 * planecount]) : cuReIm3());
+		x[14] = (n.z > 14 ? cuReIm3(cuSx_in[idx + 14 * planecount], cuSy_in[idx + 14 * planecount], cuSz_in[idx + 14 * planecount]) : cuReIm3());
+		x[15] = (n.z > 15 ? cuReIm3(cuSx_in[idx + 15 * planecount], cuSy_in[idx + 15 * planecount], cuSz_in[idx + 15 * planecount]) : cuReIm3());
 
 		//no performance gain to be had from setting these as X0, X1, ... etc.
 		//unrolling loops does make a slight difference though - probably last case for which you want to unroll loops
@@ -4269,54 +4311,52 @@ __global__ void cu_MultiDemag_ConvProd_q2D_32_transpose_xy_xshifted(
 #define g	(cuBReal)0.707106781186548
 
 		//j = 0
-		X[0] = (x(0) + x(8));
-		X[8] = (x(0) - x(8));
-		X[16] = (x(0) - !x(8));
-		X[24] = (x(0) + !x(8));
+		X[0] = (x[0] + x[8]);
+		X[8] = (x[0] - x[8]);
+		X[16] = (x[0] - !x[8]);
+		X[24] = (x[0] + !x[8]);
 
 		//j = 1
-		X[1] = (x(1) + x(9));
-		X[9] = (x(1) - x(9)) * cuReIm(c, -d);
-		X[17] = (x(1) - !x(9)) * cuReIm(a, -b);
-		X[25] = (x(1) + !x(9)) * cuReIm(e, -f);
+		X[1] = (x[1] + x[9]);
+		X[9] = (x[1] - x[9]) * cuReIm(c, -d);
+		X[17] = (x[1] - !x[9]) * cuReIm(a, -b);
+		X[25] = (x[1] + !x[9]) * cuReIm(e, -f);
 
 		//j = 2
-		X[2] = (x(2) + x(10));
-		X[10] = (x(2) - x(10)) * cuReIm(g, -g);
-		X[18] = (x(2) - !x(10)) * cuReIm(c, -d);
-		X[26] = (x(2) + !x(10)) * cuReIm(d, -c);
+		X[2] = (x[2] + x[10]);
+		X[10] = (x[2] - x[10]) * cuReIm(g, -g);
+		X[18] = (x[2] - !x[10]) * cuReIm(c, -d);
+		X[26] = (x[2] + !x[10]) * cuReIm(d, -c);
 
 		//j = 3
-		X[3] = (x(3) + x(11));
-		X[11] = (x(3) - x(11)) * cuReIm(d, -c);
-		X[19] = (x(3) - !x(11)) * cuReIm(e, -f);
-		X[27] = (x(3) + !x(11)) * cuReIm(-b, -a);
+		X[3] = (x[3] + x[11]);
+		X[11] = (x[3] - x[11]) * cuReIm(d, -c);
+		X[19] = (x[3] - !x[11]) * cuReIm(e, -f);
+		X[27] = (x[3] + !x[11]) * cuReIm(-b, -a);
 
 		//j = 4
-		X[4] = (x(4) + x(12));
-		X[12] = !(x(12) - x(4));
-		X[20] = (x(4) - !x(12)) * cuReIm(g, -g);
-		X[28] = (x(4) + !x(12)) * cuReIm(-g, -g);
+		X[4] = (x[4] + x[12]);
+		X[12] = !(x[12] - x[4]);
+		X[20] = (x[4] - !x[12]) * cuReIm(g, -g);
+		X[28] = (x[4] + !x[12]) * cuReIm(-g, -g);
 
 		//j = 5
-		X[5] = (x(5) + x(13));
-		X[13] = (x(5) - x(13)) * cuReIm(-d, -c);
-		X[21] = (x(5) - !x(13)) * cuReIm(f, -e);
-		X[29] = (x(5) + !x(13)) * cuReIm(-a, -b);
+		X[5] = (x[5] + x[13]);
+		X[13] = (x[5] - x[13]) * cuReIm(-d, -c);
+		X[21] = (x[5] - !x[13]) * cuReIm(f, -e);
+		X[29] = (x[5] + !x[13]) * cuReIm(-a, -b);
 
 		//j = 6
-		X[6] = (x(6) + x(14));
-		X[14] = (x(6) - x(14)) * cuReIm(-g, -g);
-		X[22] = (x(6) - !x(14)) * cuReIm(d, -c);
-		X[30] = (x(6) + !x(14)) * cuReIm(-c, d);
+		X[6] = (x[6] + x[14]);
+		X[14] = (x[6] - x[14]) * cuReIm(-g, -g);
+		X[22] = (x[6] - !x[14]) * cuReIm(d, -c);
+		X[30] = (x[6] + !x[14]) * cuReIm(-c, d);
 
 		//j = 7
-		X[7] = (x(7) + x(15));
-		X[15] = (x(7) - x(15)) * cuReIm(-c, -d);
-		X[23] = (x(7) - !x(15)) * cuReIm(b, -a);
-		X[31] = (x(7) + !x(15)) * cuReIm(-f, e);
-
-#undef x
+		X[7] = (x[7] + x[15]);
+		X[15] = (x[7] - x[15]) * cuReIm(-c, -d);
+		X[23] = (x[7] - !x[15]) * cuReIm(b, -a);
+		X[31] = (x[7] + !x[15]) * cuReIm(-f, e);
 
 		//final radix4 stage
 
@@ -4470,14 +4510,14 @@ __global__ void cu_MultiDemag_ConvProd_q2D_32_transpose_xy_xshifted(
 		//output is shuffled now, i.e. it is ordered as:
 		//0, 16, 8, 24, 4, 20, 12, 28, 2, 18, 10, 26, 6, 22, 14, 30, 1, 17, 9, 25, 5, 21, 13, 29, 3, 19, 11, 27, 7, 23, 15, 31
 
-		int i = idx % N.y;
-		int j = (idx / N.y) % (N.x / 2 + 1);
+		int i = idx % N_xRegion.y;
+		int j = (idx / N_xRegion.y) % N_xRegion.x;
 
 		cuReIm3 F[32];
 
-		if (i <= N.y / 2) {
+		if (i <= N_xRegion.y / 2) {
 
-			int ker_baseidx = i + j * (N.y / 2 + 1);
+			int ker_baseidx = i + j * (N_xRegion.y / 2 + 1);
 
 			//lower z, lower y
 			F[0].x = (Kdiag[ker_baseidx].x * X[0].x) + (Kodiag[ker_baseidx].x * X[0].y) + (Kodiag[ker_baseidx].y * X[0].z);
@@ -4611,7 +4651,7 @@ __global__ void cu_MultiDemag_ConvProd_q2D_32_transpose_xy_xshifted(
 		}
 		else {
 
-			int ker_baseidx = (N.y - i) + j * (N.y / 2 + 1);
+			int ker_baseidx = (N_xRegion.y - i) + j * (N_xRegion.y / 2 + 1);
 
 			//lower z, upper y
 			F[0].x = (Kdiag[ker_baseidx].x * X[0].x) - (Kodiag[ker_baseidx].x * X[0].y) + (Kodiag[ker_baseidx].y * X[0].z);
@@ -4892,24 +4932,24 @@ __global__ void cu_MultiDemag_ConvProd_q2D_32_transpose_xy_xshifted(
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////// Q2D - REGULAR
 
-//N = (N.x/2 + 1, N.y, 4)
+//N = (N_xRegion.x/2 + 1, N_xRegion.y, 4)
 //xy is transposed
 //Complex kernels : this is a inter-mesh demag version which accumulates into output, but ifft not performed yet
 __global__ void cu_MultiDemag_ConvProd_q2D_4_transpose_xy_Regular(
 	cuVEC<cuReIm3>& Kdiag, cuVEC<cuReIm3>& Kodiag,
 	cuBComplex* cuSx_in, cuBComplex* cuSy_in, cuBComplex* cuSz_in,
 	cuBComplex* cuSx_out, cuBComplex* cuSy_out, cuBComplex* cuSz_out,
-	cuSZ3& N)
+	cuSZ3& N_xRegion)
 {
 	//Regular version : no kernel symmetries
 
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-	//N.z = 4, and this kernel was called with (N.x/2 + 1) * N.y points: handle all z points in one go
-	int planecount = (N.x / 2 + 1) * N.y;
+	//N_xRegion.z = 4, and this kernel was called with (N_xRegion.x/2 + 1) * N_xRegion.y points: handle all z points in one go
+	int planecount = N_xRegion.x * N_xRegion.y;
 
-	//kernels packed into planes of (N.x / 2 + 1)*N.y size
-	int kerplanecount = (N.x / 2 + 1) * N.y;
+	//kernels packed into planes of N_xRegion.x*N_xRegion.y size
+	int kerplanecount = N_xRegion.x * N_xRegion.y;
 
 	if (idx < planecount) {
 
@@ -4966,22 +5006,22 @@ __global__ void cu_MultiDemag_ConvProd_q2D_4_transpose_xy_Regular(
 	}
 }
 
-//N = (N.x/2 + 1, N.y, 8)
+//N = (N_xRegion.x/2 + 1, N_xRegion.y, 8)
 //xy is transposed
 //Complex kernels : this is a inter-mesh demag version which accumulates into output, but ifft not performed yet
 __global__ void cu_MultiDemag_ConvProd_q2D_8_transpose_xy_Regular(
 	cuVEC<cuReIm3>& Kdiag, cuVEC<cuReIm3>& Kodiag,
 	cuBComplex* cuSx_in, cuBComplex* cuSy_in, cuBComplex* cuSz_in,
 	cuBComplex* cuSx_out, cuBComplex* cuSy_out, cuBComplex* cuSz_out,
-	cuSZ3& N)
+	cuSZ3& N_xRegion, cuSZ3& n)
 {
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-	//N.z = 8, and this kernel was called with (N.x/2 + 1) * N.y points: handle all z points in one go
-	int planecount = (N.x / 2 + 1) * N.y;
+	//N_xRegion.z = 8, and this kernel was called with (N_xRegion.x/2 + 1) * N_xRegion.y points: handle all z points in one go
+	int planecount = N_xRegion.x * N_xRegion.y;
 
-	//kernels packed into planes of (N.x / 2 + 1)*N.y size
-	int kerplanecount = (N.x / 2 + 1) * N.y;
+	//kernels packed into planes of N_xRegion.x*N_xRegion.y size
+	int kerplanecount = N_xRegion.x * N_xRegion.y;
 
 	if (idx < planecount) {
 
@@ -4991,7 +5031,7 @@ __global__ void cu_MultiDemag_ConvProd_q2D_8_transpose_xy_Regular(
 		cuReIm3 x0 = cuReIm3(cuSx_in[idx], cuSy_in[idx], cuSz_in[idx]);
 		cuReIm3 x1 = cuReIm3(cuSx_in[idx + planecount], cuSy_in[idx + planecount], cuSz_in[idx + planecount]);
 		cuReIm3 x2 = cuReIm3(cuSx_in[idx + 2 * planecount], cuSy_in[idx + 2 * planecount], cuSz_in[idx + 2 * planecount]);
-		cuReIm3 x3 = cuReIm3(cuSx_in[idx + 3 * planecount], cuSy_in[idx + 3 * planecount], cuSz_in[idx + 3 * planecount]);
+		cuReIm3 x3 = (n.z > 3 ? cuReIm3(cuSx_in[idx + 3 * planecount], cuSy_in[idx + 3 * planecount], cuSz_in[idx + 3 * planecount]) : cuReIm3());
 
 		//Radix-4 step
 		cuReIm3 X0 = x0 + x2;
@@ -5098,22 +5138,22 @@ __global__ void cu_MultiDemag_ConvProd_q2D_8_transpose_xy_Regular(
 	}
 }
 
-//N = (N.x/2 + 1, N.y, 16)
+//N = (N_xRegion.x/2 + 1, N_xRegion.y, 16)
 //xy is transposed
 //Complex kernels : this is a inter-mesh demag version which accumulates into output, but ifft not performed yet
 __global__ void cu_MultiDemag_ConvProd_q2D_16_transpose_xy_Regular(
 	cuVEC<cuReIm3>& Kdiag, cuVEC<cuReIm3>& Kodiag,
 	cuBComplex* cuSx_in, cuBComplex* cuSy_in, cuBComplex* cuSz_in,
 	cuBComplex* cuSx_out, cuBComplex* cuSy_out, cuBComplex* cuSz_out,
-	cuSZ3& N)
+	cuSZ3& N_xRegion, cuSZ3& n)
 {
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-	//N.z = 16, and this kernel was called with (N.x/2 + 1) * N.y points: handle all z points in one go
-	int planecount = (N.x / 2 + 1) * N.y;
+	//N_xRegion.z = 16, and this kernel was called with (N_xRegion.x/2 + 1) * N_xRegion.y points: handle all z points in one go
+	int planecount = N_xRegion.x * N_xRegion.y;
 
-	//kernels packed into planes of (N.x / 2 + 1)*N.y size
-	int kerplanecount = (N.x / 2 + 1) * N.y;
+	//kernels packed into planes of N_xRegion.x*N_xRegion.y size
+	int kerplanecount = N_xRegion.x * N_xRegion.y;
 
 	if (idx < planecount) {
 
@@ -5123,9 +5163,9 @@ __global__ void cu_MultiDemag_ConvProd_q2D_16_transpose_xy_Regular(
 		cuReIm3 x2 = cuReIm3(cuSx_in[idx + 2 * planecount], cuSy_in[idx + 2 * planecount], cuSz_in[idx + 2 * planecount]);
 		cuReIm3 x3 = cuReIm3(cuSx_in[idx + 3 * planecount], cuSy_in[idx + 3 * planecount], cuSz_in[idx + 3 * planecount]);
 		cuReIm3 x4 = cuReIm3(cuSx_in[idx + 4 * planecount], cuSy_in[idx + 4 * planecount], cuSz_in[idx + 4 * planecount]);
-		cuReIm3 x5 = cuReIm3(cuSx_in[idx + 5 * planecount], cuSy_in[idx + 5 * planecount], cuSz_in[idx + 5 * planecount]);
-		cuReIm3 x6 = cuReIm3(cuSx_in[idx + 6 * planecount], cuSy_in[idx + 6 * planecount], cuSz_in[idx + 6 * planecount]);
-		cuReIm3 x7 = cuReIm3(cuSx_in[idx + 7 * planecount], cuSy_in[idx + 7 * planecount], cuSz_in[idx + 7 * planecount]);
+		cuReIm3 x5 = (n.z > 5 ? cuReIm3(cuSx_in[idx + 5 * planecount], cuSy_in[idx + 5 * planecount], cuSz_in[idx + 5 * planecount]) : cuReIm3());
+		cuReIm3 x6 = (n.z > 6 ? cuReIm3(cuSx_in[idx + 6 * planecount], cuSy_in[idx + 6 * planecount], cuSz_in[idx + 6 * planecount]) : cuReIm3());
+		cuReIm3 x7 = (n.z > 7 ? cuReIm3(cuSx_in[idx + 7 * planecount], cuSy_in[idx + 7 * planecount], cuSz_in[idx + 7 * planecount]) : cuReIm3());
 
 #define a	(cuBReal)9.238795325113E-01
 #define b	(cuBReal)3.826834323651E-01
@@ -5336,27 +5376,43 @@ __global__ void cu_MultiDemag_ConvProd_q2D_16_transpose_xy_Regular(
 	}
 }
 
-//N = (N.x/2 + 1, N.y, 32)
+//N = (N_xRegion.x/2 + 1, N_xRegion.y, 32)
 //xy is transposed
 //Complex kernels : this is a inter-mesh demag version which accumulates into output, but ifft not performed yet
 __global__ void cu_MultiDemag_ConvProd_q2D_32_transpose_xy_Regular(
 	cuVEC<cuReIm3>& Kdiag, cuVEC<cuReIm3>& Kodiag,
 	cuBComplex* cuSx_in, cuBComplex* cuSy_in, cuBComplex* cuSz_in,
 	cuBComplex* cuSx_out, cuBComplex* cuSy_out, cuBComplex* cuSz_out,
-	cuSZ3& N)
+	cuSZ3& N_xRegion, cuSZ3& n)
 {
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-	//N.z = 32, and this kernel was called with (N.x/2 + 1) * N.y points: handle all z points in one go
-	int planecount = (N.x / 2 + 1) * N.y;
+	//N_xRegion.z = 32, and this kernel was called with (N_xRegion.x/2 + 1) * N_xRegion.y points: handle all z points in one go
+	int planecount = N_xRegion.x * N_xRegion.y;
 
-	//kernels packed into planes of (N.x / 2 + 1)*N.y size
-	int kerplanecount = (N.x / 2 + 1) * N.y;
+	//kernels packed into planes of N_xRegion.x*N_xRegion.y size
+	int kerplanecount = N_xRegion.x * N_xRegion.y;
 
 	if (idx < planecount) {
 
 		//input data
-#define x(n)	(cuReIm3(cuSx_in[idx + (n) * planecount], cuSy_in[idx + (n) * planecount], cuSz_in[idx + (n) * planecount]))
+		__shared__ cuReIm3 x[16];
+		x[0] = cuReIm3(cuSx_in[idx + 0 * planecount], cuSy_in[idx + 0 * planecount], cuSz_in[idx + 0 * planecount]);
+		x[1] = cuReIm3(cuSx_in[idx + 1 * planecount], cuSy_in[idx + 1 * planecount], cuSz_in[idx + 1 * planecount]);
+		x[2] = cuReIm3(cuSx_in[idx + 2 * planecount], cuSy_in[idx + 2 * planecount], cuSz_in[idx + 2 * planecount]);
+		x[3] = cuReIm3(cuSx_in[idx + 3 * planecount], cuSy_in[idx + 3 * planecount], cuSz_in[idx + 3 * planecount]);
+		x[4] = cuReIm3(cuSx_in[idx + 4 * planecount], cuSy_in[idx + 4 * planecount], cuSz_in[idx + 4 * planecount]);
+		x[5] = cuReIm3(cuSx_in[idx + 5 * planecount], cuSy_in[idx + 5 * planecount], cuSz_in[idx + 5 * planecount]);
+		x[6] = cuReIm3(cuSx_in[idx + 6 * planecount], cuSy_in[idx + 6 * planecount], cuSz_in[idx + 6 * planecount]);
+		x[7] = cuReIm3(cuSx_in[idx + 7 * planecount], cuSy_in[idx + 7 * planecount], cuSz_in[idx + 7 * planecount]);
+		x[8] = cuReIm3(cuSx_in[idx + 8 * planecount], cuSy_in[idx + 8 * planecount], cuSz_in[idx + 8 * planecount]);
+		x[9] = (n.z > 9 ? cuReIm3(cuSx_in[idx + 9 * planecount], cuSy_in[idx + 9 * planecount], cuSz_in[idx + 9 * planecount]) : cuReIm3());
+		x[10] = (n.z > 10 ? cuReIm3(cuSx_in[idx + 10 * planecount], cuSy_in[idx + 10 * planecount], cuSz_in[idx + 10 * planecount]) : cuReIm3());
+		x[11] = (n.z > 11 ? cuReIm3(cuSx_in[idx + 11 * planecount], cuSy_in[idx + 11 * planecount], cuSz_in[idx + 11 * planecount]) : cuReIm3());
+		x[12] = (n.z > 12 ? cuReIm3(cuSx_in[idx + 12 * planecount], cuSy_in[idx + 12 * planecount], cuSz_in[idx + 12 * planecount]) : cuReIm3());
+		x[13] = (n.z > 13 ? cuReIm3(cuSx_in[idx + 13 * planecount], cuSy_in[idx + 13 * planecount], cuSz_in[idx + 13 * planecount]) : cuReIm3());
+		x[14] = (n.z > 14 ? cuReIm3(cuSx_in[idx + 14 * planecount], cuSy_in[idx + 14 * planecount], cuSz_in[idx + 14 * planecount]) : cuReIm3());
+		x[15] = (n.z > 15 ? cuReIm3(cuSx_in[idx + 15 * planecount], cuSy_in[idx + 15 * planecount], cuSz_in[idx + 15 * planecount]) : cuReIm3());
 
 		//no performance gain to be had from setting these as X0, X1, ... etc.
 		//unrolling loops does make a slight difference though - probably last case for which you want to unroll loops
@@ -5375,54 +5431,52 @@ __global__ void cu_MultiDemag_ConvProd_q2D_32_transpose_xy_Regular(
 #define g	(cuBReal)0.707106781186548
 
 		//j = 0
-		X[0] = (x(0) + x(8));
-		X[8] = (x(0) - x(8));
-		X[16] = (x(0) - !x(8));
-		X[24] = (x(0) + !x(8));
+		X[0] = (x[0] + x[8]);
+		X[8] = (x[0] - x[8]);
+		X[16] = (x[0] - !x[8]);
+		X[24] = (x[0] + !x[8]);
 
 		//j = 1
-		X[1] = (x(1) + x(9));
-		X[9] = (x(1) - x(9)) * cuReIm(c, -d);
-		X[17] = (x(1) - !x(9)) * cuReIm(a, -b);
-		X[25] = (x(1) + !x(9)) * cuReIm(e, -f);
+		X[1] = (x[1] + x[9]);
+		X[9] = (x[1] - x[9]) * cuReIm(c, -d);
+		X[17] = (x[1] - !x[9]) * cuReIm(a, -b);
+		X[25] = (x[1] + !x[9]) * cuReIm(e, -f);
 
 		//j = 2
-		X[2] = (x(2) + x(10));
-		X[10] = (x(2) - x(10)) * cuReIm(g, -g);
-		X[18] = (x(2) - !x(10)) * cuReIm(c, -d);
-		X[26] = (x(2) + !x(10)) * cuReIm(d, -c);
+		X[2] = (x[2] + x[10]);
+		X[10] = (x[2] - x[10]) * cuReIm(g, -g);
+		X[18] = (x[2] - !x[10]) * cuReIm(c, -d);
+		X[26] = (x[2] + !x[10]) * cuReIm(d, -c);
 
 		//j = 3
-		X[3] = (x(3) + x(11));
-		X[11] = (x(3) - x(11)) * cuReIm(d, -c);
-		X[19] = (x(3) - !x(11)) * cuReIm(e, -f);
-		X[27] = (x(3) + !x(11)) * cuReIm(-b, -a);
+		X[3] = (x[3] + x[11]);
+		X[11] = (x[3] - x[11]) * cuReIm(d, -c);
+		X[19] = (x[3] - !x[11]) * cuReIm(e, -f);
+		X[27] = (x[3] + !x[11]) * cuReIm(-b, -a);
 
 		//j = 4
-		X[4] = (x(4) + x(12));
-		X[12] = !(x(12) - x(4));
-		X[20] = (x(4) - !x(12)) * cuReIm(g, -g);
-		X[28] = (x(4) + !x(12)) * cuReIm(-g, -g);
+		X[4] = (x[4] + x[12]);
+		X[12] = !(x[12] - x[4]);
+		X[20] = (x[4] - !x[12]) * cuReIm(g, -g);
+		X[28] = (x[4] + !x[12]) * cuReIm(-g, -g);
 
 		//j = 5
-		X[5] = (x(5) + x(13));
-		X[13] = (x(5) - x(13)) * cuReIm(-d, -c);
-		X[21] = (x(5) - !x(13)) * cuReIm(f, -e);
-		X[29] = (x(5) + !x(13)) * cuReIm(-a, -b);
+		X[5] = (x[5] + x[13]);
+		X[13] = (x[5] - x[13]) * cuReIm(-d, -c);
+		X[21] = (x[5] - !x[13]) * cuReIm(f, -e);
+		X[29] = (x[5] + !x[13]) * cuReIm(-a, -b);
 
 		//j = 6
-		X[6] = (x(6) + x(14));
-		X[14] = (x(6) - x(14)) * cuReIm(-g, -g);
-		X[22] = (x(6) - !x(14)) * cuReIm(d, -c);
-		X[30] = (x(6) + !x(14)) * cuReIm(-c, d);
+		X[6] = (x[6] + x[14]);
+		X[14] = (x[6] - x[14]) * cuReIm(-g, -g);
+		X[22] = (x[6] - !x[14]) * cuReIm(d, -c);
+		X[30] = (x[6] + !x[14]) * cuReIm(-c, d);
 
 		//j = 7
-		X[7] = (x(7) + x(15));
-		X[15] = (x(7) - x(15)) * cuReIm(-c, -d);
-		X[23] = (x(7) - !x(15)) * cuReIm(b, -a);
-		X[31] = (x(7) + !x(15)) * cuReIm(-f, e);
-
-#undef x
+		X[7] = (x[7] + x[15]);
+		X[15] = (x[7] - x[15]) * cuReIm(-c, -d);
+		X[23] = (x[7] - !x[15]) * cuReIm(b, -a);
+		X[31] = (x[7] + !x[15]) * cuReIm(-f, e);
 
 		//final radix4 stage
 
@@ -5848,16 +5902,16 @@ __global__ void cu_MultiDemag_ConvProd_q2D_32_transpose_xy_Regular(
 	}
 }
 
-//N = (N.x/2 + 1, N.y, 4)
+//N = (N_xRegion.x/2 + 1, N_xRegion.y, 4)
 //IFFT part
 __global__ void cu_MultiDemag_ConvProd_q2D_4_IFFT(
 	cuBComplex* cuSx, cuBComplex* cuSy, cuBComplex* cuSz,
-	cuSZ3& N)
+	cuSZ3& N_xRegion)
 {
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-	//N.z = 4, and this kernel was called with (N.x/2 + 1) * N.y points: handle all z points in one go
-	int planecount = (N.x / 2 + 1) * N.y;
+	//N_xRegion.z = 4, and this kernel was called with (N_xRegion.x/2 + 1) * N_xRegion.y points: handle all z points in one go
+	int planecount = N_xRegion.x * N_xRegion.y;
 
 	if (idx < planecount) {
 
@@ -5882,16 +5936,16 @@ __global__ void cu_MultiDemag_ConvProd_q2D_4_IFFT(
 	}
 }
 
-//N = (N.x/2 + 1, N.y, 8)
+//N = (N_xRegion.x/2 + 1, N_xRegion.y, 8)
 //IFFT part
 __global__ void cu_MultiDemag_ConvProd_q2D_8_IFFT(
 	cuBComplex* cuSx, cuBComplex* cuSy, cuBComplex* cuSz,
-	cuSZ3& N)
+	cuSZ3& N_xRegion, cuSZ3& n)
 {
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-	//N.z = 8, and this kernel was called with (N.x/2 + 1) * N.y points: handle all z points in one go
-	int planecount = (N.x / 2 + 1) * N.y;
+	//N_xRegion.z = 8, and this kernel was called with (N_xRegion.x/2 + 1) * N_xRegion.y points: handle all z points in one go
+	int planecount = N_xRegion.x * N_xRegion.y;
 
 	if (idx < planecount) {
 
@@ -5951,24 +6005,26 @@ __global__ void cu_MultiDemag_ConvProd_q2D_8_IFFT(
 		cuSy[idx + 2 * planecount] = X2.y;
 		cuSz[idx + 2 * planecount] = X2.z;
 
-		cuSx[idx + 3 * planecount] = X3.x;
-		cuSy[idx + 3 * planecount] = X3.y;
-		cuSz[idx + 3 * planecount] = X3.z;
+		if (n.z > 3) {
+			cuSx[idx + 3 * planecount] = X3.x;
+			cuSy[idx + 3 * planecount] = X3.y;
+			cuSz[idx + 3 * planecount] = X3.z;
+		}
 
 #undef a
 	}
 }
 
-//N = (N.x/2 + 1, N.y, 16)
+//N = (N_xRegion.x/2 + 1, N_xRegion.y, 16)
 //IFFT part
 __global__ void cu_MultiDemag_ConvProd_q2D_16_IFFT(
 	cuBComplex* cuSx, cuBComplex* cuSy, cuBComplex* cuSz,
-	cuSZ3& N)
+	cuSZ3& N_xRegion, cuSZ3& n)
 {
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-	//N.z = 16, and this kernel was called with (N.x/2 + 1) * N.y points: handle all z points in one go
-	int planecount = (N.x / 2 + 1) * N.y;
+	//N_xRegion.z = 16, and this kernel was called with (N_xRegion.x/2 + 1) * N_xRegion.y points: handle all z points in one go
+	int planecount = N_xRegion.x * N_xRegion.y;
 
 	if (idx < planecount) {
 
@@ -6081,23 +6137,29 @@ __global__ void cu_MultiDemag_ConvProd_q2D_16_IFFT(
 		cuSx[idx + 1 * planecount] = X1.x;
 		cuSy[idx + 1 * planecount] = X1.y;
 		cuSz[idx + 1 * planecount] = X1.z;
-		cuSx[idx + 5 * planecount] = X5.x;
-		cuSy[idx + 5 * planecount] = X5.y;
-		cuSz[idx + 5 * planecount] = X5.z;
+		if (n.z > 5) {
+			cuSx[idx + 5 * planecount] = X5.x;
+			cuSy[idx + 5 * planecount] = X5.y;
+			cuSz[idx + 5 * planecount] = X5.z;
+		}
 
 		cuSx[idx + 2 * planecount] = X2.x;
 		cuSy[idx + 2 * planecount] = X2.y;
 		cuSz[idx + 2 * planecount] = X2.z;
-		cuSx[idx + 6 * planecount] = X6.x;
-		cuSy[idx + 6 * planecount] = X6.y;
-		cuSz[idx + 6 * planecount] = X6.z;
+		if (n.z > 6) {
+			cuSx[idx + 6 * planecount] = X6.x;
+			cuSy[idx + 6 * planecount] = X6.y;
+			cuSz[idx + 6 * planecount] = X6.z;
+		}
 
 		cuSx[idx + 3 * planecount] = X3.x;
 		cuSy[idx + 3 * planecount] = X3.y;
 		cuSz[idx + 3 * planecount] = X3.z;
-		cuSx[idx + 7 * planecount] = X7.x;
-		cuSy[idx + 7 * planecount] = X7.y;
-		cuSz[idx + 7 * planecount] = X7.z;
+		if (n.z > 7) {
+			cuSx[idx + 7 * planecount] = X7.x;
+			cuSy[idx + 7 * planecount] = X7.y;
+			cuSz[idx + 7 * planecount] = X7.z;
+		}
 
 #undef a
 #undef b
@@ -6105,16 +6167,16 @@ __global__ void cu_MultiDemag_ConvProd_q2D_16_IFFT(
 	}
 }
 
-//N = (N.x/2 + 1, N.y, 32)
+//N = (N_xRegion.x/2 + 1, N_xRegion.y, 32)
 //IFFT part
 __global__ void cu_MultiDemag_ConvProd_q2D_32_IFFT(
 	cuBComplex* cuSx, cuBComplex* cuSy, cuBComplex* cuSz,
-	cuSZ3& N)
+	cuSZ3& N_xRegion, cuSZ3& n)
 {
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-	//N.z = 32, and this kernel was called with (N.x/2 + 1) * N.y points: handle all z points in one go
-	int planecount = (N.x / 2 + 1) * N.y;
+	//N_xRegion.z = 32, and this kernel was called with (N_xRegion.x/2 + 1) * N_xRegion.y points: handle all z points in one go
+	int planecount = N_xRegion.x * N_xRegion.y;
 
 	if (idx < planecount) {
 
@@ -6332,9 +6394,11 @@ __global__ void cu_MultiDemag_ConvProd_q2D_32_IFFT(
 		cuSx[idx + planecount] = l.x;
 		cuSy[idx + planecount] = l.y;
 		cuSz[idx + planecount] = l.z;
-		cuSx[idx + 9 * planecount] = h.x;
-		cuSy[idx + 9 * planecount] = h.y;
-		cuSz[idx + 9 * planecount] = h.z;
+		if (n.z > 9) {
+			cuSx[idx + 9 * planecount] = h.x;
+			cuSy[idx + 9 * planecount] = h.y;
+			cuSz[idx + 9 * planecount] = h.z;
+		}
 
 		//j = 2
 		t0 = (X[2] + X[10] * cuReIm(g, g));
@@ -6348,9 +6412,11 @@ __global__ void cu_MultiDemag_ConvProd_q2D_32_IFFT(
 		cuSx[idx + 2 * planecount] = l.x;
 		cuSy[idx + 2 * planecount] = l.y;
 		cuSz[idx + 2 * planecount] = l.z;
-		cuSx[idx + 10 * planecount] = h.x;
-		cuSy[idx + 10 * planecount] = h.y;
-		cuSz[idx + 10 * planecount] = h.z;
+		if (n.z > 10) {
+			cuSx[idx + 10 * planecount] = h.x;
+			cuSy[idx + 10 * planecount] = h.y;
+			cuSz[idx + 10 * planecount] = h.z;
+		}
 
 		//j = 3
 		t0 = (X[3] + X[11] * cuReIm(d, c));
@@ -6364,9 +6430,11 @@ __global__ void cu_MultiDemag_ConvProd_q2D_32_IFFT(
 		cuSx[idx + 3 * planecount] = l.x;
 		cuSy[idx + 3 * planecount] = l.y;
 		cuSz[idx + 3 * planecount] = l.z;
-		cuSx[idx + 11 * planecount] = h.x;
-		cuSy[idx + 11 * planecount] = h.y;
-		cuSz[idx + 11 * planecount] = h.z;
+		if (n.z > 11) {
+			cuSx[idx + 11 * planecount] = h.x;
+			cuSy[idx + 11 * planecount] = h.y;
+			cuSz[idx + 11 * planecount] = h.z;
+		}
 
 		//j = 4
 		t0 = (X[4] + !X[12]);
@@ -6380,9 +6448,11 @@ __global__ void cu_MultiDemag_ConvProd_q2D_32_IFFT(
 		cuSx[idx + 4 * planecount] = l.x;
 		cuSy[idx + 4 * planecount] = l.y;
 		cuSz[idx + 4 * planecount] = l.z;
-		cuSx[idx + 12 * planecount] = h.x;
-		cuSy[idx + 12 * planecount] = h.y;
-		cuSz[idx + 12 * planecount] = h.z;
+		if (n.z > 12) {
+			cuSx[idx + 12 * planecount] = h.x;
+			cuSy[idx + 12 * planecount] = h.y;
+			cuSz[idx + 12 * planecount] = h.z;
+		}
 
 		//j = 5
 		t0 = (X[5] + X[13] * cuReIm(-d, c));
@@ -6396,9 +6466,11 @@ __global__ void cu_MultiDemag_ConvProd_q2D_32_IFFT(
 		cuSx[idx + 5 * planecount] = l.x;
 		cuSy[idx + 5 * planecount] = l.y;
 		cuSz[idx + 5 * planecount] = l.z;
-		cuSx[idx + 13 * planecount] = h.x;
-		cuSy[idx + 13 * planecount] = h.y;
-		cuSz[idx + 13 * planecount] = h.z;
+		if (n.z > 13) {
+			cuSx[idx + 13 * planecount] = h.x;
+			cuSy[idx + 13 * planecount] = h.y;
+			cuSz[idx + 13 * planecount] = h.z;
+		}
 
 		//j = 6
 		t0 = (X[6] + X[14] * cuReIm(-g, g));
@@ -6412,9 +6484,11 @@ __global__ void cu_MultiDemag_ConvProd_q2D_32_IFFT(
 		cuSx[idx + 6 * planecount] = l.x;
 		cuSy[idx + 6 * planecount] = l.y;
 		cuSz[idx + 6 * planecount] = l.z;
-		cuSx[idx + 14 * planecount] = h.x;
-		cuSy[idx + 14 * planecount] = h.y;
-		cuSz[idx + 14 * planecount] = h.z;
+		if (n.z > 14) {
+			cuSx[idx + 14 * planecount] = h.x;
+			cuSy[idx + 14 * planecount] = h.y;
+			cuSz[idx + 14 * planecount] = h.z;
+		}
 
 		//j = 7
 		t0 = (X[7] + X[15] * cuReIm(-c, d));
@@ -6428,9 +6502,11 @@ __global__ void cu_MultiDemag_ConvProd_q2D_32_IFFT(
 		cuSx[idx + 7 * planecount] = l.x;
 		cuSy[idx + 7 * planecount] = l.y;
 		cuSz[idx + 7 * planecount] = l.z;
-		cuSx[idx + 15 * planecount] = h.x;
-		cuSy[idx + 15 * planecount] = h.y;
-		cuSz[idx + 15 * planecount] = h.z;
+		if (n.z > 15) {
+			cuSx[idx + 15 * planecount] = h.x;
+			cuSy[idx + 15 * planecount] = h.y;
+			cuSz[idx + 15 * planecount] = h.z;
+		}
 
 #undef a
 #undef b
@@ -6458,18 +6534,18 @@ void DemagKernelCollectionCUDA::KernelMultiplication_2D(
 {
 	//first compute the self contribution -> this sets Out
 	if (transpose_xy) {
-
-		cu_KernelMultiplication_2D_Self_transpose_xy <<< ((N.x / 2 + 1)*N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+		
+		cu_KernelMultiplication_2D_Self_transpose_xy <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
 			*kernels[self_contribution_index],
 			*Incol_x[self_contribution_index], *Incol_y[self_contribution_index], *Incol_z[self_contribution_index],
-			Out_x, Out_y, Out_z, cuN);
+			Out_x, Out_y, Out_z, cuN_xRegion);
 	}
 	else {
-
-		cu_KernelMultiplication_2D_Self <<< ((N.x / 2 + 1)*N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+		
+		cu_KernelMultiplication_2D_Self <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
 			*kernels[self_contribution_index],
 			*Incol_x[self_contribution_index], *Incol_y[self_contribution_index], *Incol_z[self_contribution_index],
-			Out_x, Out_y, Out_z, cuN);
+			Out_x, Out_y, Out_z, cuN_xRegion);
 	}
 
 	//the rest add to Out
@@ -6486,17 +6562,17 @@ void DemagKernelCollectionCUDA::KernelMultiplication_2D(
 
 				if (transpose_xy) {
 
-					cu_KernelMultiplication_2D_inversezShifted_transpose_xy <<< ((N.x / 2 + 1)*N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+					cu_KernelMultiplication_2D_inversezShifted_transpose_xy <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
 						*kernels[mesh_index],
 						*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index],
-						Out_x, Out_y, Out_z, cuN);
+						Out_x, Out_y, Out_z, cuN_xRegion);
 				}
 				else {
 					
-					cu_KernelMultiplication_2D_inversezShifted <<< ((N.x / 2 + 1)*N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+					cu_KernelMultiplication_2D_inversezShifted <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
 						*kernels[mesh_index],
 						*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index],
-						Out_x, Out_y, Out_z, cuN);
+						Out_x, Out_y, Out_z, cuN_xRegion);
 				}
 			}
 			//z-shifted regular
@@ -6504,17 +6580,17 @@ void DemagKernelCollectionCUDA::KernelMultiplication_2D(
 
 				if (transpose_xy) {
 
-					cu_KernelMultiplication_2D_zShifted_transpose_xy <<< ((N.x / 2 + 1)*N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+					cu_KernelMultiplication_2D_zShifted_transpose_xy <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
 						*kernels[mesh_index],
 						*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index],
-						Out_x, Out_y, Out_z, cuN);
+						Out_x, Out_y, Out_z, cuN_xRegion);
 				}
 				else {
 
-					cu_KernelMultiplication_2D_zShifted <<< ((N.x / 2 + 1)*N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+					cu_KernelMultiplication_2D_zShifted <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
 						*kernels[mesh_index],
 						*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index],
-						Out_x, Out_y, Out_z, cuN);
+						Out_x, Out_y, Out_z, cuN_xRegion);
 				}
 			}
 		}
@@ -6523,17 +6599,17 @@ void DemagKernelCollectionCUDA::KernelMultiplication_2D(
 
 			if (transpose_xy) {
 
-				cu_KernelMultiplication_2D_xShifted_transpose_xy <<< ((N.x / 2 + 1) * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+				cu_KernelMultiplication_2D_xShifted_transpose_xy <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
 					*kernels[mesh_index],
 					*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index],
-					Out_x, Out_y, Out_z, cuN);
+					Out_x, Out_y, Out_z, cuN_xRegion);
 			}
 			else {
 
-				cu_KernelMultiplication_2D_xShifted <<< ((N.x / 2 + 1) * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+				cu_KernelMultiplication_2D_xShifted <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
 					*kernels[mesh_index],
 					*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index],
-					Out_x, Out_y, Out_z, cuN);
+					Out_x, Out_y, Out_z, cuN_xRegion);
 			}
 		}
 		//it's possible this rect coincides with another rect in the collection (and not self contribution), in which case use 2D Self multiplication
@@ -6541,26 +6617,26 @@ void DemagKernelCollectionCUDA::KernelMultiplication_2D(
 
 			if (transpose_xy) {
 
-				cu_KernelMultiplication_2D_Self_transpose_xy_add <<< ((N.x / 2 + 1)*N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+				cu_KernelMultiplication_2D_Self_transpose_xy_add <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
 					*kernels[mesh_index],
 					*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index],
-					Out_x, Out_y, Out_z, cuN);
+					Out_x, Out_y, Out_z, cuN_xRegion);
 			}
 			else {
 
-				cu_KernelMultiplication_2D_Self_add <<< ((N.x / 2 + 1)*N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+				cu_KernelMultiplication_2D_Self_add <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
 					*kernels[mesh_index],
 					*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index],
-					Out_x, Out_y, Out_z, cuN);
+					Out_x, Out_y, Out_z, cuN_xRegion);
 			}
 		}
 		//now compute the other contributions by adding to Out : general kernel multiplication without any symmetries used
 		else {
 			
-			cu_KernelMultiplication_2D_Regular <<< ((N.x / 2 + 1)*N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+			cu_KernelMultiplication_2D_Regular <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
 				*kernels[mesh_index],
 				*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index],
-				Out_x, Out_y, Out_z, cuN);
+				Out_x, Out_y, Out_z, cuN_xRegion);
 		}
 	}
 }
@@ -6572,10 +6648,10 @@ void DemagKernelCollectionCUDA::KernelMultiplication_3D(
 	//transpose_xy always true in 3D
 	
 	//first compute the self contribution -> this sets Out
-	cu_KernelMultiplication_3D_Self_transpose_xy <<< ((N.x / 2 + 1)*N.y*N.z + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+	cu_KernelMultiplication_3D_Self_transpose_xy <<< (nxRegion * N.y * N.z + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
 		*kernels[self_contribution_index],
 		*Incol_x[self_contribution_index], *Incol_y[self_contribution_index], *Incol_z[self_contribution_index],
-		Out_x, Out_y, Out_z, cuN);
+		Out_x, Out_y, Out_z, cuN_xRegion);
 	
 	//now compute the other contribution by adding to Out
 	for (int mesh_index = 0; mesh_index < Incol_x.size(); mesh_index++) {
@@ -6586,34 +6662,34 @@ void DemagKernelCollectionCUDA::KernelMultiplication_3D(
 		//z-shifted : use symmetries
 		if (zshifted[mesh_index]) {
 			
-			cu_KernelMultiplication_3D_zShifted_transpose_xy <<< ((N.x / 2 + 1)*N.y*N.z + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+			cu_KernelMultiplication_3D_zShifted_transpose_xy <<< (nxRegion * N.y * N.z + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
 				*kernels[mesh_index],
 				*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index],
-				Out_x, Out_y, Out_z, cuN);
+				Out_x, Out_y, Out_z, cuN_xRegion);
 		}
 		//x-shifted : use symmetries
 		else if (xshifted[mesh_index]) {
 
-			cu_KernelMultiplication_3D_xShifted_transpose_xy <<< ((N.x / 2 + 1) * N.y * N.z + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+			cu_KernelMultiplication_3D_xShifted_transpose_xy <<< (nxRegion * N.y * N.z + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
 				*kernels[mesh_index],
 				*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index],
-				Out_x, Out_y, Out_z, cuN);
+				Out_x, Out_y, Out_z, cuN_xRegion);
 		}
 		//it's possible this rect coincides with another rect in the collection (and not self contribution), in which case use 3D Self multiplication
 		else if (Rect_collection[mesh_index] == this_rect) {
 
-			cu_KernelMultiplication_3D_Self_transpose_xy_add <<< ((N.x / 2 + 1)*N.y*N.z + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+			cu_KernelMultiplication_3D_Self_transpose_xy_add <<< (nxRegion * N.y * N.z + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
 				*kernels[mesh_index],
 				*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index],
-				Out_x, Out_y, Out_z, cuN);
+				Out_x, Out_y, Out_z, cuN_xRegion);
 		}
 		//general kernel multiplication without any symmetries used
 		else {
 			
-			cu_KernelMultiplication_3D_Regular <<< ((N.x / 2 + 1)*N.y*N.z + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+			cu_KernelMultiplication_3D_Regular <<< (nxRegion * N.y * N.z + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
 				*kernels[mesh_index],
 				*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index],
-				Out_x, Out_y, Out_z, cuN);
+				Out_x, Out_y, Out_z, cuN_xRegion);
 		}
 	}
 }
@@ -6630,30 +6706,30 @@ void DemagKernelCollectionCUDA::KernelMultiplication_q2D(
 	{
 		//N.z = 4, n.z = 2
 	case 4:
-		cu_MultiDemag_ConvProd_q2D_4_transpose_xy <<< ((N.x / 2 + 1)*N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+		cu_MultiDemag_ConvProd_q2D_4_transpose_xy <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
 			(*kernels[self_contribution_index])()->Kdiag_real, (*kernels[self_contribution_index])()->Kodiag_real,
-			*Incol_x[self_contribution_index], *Incol_y[self_contribution_index], *Incol_z[self_contribution_index], Out_x, Out_y, Out_z, cuN);
+			*Incol_x[self_contribution_index], *Incol_y[self_contribution_index], *Incol_z[self_contribution_index], Out_x, Out_y, Out_z, cuN_xRegion);
 		break;
 		
 		//N.z = 8, n.z = 3, 4
 	case 8:
-		cu_MultiDemag_ConvProd_q2D_8_transpose_xy <<< ((N.x / 2 + 1)*N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+		cu_MultiDemag_ConvProd_q2D_8_transpose_xy <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
 			(*kernels[self_contribution_index])()->Kdiag_real, (*kernels[self_contribution_index])()->Kodiag_real,
-			*Incol_x[self_contribution_index], *Incol_y[self_contribution_index], *Incol_z[self_contribution_index], Out_x, Out_y, Out_z, cuN);
+			*Incol_x[self_contribution_index], *Incol_y[self_contribution_index], *Incol_z[self_contribution_index], Out_x, Out_y, Out_z, cuN_xRegion, cun);
 		break;
 
 		//N.z = 16, n.z = 5, 6, 7, 8
 	case 16:
-		cu_MultiDemag_ConvProd_q2D_16_transpose_xy <<< ((N.x / 2 + 1)*N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+		cu_MultiDemag_ConvProd_q2D_16_transpose_xy <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
 			(*kernels[self_contribution_index])()->Kdiag_real, (*kernels[self_contribution_index])()->Kodiag_real,
-			*Incol_x[self_contribution_index], *Incol_y[self_contribution_index], *Incol_z[self_contribution_index], Out_x, Out_y, Out_z, cuN);
+			*Incol_x[self_contribution_index], *Incol_y[self_contribution_index], *Incol_z[self_contribution_index], Out_x, Out_y, Out_z, cuN_xRegion, cun);
 		break;
 
 		//N.z = 32, n.z = 9, 10, ..., 16
 	case 32:
-		cu_MultiDemag_ConvProd_q2D_32_transpose_xy <<< ((N.x / 2 + 1)*N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+		cu_MultiDemag_ConvProd_q2D_32_transpose_xy <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
 			(*kernels[self_contribution_index])()->Kdiag_real, (*kernels[self_contribution_index])()->Kodiag_real,
-			*Incol_x[self_contribution_index], *Incol_y[self_contribution_index], *Incol_z[self_contribution_index], Out_x, Out_y, Out_z, cuN);
+			*Incol_x[self_contribution_index], *Incol_y[self_contribution_index], *Incol_z[self_contribution_index], Out_x, Out_y, Out_z, cuN_xRegion, cun);
 		break;
 		
 		//higher values not handled in q2D mode as they are slower than full 3D mode
@@ -6672,30 +6748,30 @@ void DemagKernelCollectionCUDA::KernelMultiplication_q2D(
 			{
 				//N.z = 4, n.z = 2
 			case 4:
-				cu_MultiDemag_ConvProd_q2D_4_transpose_xy_zshifted <<< ((N.x / 2 + 1)*N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+				cu_MultiDemag_ConvProd_q2D_4_transpose_xy_zshifted <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
 					(*kernels[mesh_index])()->Kdiag_cmpl, (*kernels[mesh_index])()->Kodiag_cmpl,
-					*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index], Out_x, Out_y, Out_z, cuN);
+					*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index], Out_x, Out_y, Out_z, cuN_xRegion);
 				break;
 
 				//N.z = 8, n.z = 3, 4
 			case 8:
-				cu_MultiDemag_ConvProd_q2D_8_transpose_xy_zshifted <<< ((N.x / 2 + 1)*N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+				cu_MultiDemag_ConvProd_q2D_8_transpose_xy_zshifted <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
 					(*kernels[mesh_index])()->Kdiag_cmpl, (*kernels[mesh_index])()->Kodiag_cmpl,
-					*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index], Out_x, Out_y, Out_z, cuN);
+					*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index], Out_x, Out_y, Out_z, cuN_xRegion, cun);
 				break;
 
 				//N.z = 8, n.z = 5, 6, 7, 8
 			case 16:
-				cu_MultiDemag_ConvProd_q2D_16_transpose_xy_zshifted <<< ((N.x / 2 + 1)*N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+				cu_MultiDemag_ConvProd_q2D_16_transpose_xy_zshifted <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
 					(*kernels[mesh_index])()->Kdiag_cmpl, (*kernels[mesh_index])()->Kodiag_cmpl,
-					*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index], Out_x, Out_y, Out_z, cuN);
+					*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index], Out_x, Out_y, Out_z, cuN_xRegion, cun);
 				break;
 
 				//N.z = 32, n.z = 9, 10, ..., 16
 			case 32:
-				cu_MultiDemag_ConvProd_q2D_32_transpose_xy_zshifted <<< ((N.x / 2 + 1)*N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+				cu_MultiDemag_ConvProd_q2D_32_transpose_xy_zshifted <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
 					(*kernels[mesh_index])()->Kdiag_cmpl, (*kernels[mesh_index])()->Kodiag_cmpl,
-					*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index], Out_x, Out_y, Out_z, cuN);
+					*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index], Out_x, Out_y, Out_z, cuN_xRegion, cun);
 				break;
 			}
 		}
@@ -6706,30 +6782,30 @@ void DemagKernelCollectionCUDA::KernelMultiplication_q2D(
 			{
 				//N.z = 4, n.z = 2
 			case 4:
-				cu_MultiDemag_ConvProd_q2D_4_transpose_xy_xshifted <<< ((N.x / 2 + 1) * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+				cu_MultiDemag_ConvProd_q2D_4_transpose_xy_xshifted <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
 					(*kernels[mesh_index])()->Kdiag_cmpl, (*kernels[mesh_index])()->Kodiag_cmpl,
-					*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index], Out_x, Out_y, Out_z, cuN);
+					*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index], Out_x, Out_y, Out_z, cuN_xRegion);
 				break;
 
 				//N.z = 8, n.z = 3, 4
 			case 8:
-				cu_MultiDemag_ConvProd_q2D_8_transpose_xy_xshifted <<< ((N.x / 2 + 1) * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+				cu_MultiDemag_ConvProd_q2D_8_transpose_xy_xshifted <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
 					(*kernels[mesh_index])()->Kdiag_cmpl, (*kernels[mesh_index])()->Kodiag_cmpl,
-					*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index], Out_x, Out_y, Out_z, cuN);
+					*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index], Out_x, Out_y, Out_z, cuN_xRegion, cun);
 				break;
 
 				//N.z = 8, n.z = 5, 6, 7, 8
 			case 16:
-				cu_MultiDemag_ConvProd_q2D_16_transpose_xy_xshifted <<< ((N.x / 2 + 1) * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+				cu_MultiDemag_ConvProd_q2D_16_transpose_xy_xshifted <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
 					(*kernels[mesh_index])()->Kdiag_cmpl, (*kernels[mesh_index])()->Kodiag_cmpl,
-					*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index], Out_x, Out_y, Out_z, cuN);
+					*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index], Out_x, Out_y, Out_z, cuN_xRegion, cun);
 				break;
 
 				//N.z = 32, n.z = 9, 10, ..., 16
 			case 32:
-				cu_MultiDemag_ConvProd_q2D_32_transpose_xy_xshifted <<< ((N.x / 2 + 1) * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+				cu_MultiDemag_ConvProd_q2D_32_transpose_xy_xshifted <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
 					(*kernels[mesh_index])()->Kdiag_cmpl, (*kernels[mesh_index])()->Kodiag_cmpl,
-					*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index], Out_x, Out_y, Out_z, cuN);
+					*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index], Out_x, Out_y, Out_z, cuN_xRegion, cun);
 				break;
 			}
 		}
@@ -6740,30 +6816,30 @@ void DemagKernelCollectionCUDA::KernelMultiplication_q2D(
 			{
 				//N.z = 4, n.z = 2
 			case 4:
-				cu_MultiDemag_ConvProd_q2D_4_transpose_xy <<< ((N.x / 2 + 1)*N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+				cu_MultiDemag_ConvProd_q2D_4_transpose_xy <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
 					(*kernels[mesh_index])()->Kdiag_real, (*kernels[mesh_index])()->Kodiag_real,
-					*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index], Out_x, Out_y, Out_z, cuN, false);
+					*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index], Out_x, Out_y, Out_z, cuN_xRegion, false);
 				break;
 
 				//N.z = 8, n.z = 3, 4
 			case 8:
-				cu_MultiDemag_ConvProd_q2D_8_transpose_xy <<< ((N.x / 2 + 1)*N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+				cu_MultiDemag_ConvProd_q2D_8_transpose_xy <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
 					(*kernels[mesh_index])()->Kdiag_real, (*kernels[mesh_index])()->Kodiag_real,
-					*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index], Out_x, Out_y, Out_z, cuN, false);
+					*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index], Out_x, Out_y, Out_z, cuN_xRegion, cun, false);
 				break;
 
 				//N.z = 16, n.z = 5, 6, 7, 8
 			case 16:
-				cu_MultiDemag_ConvProd_q2D_16_transpose_xy <<< ((N.x / 2 + 1)*N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+				cu_MultiDemag_ConvProd_q2D_16_transpose_xy <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
 					(*kernels[mesh_index])()->Kdiag_real, (*kernels[mesh_index])()->Kodiag_real,
-					*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index], Out_x, Out_y, Out_z, cuN, false);
+					*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index], Out_x, Out_y, Out_z, cuN_xRegion, cun, false);
 				break;
 
 				//N.z = 32, n.z = 9, 10, ..., 16
 			case 32:
-				cu_MultiDemag_ConvProd_q2D_32_transpose_xy <<< ((N.x / 2 + 1)*N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+				cu_MultiDemag_ConvProd_q2D_32_transpose_xy <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
 					(*kernels[mesh_index])()->Kdiag_real, (*kernels[mesh_index])()->Kodiag_real,
-					*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index], Out_x, Out_y, Out_z, cuN, false);
+					*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index], Out_x, Out_y, Out_z, cuN_xRegion, cun, false);
 				break;
 
 				//higher values not handled in q2D mode as they are slower than full 3D mode
@@ -6777,31 +6853,31 @@ void DemagKernelCollectionCUDA::KernelMultiplication_q2D(
 				//N.z = 4, n.z = 2
 			case 4:
 
-				cu_MultiDemag_ConvProd_q2D_4_transpose_xy_Regular <<< ((N.x / 2 + 1)*N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+				cu_MultiDemag_ConvProd_q2D_4_transpose_xy_Regular <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
 					(*kernels[mesh_index])()->Kdiag_cmpl, (*kernels[mesh_index])()->Kodiag_cmpl,
-					*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index], Out_x, Out_y, Out_z, cuN);
+					*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index], Out_x, Out_y, Out_z, cuN_xRegion);
 				break;
 
 				//N.z = 8, n.z = 3, 4
 			case 8:
-				cu_MultiDemag_ConvProd_q2D_8_transpose_xy_Regular <<< ((N.x / 2 + 1)*N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+				cu_MultiDemag_ConvProd_q2D_8_transpose_xy_Regular <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
 					(*kernels[mesh_index])()->Kdiag_cmpl, (*kernels[mesh_index])()->Kodiag_cmpl,
-					*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index], Out_x, Out_y, Out_z, cuN);
+					*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index], Out_x, Out_y, Out_z, cuN_xRegion, cun);
 				break;
 
 				//N.z = 16, n.z = 5, 6, 7, 8
 			case 16:
-				cu_MultiDemag_ConvProd_q2D_16_transpose_xy_Regular <<< ((N.x / 2 + 1)*N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+				cu_MultiDemag_ConvProd_q2D_16_transpose_xy_Regular <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
 					(*kernels[mesh_index])()->Kdiag_cmpl, (*kernels[mesh_index])()->Kodiag_cmpl,
-					*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index], Out_x, Out_y, Out_z, cuN);
+					*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index], Out_x, Out_y, Out_z, cuN_xRegion, cun);
 				break;
 
 				//N.z = 32, n.z = 9, 10, ..., 16
 			case 32:
 				
-				cu_MultiDemag_ConvProd_q2D_32_transpose_xy_Regular <<< ((N.x / 2 + 1)*N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+				cu_MultiDemag_ConvProd_q2D_32_transpose_xy_Regular <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
 					(*kernels[mesh_index])()->Kdiag_cmpl, (*kernels[mesh_index])()->Kodiag_cmpl,
-					*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index], Out_x, Out_y, Out_z, cuN);
+					*Incol_x[mesh_index], *Incol_y[mesh_index], *Incol_z[mesh_index], Out_x, Out_y, Out_z, cuN_xRegion, cun);
 				break;
 
 				//higher values not handled in q2D mode as they are slower than full 3D mode
@@ -6815,26 +6891,26 @@ void DemagKernelCollectionCUDA::KernelMultiplication_q2D(
 		//N.z = 4, n.z = 2
 	case 4:
 		
-		cu_MultiDemag_ConvProd_q2D_4_IFFT <<< ((N.x / 2 + 1)*N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
-			Out_x, Out_y, Out_z, cuN);
+		cu_MultiDemag_ConvProd_q2D_4_IFFT <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+			Out_x, Out_y, Out_z, cuN_xRegion);
 		break;
 		
 		//N.z = 8, n.z = 3, 4
 	case 8:
-		cu_MultiDemag_ConvProd_q2D_8_IFFT <<< ((N.x / 2 + 1)*N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
-			Out_x, Out_y, Out_z, cuN);
+		cu_MultiDemag_ConvProd_q2D_8_IFFT <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+			Out_x, Out_y, Out_z, cuN_xRegion, cun);
 		break;
 
 		//N.z = 16, n.z = 5, 6, 7, 8
 	case 16:
-		cu_MultiDemag_ConvProd_q2D_16_IFFT <<< ((N.x / 2 + 1)*N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
-			Out_x, Out_y, Out_z, cuN);
+		cu_MultiDemag_ConvProd_q2D_16_IFFT <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+			Out_x, Out_y, Out_z, cuN_xRegion, cun);
 		break;
 
 		//N.z = 32, n.z = 9, 10, ..., 16
 	case 32:
-		cu_MultiDemag_ConvProd_q2D_32_IFFT <<< ((N.x / 2 + 1)*N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
-			Out_x, Out_y, Out_z, cuN);
+		cu_MultiDemag_ConvProd_q2D_32_IFFT <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (
+			Out_x, Out_y, Out_z, cuN_xRegion, cun);
 		break;
 		
 		//higher values not handled in q2D mode as they are slower than full 3D mode

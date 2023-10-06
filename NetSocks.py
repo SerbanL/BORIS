@@ -1,6 +1,6 @@
 #BORIS Computational Spintronics 2022
 
-Update_Date = '22/08/2023'
+Update_Date = '15/09/2023'
 Boris_version = 4.0
 Notes = 'u'
 
@@ -340,6 +340,9 @@ class NSClient:
     
     #verbosity of Python script (adjusted by configure)
     script_verbose = True
+    
+    #number of meshes currently active as created through Mesh objects
+    number_meshes_set = 0
 
     #################### CTOR / DTOR
     
@@ -1175,8 +1178,8 @@ class NSClient:
     	self.SendCommand("buffercommand", ["dataprecision", precision])
     
     def default(self, bufferCommand = False):
-    	if not bufferCommand: return self.SendCommand("default")
-    	self.SendCommand("buffercommand", ["default"])
+        self.number_meshes_set = 0
+        return self.SendCommand("default")
     
     def deldata(self, index = '', bufferCommand = False):
     	if not bufferCommand: return self.SendCommand("deldata", [index])
@@ -1700,6 +1703,10 @@ class NSClient:
     	if not bufferCommand: return self.SendCommand("gpukernels", [status])
     	self.SendCommand("buffercommand", ["gpukernels", status])
     
+    def gputemperature(self, device = '', bufferCommand = False):
+        if not bufferCommand: return self.SendCommand("gputemperature", [device])
+        self.SendCommand("buffercommand", ["gputemperature", device])
+    
     def halfprecisiontransfer(self, status = '', bufferCommand = False):
     	if not bufferCommand: return self.SendCommand("halfprecisiontransfer", [status])
     	self.SendCommand("buffercommand", ["halfprecisiontransfer", status])
@@ -1802,6 +1809,10 @@ class NSClient:
     def materialsdatabase(self, mdbname = '', bufferCommand = False):
     	if not bufferCommand: return self.SendCommand("materialsdatabase", [mdbname])
     	self.SendCommand("buffercommand", ["materialsdatabase", mdbname])
+        
+    def maxgputemperature(self, max_temperature = '', timeout_s = '', bufferCommand = False):
+        if not bufferCommand: return self.SendCommand("maxgputemperature", [max_temperature, timeout_s])
+        self.SendCommand("buffercommand", ["maxgputemperature", max_temperature, timeout_s])
     
     def mccomputefields(self, status = '', bufferCommand = False):
     	if not bufferCommand: return self.SendCommand("mccomputefields", [status])
@@ -3263,9 +3274,6 @@ class NSClient:
     #
     # Meshes : create using factory methods so we have access to NSClient object
     
-    #number of meshes currently active as created through Mesh objects
-    number_meshes_set = 0
-    
     ####################### MESH PARAMETERS
     
     #Access to parameter specific commands
@@ -4248,7 +4256,7 @@ class NSClient:
         #################### DTOR
         
         def __del__(self):
-            self.ns.number_meshes_set -= 1
+            if self.ns.number_meshes_set: self.ns.number_meshes_set -= 1
             
         #################### COMMANDS on Mesh
         

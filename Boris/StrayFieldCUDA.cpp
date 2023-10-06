@@ -46,10 +46,8 @@ BError StrayFieldCUDA::Initialize(void)
 		//need to collect cpu versions to initialize the mesh transfer object, before transferring it to the gpu
 		std::vector< VEC<DBL3>* > meshes_out_cpu;
 
-		//MCUDA
-		/*
 		//array of pointers to oputput meshes (Heff) to transfer to
-		cu_arr<cuVEC<cuReal3>> meshes_out;
+		std::vector< mcu_VEC(cuReal3)* > meshes_out;
 
 		//identify all output Heff meshes
 		for (int idx = 0; idx < (int)pSMesh->size(); idx++) {
@@ -59,31 +57,29 @@ BError StrayFieldCUDA::Initialize(void)
 
 				if (!(*pSMesh)[idx]->is_atomistic()) {
 
-					meshes_out.push_back((cuVEC<cuReal3>*&)dynamic_cast<Mesh*>((*pSMesh)[idx])->pMeshCUDA->Heff.get_managed_object());
+					meshes_out.push_back(&dynamic_cast<Mesh*>((*pSMesh)[idx])->pMeshCUDA->Heff);
 					meshes_out_cpu.push_back(&(dynamic_cast<Mesh*>((*pSMesh)[idx])->Heff));
 				}
 				else {
 
-					meshes_out.push_back((cuVEC<cuReal3>*&)dynamic_cast<Atom_Mesh*>((*pSMesh)[idx])->paMeshCUDA->Heff1.get_managed_object());
+					meshes_out.push_back(&dynamic_cast<Atom_Mesh*>((*pSMesh)[idx])->paMeshCUDA->Heff1);
 					meshes_out_cpu.push_back(&(dynamic_cast<Atom_Mesh*>((*pSMesh)[idx])->Heff1));
 				}
 
 				//for antiferromagnetic meshes we also need to add the stray field to the second sub-lattice
 				if ((*pSMesh)[idx]->GetMeshType() == MESH_ANTIFERROMAGNETIC) {
 
-					meshes_out.push_back((cuVEC<cuReal3>*&)dynamic_cast<Mesh*>((*pSMesh)[idx])->pMeshCUDA->Heff2.get_managed_object());
+					meshes_out.push_back(&dynamic_cast<Mesh*>((*pSMesh)[idx])->pMeshCUDA->Heff2);
 					meshes_out_cpu.push_back(&(dynamic_cast<Mesh*>((*pSMesh)[idx])->Heff2));
 				}
 			}
 		}
-		*/
 
 		//Initialize the mesh transfer object.
-		if (!pStrayField->strayField.Initialize_MeshTransfer(std::vector< VEC<DBL3>* >(), meshes_out_cpu, MESHTRANSFERTYPE_WEIGHTED)) return error(BERROR_OUTOFMEMORY_CRIT);
+		if (!pStrayField->strayField.Initialize_MeshTransfer({}, meshes_out_cpu, MESHTRANSFERTYPE_WEIGHTED)) return error(BERROR_OUTOFMEMORY_CRIT);
 
 		//Now copy mesh transfer object to cuda version
-		//MCUDA
-		//if (!strayField.copy_transfer_info(meshes_out, meshes_out, pStrayField->strayField.get_transfer())) return error(BERROR_OUTOFGPUMEMORY_CRIT);
+		if (!strayField.copy_transfer_info<cuVEC<cuReal3>, cuVEC<cuReal3>, Transfer<DBL3>>({}, meshes_out, pStrayField->strayField.get_transfer())) return error(BERROR_OUTOFGPUMEMORY_CRIT);
 
 		//initialize and calculate the stray field using the base class method
 		InitializeStrayField();
@@ -98,7 +94,7 @@ BError StrayFieldCUDA::UpdateConfiguration(UPDATECONFIG_ cfgMessage)
 {
 	BError error(CLASS_STR(StrayFieldCUDA));
 
-	if (ucfg::check_cfgflags(cfgMessage, UPDATECONFIG_MESHCHANGE, UPDATECONFIG_MESHADDED, UPDATECONFIG_MESHDELETED)) {
+	if (ucfg::check_cfgflags(cfgMessage, UPDATECONFIG_MESHCHANGE, UPDATECONFIG_MESHADDED, UPDATECONFIG_MESHDELETED, UPDATECONFIG_SMESH_CELLSIZE)) {
 
 		Uninitialize();
 		dipoles.clear();
@@ -115,8 +111,7 @@ void StrayFieldCUDA::UpdateField(void)
 	if (CheckRecalculateStrayField()) CalculateStrayField();
 
 	//transfer to individual Heff meshes
-	//MCUDA
-	//strayField.transfer_out(pStrayField->strayField.size_transfer_out());
+	strayField.transfer_out();
 }
 
 #endif

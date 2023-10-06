@@ -10,7 +10,7 @@
 
 //3. antiferromagnetic (to be implemented - will be applicable to antiferromagnetic meshes, currently these are set to STSOLVE_NONE)
 
-//4. tunneling (to be implemented eventually - will be applicable to insulator meshes)
+//4. tunneling
 
 //5. ferromagnetic in atomistic mesh
 

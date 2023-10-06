@@ -21,7 +21,7 @@ enum BERROR_
 	BERROR_CUDADEVICE_INCORRECTCONFIG,		//CUDA device selection incorrect
 	BERROR_CUDA_NOP2P,						//P2P needed between all devices, and is not available
 	BERROR_MGPU_MUSTBEXAXIS,				//mGPU configuration error when using multiple devices : must have x axis subvecs
-	BERROR_ATOMDMCELL,						//Must have an integer number of spins in each macrocell
+	BERROR_MGPU_XCELLS,						//Number of cells along x dimension must be greater or equal to number of GPUs
 	BERROR_INCORRECTMODCONFIG,				//Modules not configured correctly. Cannot start simulation
 	BERROR_INCORRECTCONFIG,					//Incorrect configuration (e.g. eval method doesn't match ode allowed evals)
 	BERROR_INCORRECTARRAYS,					//Incorrect arrays used
@@ -54,6 +54,7 @@ enum BERROR_
 	BERROR_SPINSOLVER_FIT3,					//Not a metal mesh with transport module added.
 	BERROR_SPINSOLVER_FIT4,					//Must give metal and ferromagnetic meshes in this order.
 	BERROR_NOTDEFINED,						//Name not defined
+	BERROR_MAXGPUTEMPERATURE,				//Maximum GPU temperature reached.
 	BERROR_ENUMSIZE
 };
 
@@ -368,7 +369,7 @@ ErrorHandler<Owner>::ErrorHandler(Owner* pOwner_) :
 	errors[BERROR_CUDADEVICE_INCORRECTCONFIG] = std::pair<std::string, ERRLEV_>("CUDA device selection incorrect.", ERRLEV_NCRIT);
 	errors[BERROR_CUDA_NOP2P] = std::pair<std::string, ERRLEV_>("Not all GPUs are in P2P mode. Multi-GPU simulations with multiple meshes require P2P access between all devices.", ERRLEV_CRIT);
 	errors[BERROR_MGPU_MUSTBEXAXIS] = std::pair<std::string, ERRLEV_>("Multiple GPU use requires subvec x axis here.", ERRLEV_CRIT);
-	errors[BERROR_ATOMDMCELL] = std::pair<std::string, ERRLEV_>("Must have an integer number of atomistic cells in each macro-cell.", ERRLEV_CRIT);
+	errors[BERROR_MGPU_XCELLS] = std::pair<std::string, ERRLEV_>("Number of cells along x dimension must be greater or equal to number of GPUs used.", ERRLEV_CRIT);
 	errors[BERROR_INCORRECTMODCONFIG] = std::pair<std::string, ERRLEV_>( "Incorrect modules configuration.", ERRLEV_NCRIT);
 	errors[BERROR_INCORRECTCONFIG] = std::pair<std::string, ERRLEV_>( "Incorrect configuration.", ERRLEV_NCRIT);
 	errors[BERROR_INCORRECTARRAYS] = std::pair<std::string, ERRLEV_>( "Incorrect arrays.", ERRLEV_NCRIT);
@@ -400,6 +401,7 @@ ErrorHandler<Owner>::ErrorHandler(Owner* pOwner_) :
 	errors[BERROR_SPINSOLVER_FIT2] = std::pair<std::string, ERRLEV_>("Must be ferromagnetic mesh with transport module added and spin transport solver enabled.", ERRLEV_NCRIT);
 	errors[BERROR_SPINSOLVER_FIT3] = std::pair<std::string, ERRLEV_>("Must be ferromagnetic mesh with transport module added and spin transport solver enabled. hm_mesh must be a metal mesh with transport module added.", ERRLEV_NCRIT);
 	errors[BERROR_SPINSOLVER_FIT4] = std::pair<std::string, ERRLEV_>("Must give metal and ferromagnetic meshes in this order.", ERRLEV_NCRIT);
+	errors[BERROR_MAXGPUTEMPERATURE] = std::pair<std::string, ERRLEV_>("Maximum GPU operating temperature reached.", ERRLEV_NCRIT);
 	errors[BERROR_NOTDEFINED] = std::pair<std::string, ERRLEV_>("Name not defined.", ERRLEV_NCRIT);
 
 	/////////////////////////////////////////////////////////////////////////////////////

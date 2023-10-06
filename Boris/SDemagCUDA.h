@@ -6,23 +6,22 @@
 #ifdef MODULE_COMPILATION_SDEMAG
 
 #include "ModulesCUDA.h"
-
-#include "ConvolutionCUDA.h"
-#include "DemagKernelCUDA.h"
-#include "DemagKernelCollectionCUDA.h"
-
-#include "SDemagCUDA_Demag.h"
+#include "EvalSpeedupCUDA.h"
 
 class SuperMesh;
 class SDemag;
-class SDemagCUDA_Demag;
 class ManagedMeshCUDA;
+
+class SDemagCUDA_Demag;
+class SDemagMCUDA_single;
+
+class DemagKernelCollectionCUDA;
 
 class SDemagCUDA :
 	public ModulesCUDA,
-	public ConvolutionCUDA<SDemagCUDA, DemagKernelCUDA>
+	public EvalSpeedupCUDA
 {
-
+	friend SDemagMCUDA_single;
 	friend SDemagCUDA_Demag;
 
 private:
@@ -33,22 +32,46 @@ private:
 	//the SDemag module (cpu version) holding this CUDA version
 	SDemag* pSDemag;
 
-	//--------
+	//-------- SUPERMESH DEMAG
 
 	//super-mesh magnetization values used for computing demag field on the super-mesh
-	cu_obj<cuVEC<cuReal3>> sm_Vals;
+	mcu_VEC(cuReal3) sm_Vals;
+
+	//value used by SDemagMCUDA_single modules for half-precision transfer data normalization (set as largest Ms from all participating meshes)
+	cuBReal normalization_Ms = 1.0;
 
 	//total non-empty volume from all meshes participating in convolution
 	double total_nonempty_volume = 0.0;
 
 	//--------
 
-	//collection of all SDemagCUDA_Demag modules in individual ferromagnetic meshes
+	//one SDemagMCUDA_single object per GPU
+	std::vector<SDemagMCUDA_single*> pSDemagMCUDA;
+
+	//transfer data before x-FFTs
+	std::vector<std::vector<mGPU_Transfer<cuReal3>*>> M_Input_transfer;
+	std::vector<std::vector<mGPU_Transfer<cuBHalf>*>> M_Input_transfer_half;
+
+	std::vector<std::vector<mGPU_Transfer<cuBComplex>*>> xFFT_Data_transfer;
+	std::vector<std::vector<mGPU_Transfer<cuBHalf>*>> xFFT_Data_transfer_half;
+
+	//transfer data before x-IFFTs
+	std::vector<std::vector<mGPU_Transfer<cuBComplex>*>> xIFFT_Data_transfer;
+	std::vector<std::vector<mGPU_Transfer<cuBHalf>*>> xIFFT_Data_transfer_half;
+
+	//transfer data after x-IFFTs
+	std::vector<std::vector<mGPU_Transfer<cuReal3>*>> Out_Data_transfer;
+	std::vector<std::vector<mGPU_Transfer<cuBHalf>*>> Out_Data_transfer_half;
+
+	//-------- MULTICONVOLUTION DEMAG
+
+	//collection of all SDemagCUDA_Demag modules in individual magnetic meshes
 	std::vector<SDemagCUDA_Demag*> pSDemagCUDA_Demag;
 
 	//collect FFT input spaces : after Forward FFT the ffts of M from the individual meshes will be found here
 	//These are used as inputs to kernel multiplications. Same order as pSDemag_Demag.
-	std::vector<cu_arr<cuBComplex>*> FFT_Spaces_x_Input, FFT_Spaces_y_Input, FFT_Spaces_z_Input;
+	//outer vector dimension is number of GPUs used
+	std::vector<std::vector<cu_arr<cuBComplex>*>> FFT_Spaces_x_Input, FFT_Spaces_y_Input, FFT_Spaces_z_Input;
 
 	//collection of rectangles of meshes, same ordering as for pSDemag_Demag and FFT_Spaces, used in multi-layered convolution
 	//these are not necessarily the rectangles of the input M meshes, but are the rectangles of the transfer meshes (M -> transfer -> convolution)
@@ -59,154 +82,41 @@ private:
 	std::vector<cuRect> Rect_collection;
 
 	//demag kernels used for multilayered convolution, one collection per mesh/SDemag_Demag module. Don't recalculate redundant kernels in the collection.
-	std::vector<DemagKernelCollectionCUDA*> kernel_collection;
-
-	//Evaluation speedup mode data
-
-	//times at which evaluations were done, used for extrapolation
-	double time_demag1 = 0.0, time_demag2 = 0.0, time_demag3 = 0.0, time_demag4 = 0.0, time_demag5 = 0.0, time_demag6 = 0.0;
-
-	int num_Hdemag_saved = 0;
+	//outer vector dimension is number of GPUs used
+	std::vector<std::vector<DemagKernelCollectionCUDA*>> kernel_collection;
 
 private:
 
-	//Subtract self demag contribution from H; M is cuVEC, not cuVEC_VC, since it's a transfer mesh : transfer mode
-	void SDemag_EvalSpeedup_SubSelf(size_t size, cu_obj<cuVEC<cuReal3>>& H, cu_obj<cuVEC<cuReal3>>& M, cu_obj<cuReal3>& selfDemagCoeff);
+	//-------- SUPERMESH DEMAG
 
-	//Add H to Heff and Heff2, then subtract self demag contribution : AFM, non-transfer mode
-	void SDemag_EvalSpeedup_AddField_SubSelf(size_t size,
-		cu_obj<cuVEC<cuReal3>>& Heff, cu_obj<cuVEC<cuReal3>>& Heff2,
-		cu_obj<cuVEC<cuReal3>>& H,
-		cu_obj<cuVEC_VC<cuReal3>>& M, cu_obj<cuVEC_VC<cuReal3>>& M2, cu_obj<cuReal3>& selfDemagCoeff);
+	//construct objects for supermesh demag
+	void Make_SMesh_Demag(void);
+	
+	//destruct objects for supermesh demag
+	void Clear_SMesh_Demag(void);
 
-	//Add H to Heff, then subtract self demag contribution : FM, non-transfer mode
-	void SDemag_EvalSpeedup_AddField_SubSelf(size_t size,
-		cu_obj<cuVEC<cuReal3>>& Heff,
-		cu_obj<cuVEC<cuReal3>>& H,
-		cu_obj<cuVEC_VC<cuReal3>>& M, cu_obj<cuReal3>& selfDemagCoeff);
+	//check if all pSDemagMCUDA modules are initialized
+	bool SDemagCUDA_Submodules_Initialized(void);
 
-	//Calculate extrapolated field in H_M, also adding in the self contribution given that H_M initially contains M : AFM or FM transfer mode, QUINTIC
-	void SDemag_EvalSpeedup_SetExtrapField_AddSelf(size_t size,
-		cu_obj<cuVEC<cuReal3>>& H_M,
-		cu_obj<cuVEC<cuReal3>>& Hdemag, cu_obj<cuVEC<cuReal3>>& Hdemag2, cu_obj<cuVEC<cuReal3>>& Hdemag3, cu_obj<cuVEC<cuReal3>>& Hdemag4, cu_obj<cuVEC<cuReal3>>& Hdemag5, cu_obj<cuVEC<cuReal3>>& Hdemag6,
-		cuBReal a1, cuBReal a2, cuBReal a3, cuBReal a4, cuBReal a5, cuBReal a6,
-		cu_obj<cuReal3>& selfDemagCoeff);
+	//called from Initialize if using SMesh demag
+	BError Initialize_SMesh_Demag(void);
 
-	//Calculate extrapolated field, together with self demag contribution, and set it in Heff and Heff2 : AFM, non-transfer mode, QUINTIC
-	void SDemag_EvalSpeedup_AddExtrapField_AddSelf(size_t size,
-		cu_obj<cuVEC<cuReal3>>& Heff, cu_obj<cuVEC<cuReal3>>& Heff2,
-		cu_obj<cuVEC<cuReal3>>& Hdemag, cu_obj<cuVEC<cuReal3>>& Hdemag2, cu_obj<cuVEC<cuReal3>>& Hdemag3, cu_obj<cuVEC<cuReal3>>& Hdemag4, cu_obj<cuVEC<cuReal3>>& Hdemag5, cu_obj<cuVEC<cuReal3>>& Hdemag6,
-		cuBReal a1, cuBReal a2, cuBReal a3, cuBReal a4, cuBReal a5, cuBReal a6,
-		cu_obj<cuVEC_VC<cuReal3>>& M, cu_obj<cuVEC_VC<cuReal3>>& M2, cu_obj<cuReal3>& selfDemagCoeff);
+	//called from UpdateConfiguration if using Smesh demag
+	BError UpdateConfiguration_SMesh_Demag(UPDATECONFIG_ cfgMessage);
 
-	//Calculate extrapolated field, together with self demag contribution, and set it in Heff : FM, non-transfer mode, QUINTIC
-	void SDemag_EvalSpeedup_AddExtrapField_AddSelf(size_t size,
-		cu_obj<cuVEC<cuReal3>>& Heff,
-		cu_obj<cuVEC<cuReal3>>& Hdemag, cu_obj<cuVEC<cuReal3>>& Hdemag2, cu_obj<cuVEC<cuReal3>>& Hdemag3, cu_obj<cuVEC<cuReal3>>& Hdemag4, cu_obj<cuVEC<cuReal3>>& Hdemag5, cu_obj<cuVEC<cuReal3>>& Hdemag6,
-		cuBReal a1, cuBReal a2, cuBReal a3, cuBReal a4, cuBReal a5, cuBReal a6,
-		cu_obj<cuVEC_VC<cuReal3>>& M, cu_obj<cuReal3>& selfDemagCoeff);
+	//called from UpdateField if using Smesh demag
+	void UpdateField_SMesh_Demag(void);
 
-	//Calculate extrapolated field in H_M, also adding in the self contribution given that H_M initially contains M : AFM or FM transfer mode, QUARTIC
-	void SDemag_EvalSpeedup_SetExtrapField_AddSelf(size_t size,
-		cu_obj<cuVEC<cuReal3>>& H_M,
-		cu_obj<cuVEC<cuReal3>>& Hdemag, cu_obj<cuVEC<cuReal3>>& Hdemag2, cu_obj<cuVEC<cuReal3>>& Hdemag3, cu_obj<cuVEC<cuReal3>>& Hdemag4, cu_obj<cuVEC<cuReal3>>& Hdemag5,
-		cuBReal a1, cuBReal a2, cuBReal a3, cuBReal a4, cuBReal a5,
-		cu_obj<cuReal3>& selfDemagCoeff);
+	//-------- MULTICONVOLUTION DEMAG
 
-	//Calculate extrapolated field, together with self demag contribution, and set it in Heff and Heff2 : AFM, non-transfer mode, QUARTIC
-	void SDemag_EvalSpeedup_AddExtrapField_AddSelf(size_t size,
-		cu_obj<cuVEC<cuReal3>>& Heff, cu_obj<cuVEC<cuReal3>>& Heff2,
-		cu_obj<cuVEC<cuReal3>>& Hdemag, cu_obj<cuVEC<cuReal3>>& Hdemag2, cu_obj<cuVEC<cuReal3>>& Hdemag3, cu_obj<cuVEC<cuReal3>>& Hdemag4, cu_obj<cuVEC<cuReal3>>& Hdemag5,
-		cuBReal a1, cuBReal a2, cuBReal a3, cuBReal a4, cuBReal a5,
-		cu_obj<cuVEC_VC<cuReal3>>& M, cu_obj<cuVEC_VC<cuReal3>>& M2, cu_obj<cuReal3>& selfDemagCoeff);
+	//called from Initialize if using multiconvolution demag
+	BError Initialize_MConv_Demag(void);
 
-	//Calculate extrapolated field, together with self demag contribution, and set it in Heff : FM, non-transfer mode, QUARTIC
-	void SDemag_EvalSpeedup_AddExtrapField_AddSelf(size_t size,
-		cu_obj<cuVEC<cuReal3>>& Heff,
-		cu_obj<cuVEC<cuReal3>>& Hdemag, cu_obj<cuVEC<cuReal3>>& Hdemag2, cu_obj<cuVEC<cuReal3>>& Hdemag3, cu_obj<cuVEC<cuReal3>>& Hdemag4, cu_obj<cuVEC<cuReal3>>& Hdemag5,
-		cuBReal a1, cuBReal a2, cuBReal a3, cuBReal a4, cuBReal a5,
-		cu_obj<cuVEC_VC<cuReal3>>& M, cu_obj<cuReal3>& selfDemagCoeff);
+	//called from UpdateConfiguration if using multiconvolution demag
+	BError UpdateConfiguration_MConv_Demag(UPDATECONFIG_ cfgMessage);
 
-	//Calculate extrapolated field in H_M, also adding in the self contribution given that H_M initially contains M : AFM or FM transfer mode, CUBIC
-	void SDemag_EvalSpeedup_SetExtrapField_AddSelf(size_t size,
-		cu_obj<cuVEC<cuReal3>>& H_M,
-		cu_obj<cuVEC<cuReal3>>& Hdemag, cu_obj<cuVEC<cuReal3>>& Hdemag2, cu_obj<cuVEC<cuReal3>>& Hdemag3, cu_obj<cuVEC<cuReal3>>& Hdemag4,
-		cuBReal a1, cuBReal a2, cuBReal a3, cuBReal a4,
-		cu_obj<cuReal3>& selfDemagCoeff);
-
-	//Calculate extrapolated field, together with self demag contribution, and set it in Heff and Heff2 : AFM, non-transfer mode, CUBIC
-	void SDemag_EvalSpeedup_AddExtrapField_AddSelf(size_t size,
-		cu_obj<cuVEC<cuReal3>>& Heff, cu_obj<cuVEC<cuReal3>>& Heff2,
-		cu_obj<cuVEC<cuReal3>>& Hdemag, cu_obj<cuVEC<cuReal3>>& Hdemag2, cu_obj<cuVEC<cuReal3>>& Hdemag3, cu_obj<cuVEC<cuReal3>>& Hdemag4,
-		cuBReal a1, cuBReal a2, cuBReal a3, cuBReal a4,
-		cu_obj<cuVEC_VC<cuReal3>>& M, cu_obj<cuVEC_VC<cuReal3>>& M2, cu_obj<cuReal3>& selfDemagCoeff);
-
-	//Calculate extrapolated field, together with self demag contribution, and set it in Heff : FM, non-transfer mode, CUBIC
-	void SDemag_EvalSpeedup_AddExtrapField_AddSelf(size_t size,
-		cu_obj<cuVEC<cuReal3>>& Heff,
-		cu_obj<cuVEC<cuReal3>>& Hdemag, cu_obj<cuVEC<cuReal3>>& Hdemag2, cu_obj<cuVEC<cuReal3>>& Hdemag3, cu_obj<cuVEC<cuReal3>>& Hdemag4,
-		cuBReal a1, cuBReal a2, cuBReal a3, cuBReal a4,
-		cu_obj<cuVEC_VC<cuReal3>>& M, cu_obj<cuReal3>& selfDemagCoeff);
-
-	//Calculate extrapolated field in H_M, also adding in the self contribution given that H_M initially contains M : AFM or FM transfer mode, QUADRATIC
-	void SDemag_EvalSpeedup_SetExtrapField_AddSelf(size_t size,
-		cu_obj<cuVEC<cuReal3>>& H_M,
-		cu_obj<cuVEC<cuReal3>>& Hdemag, cu_obj<cuVEC<cuReal3>>& Hdemag2, cu_obj<cuVEC<cuReal3>>& Hdemag3,
-		cuBReal a1, cuBReal a2, cuBReal a3,
-		cu_obj<cuReal3>& selfDemagCoeff);
-
-	//Calculate extrapolated field, together with self demag contribution, and set it in Heff and Heff2 : AFM, non-transfer mode, QUADRATIC
-	void SDemag_EvalSpeedup_AddExtrapField_AddSelf(size_t size,
-		cu_obj<cuVEC<cuReal3>>& Heff, cu_obj<cuVEC<cuReal3>>& Heff2,
-		cu_obj<cuVEC<cuReal3>>& Hdemag, cu_obj<cuVEC<cuReal3>>& Hdemag2, cu_obj<cuVEC<cuReal3>>& Hdemag3,
-		cuBReal a1, cuBReal a2, cuBReal a3,
-		cu_obj<cuVEC_VC<cuReal3>>& M, cu_obj<cuVEC_VC<cuReal3>>& M2, cu_obj<cuReal3>& selfDemagCoeff);
-
-	//Calculate extrapolated field, together with self demag contribution, and set it in Heff : FM, non-transfer mode, QUADRATIC
-	void SDemag_EvalSpeedup_AddExtrapField_AddSelf(size_t size,
-		cu_obj<cuVEC<cuReal3>>& Heff,
-		cu_obj<cuVEC<cuReal3>>& Hdemag, cu_obj<cuVEC<cuReal3>>& Hdemag2, cu_obj<cuVEC<cuReal3>>& Hdemag3,
-		cuBReal a1, cuBReal a2, cuBReal a3,
-		cu_obj<cuVEC_VC<cuReal3>>& M, cu_obj<cuReal3>& selfDemagCoeff);
-
-	//Calculate extrapolated field in H_M, also adding in the self contribution given that H_M initially contains M : AFM or FM transfer mode, LINEAR
-	void SDemag_EvalSpeedup_SetExtrapField_AddSelf(size_t size,
-		cu_obj<cuVEC<cuReal3>>& H_M,
-		cu_obj<cuVEC<cuReal3>>& Hdemag, cu_obj<cuVEC<cuReal3>>& Hdemag2,
-		cuBReal a1, cuBReal a2,
-		cu_obj<cuReal3>& selfDemagCoeff);
-
-	//Calculate extrapolated field, together with self demag contribution, and set it in Heff and Heff2 : AFM, non-transfer mode, LINEAR
-	void SDemag_EvalSpeedup_AddExtrapField_AddSelf(size_t size,
-		cu_obj<cuVEC<cuReal3>>& Heff, cu_obj<cuVEC<cuReal3>>& Heff2,
-		cu_obj<cuVEC<cuReal3>>& Hdemag, cu_obj<cuVEC<cuReal3>>& Hdemag2,
-		cuBReal a1, cuBReal a2,
-		cu_obj<cuVEC_VC<cuReal3>>& M, cu_obj<cuVEC_VC<cuReal3>>& M2, cu_obj<cuReal3>& selfDemagCoeff);
-
-	//Calculate extrapolated field, together with self demag contribution, and set it in Heff : FM, non-transfer mode, LINEAR
-	void SDemag_EvalSpeedup_AddExtrapField_AddSelf(size_t size,
-		cu_obj<cuVEC<cuReal3>>& Heff,
-		cu_obj<cuVEC<cuReal3>>& Hdemag, cu_obj<cuVEC<cuReal3>>& Hdemag2,
-		cuBReal a1, cuBReal a2,
-		cu_obj<cuVEC_VC<cuReal3>>& M, cu_obj<cuReal3>& selfDemagCoeff);
-
-	//Calculate extrapolated field in H_M, also adding in the self contribution given that H_M initially contains M : AFM or FM transfer mode, STEP
-	void SDemag_EvalSpeedup_SetExtrapField_AddSelf(size_t size,
-		cu_obj<cuVEC<cuReal3>>& H_M,
-		cu_obj<cuVEC<cuReal3>>& Hdemag,
-		cu_obj<cuReal3>& selfDemagCoeff);
-
-	//Calculate extrapolated field, together with self demag contribution, and set it in Heff and Heff2 : AFM, non-transfer mode, STEP
-	void SDemag_EvalSpeedup_AddExtrapField_AddSelf(size_t size,
-		cu_obj<cuVEC<cuReal3>>& Heff, cu_obj<cuVEC<cuReal3>>& Heff2,
-		cu_obj<cuVEC<cuReal3>>& Hdemag,
-		cu_obj<cuVEC_VC<cuReal3>>& M, cu_obj<cuVEC_VC<cuReal3>>& M2, cu_obj<cuReal3>& selfDemagCoeff);
-
-	//Calculate extrapolated field, together with self demag contribution, and set it in Heff : FM, non-transfer mode, STEP
-	void SDemag_EvalSpeedup_AddExtrapField_AddSelf(size_t size,
-		cu_obj<cuVEC<cuReal3>>& Heff,
-		cu_obj<cuVEC<cuReal3>>& Hdemag,
-		cu_obj<cuVEC_VC<cuReal3>>& M, cu_obj<cuReal3>& selfDemagCoeff);
+	//called from UpdateField if using multiconvolution demag
+	void UpdateField_MConv_Demag(void);
 
 public:
 
@@ -228,7 +138,7 @@ public:
 
 	//-------------------
 
-	cu_obj<cuVEC<cuReal3>>& GetDemagField(void) { return sm_Vals; }
+	mcu_VEC(cuReal3)& GetDemagField(void) { return sm_Vals; }
 };
 
 #else

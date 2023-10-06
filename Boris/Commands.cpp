@@ -4150,6 +4150,51 @@ void Simulation::HandleCommand(std::string command_string)
 		}
 		break;
 
+		case CMD_CLEARGLOBALTEMP:
+		{
+			StopSimulation();
+			SMesh.CallModuleMethod(&SHeat::ClearGlobalTemperature);
+			UpdateScreen();
+		}
+		break;
+
+		case CMD_SHIFTGLOBALTEMP:
+		{
+			DBL3 shift;
+
+			error = commandSpec.GetParameters(command_fields, shift);
+
+			if (!error) {
+
+				StopSimulation();
+				SMesh.CallModuleMethod(&SHeat::ShiftGlobalTemperatureRectangle, shift);
+				UpdateScreen();
+			}
+			else if (verbose) PrintCommandUsage(command_name);
+
+			if (script_client_connected) commSocket.SetSendData(commandSpec.PrepareReturnParameters((Rect)SMesh.CallModuleMethod(&SHeat::GetGlobalTemperatureRect)));
+		}
+		break;
+
+		case CMD_GLOBALTEMPVELOCITY:
+		{
+			DBL3 velocity, clipping;
+
+			error = commandSpec.GetParameters(command_fields, velocity, clipping);
+			if (error == BERROR_PARAMMISMATCH) { error.reset() = commandSpec.GetParameters(command_fields, velocity); clipping = DBL3(DIPOLESHIFTCLIP); }
+
+			if (!error) {
+
+				StopSimulation();
+				SMesh.CallModuleMethod(&SHeat::set_globalTemp_velocity, velocity, clipping);
+				UpdateScreen();
+			}
+			else if (verbose) PrintCommandUsage(command_name);
+
+			if (script_client_connected) commSocket.SetSendData(commandSpec.PrepareReturnParameters((DBL3)SMesh.CallModuleMethod(&SHeat::get_globalTemp_velocity), (DBL3)SMesh.CallModuleMethod(&SHeat::get_globalTemp_clipping)));
+		}
+		break;
+
 		case CMD_RESETELSOLVER:
 		{
 			StopSimulation();
@@ -4729,6 +4774,57 @@ void Simulation::HandleCommand(std::string command_string)
 		}
 		break;
 
+		case CMD_GPUTEMPERATURE:
+		{
+			int device_idx;
+			error = commandSpec.GetParameters(command_fields, device_idx);
+			if (error) { error.reset(); device_idx = -1; }
+
+			if (!error) {
+
+#if COMPILECUDA == 1
+				if (cudaAvailable) {
+
+					if (device_idx >= 0) {
+
+						unsigned int gpu_temperature = mGPU.get_gpu_temperature(device_idx);
+						if (verbose) BD.DisplayConsoleListing("GPU " + ToString(device_idx) + " temperature : " + ToString(gpu_temperature) + " C.");
+						if (script_client_connected) commSocket.SetSendData(commandSpec.PrepareReturnParameters(gpu_temperature));
+					}
+					else {
+
+						std::vector<unsigned int> temperatures = mGPU.get_gpu_temperatures();
+						if (verbose) {
+
+							for (int idx = 0; idx < temperatures.size(); idx++)
+								BD.DisplayConsoleListing("GPU " + ToString(idx) + " temperature : " + ToString(temperatures[idx]) + " C.");
+						}
+						if (script_client_connected) commSocket.SetSendData(commandSpec.PrepareReturnParameters(temperatures));
+					}
+				}
+				else error(BERROR_NOTAVAILABLE);
+#endif
+			}
+		}
+		break;
+
+		case CMD_MAXGPUTEMPERATURE:
+		{
+			int max_temperature, timeout;
+			error = commandSpec.GetParameters(command_fields, max_temperature, timeout);
+
+			if (!error) {
+
+				StopSimulation();
+
+				max_gpu_temperature = max_temperature;
+				max_temperature_timeout_s = timeout;
+			}
+
+			if (verbose) BD.DisplayConsoleListing("Maximum operating GPU temperature " + ToString(max_gpu_temperature) + " C with simulation timeout " + ToString(max_temperature_timeout_s) + " s.");
+		}
+		break;
+
 		case CMD_SELCUDADEV:
 		{
 			std::string devices_string;
@@ -5288,13 +5384,33 @@ void Simulation::HandleCommand(std::string command_string)
 		}
 		break;
 
+		case CMD_GLOBALFIELDVELOCITY:
+		{
+			DBL3 velocity, clipping;
+
+			error = commandSpec.GetParameters(command_fields, velocity, clipping);
+			if (error == BERROR_PARAMMISMATCH) { error.reset() = commandSpec.GetParameters(command_fields, velocity); clipping = DBL3(DIPOLESHIFTCLIP); }
+
+			if (!error) {
+
+				StopSimulation();
+				SMesh.SetGlobalFieldVelocity(velocity, clipping);
+				UpdateScreen();
+			}
+			else if (verbose) PrintCommandUsage(command_name);
+
+			if (script_client_connected) commSocket.SetSendData(commandSpec.PrepareReturnParameters(SMesh.GetGlobalFieldVelocity(), SMesh.GetGlobalFieldClipping()));
+		}
+		break;
+
 		case CMD_LOADOVF2TEMP:
 		{
 			std::string meshName, fileName;
 
-			optional_meshname_check_focusedmeshdefault(command_fields);
+			bool meshName_specified = optional_meshname_check_focusedmeshdefault(command_fields, true);
 			error = commandSpec.GetParameters(command_fields, meshName, fileName);
-			
+			if (!meshName_specified) meshName = SMesh.superMeshHandle;
+
 			if (!error) {
 
 				StopSimulation();
@@ -5302,21 +5418,8 @@ void Simulation::HandleCommand(std::string command_string)
 				if (GetFileTermination(fileName) != ".ovf") fileName += ".ovf";
 				if (!GetFilenameDirectory(fileName).length()) fileName = directory + fileName;
 
-				VEC<double> data;
-
-				OVF2 ovf2;
-				error = ovf2.Read_OVF2_SCA(ScanFileNameData(fileName), data);
-
-				if (!error) {
-
-					//data loaded correctly, so set temperature from it
-					if (SMesh[meshName]->TComputation_Enabled()) {
-
-						SMesh[meshName]->SetTempFromData(data);
-						UpdateScreen();
-					}
-					else err_hndl.show_error(BERROR_NOHEAT, verbose);
-				}
+				err_hndl.call(error, &SuperMesh::LoadOVF2Temp, &SMesh, meshName, ScanFileNameData(fileName));
+				UpdateScreen();
 			}
 			else if (verbose) PrintCommandUsage(command_name);
 		}
@@ -5995,6 +6098,28 @@ void Simulation::HandleCommand(std::string command_string)
 			else if (verbose) PrintCommandUsage(command_name);
 
 			if (script_client_connected) commSocket.SetSendData(commandSpec.PrepareReturnParameters(SMesh[meshName]->Is_Dormant()));
+		}
+		break;
+
+		case CMD_TRACKSHIFTING:
+		{
+			std::string holder_meshName, sim_meshName, further_meshNames;
+			DBL3 velocity, clipping;
+
+			error = commandSpec.GetParameters(command_fields, holder_meshName, sim_meshName, velocity, clipping, further_meshNames);
+			if (error) { error.reset() = commandSpec.GetParameters(command_fields, holder_meshName, sim_meshName, velocity, clipping); }
+
+			if (!error) {
+
+				StopSimulation();
+
+				std::vector<std::string> sim_meshNames;
+				if (further_meshNames.length()) sim_meshNames = split(further_meshNames);
+				sim_meshNames.insert(sim_meshNames.begin(), sim_meshName);
+
+				if (!err_hndl.qcall(error, &SuperMesh::Setup_Track_Shifting, &SMesh, holder_meshName, sim_meshNames, velocity, clipping)) UpdateScreen();
+			}
+			else if (verbose) PrintCommandUsage(command_name);
 		}
 		break;
 

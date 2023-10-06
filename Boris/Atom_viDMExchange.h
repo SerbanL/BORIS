@@ -7,10 +7,13 @@ class Atom_Mesh;
 
 #if defined(MODULE_COMPILATION_VIDMEXCHANGE) && ATOMISTIC == 1
 
+#include "ExchangeBase.h"
+
 //vector interfacial DM exchange for an atomistic simple cubic mesh
 
 class Atom_viDMExchange :
 	public Modules,
+	public ExchangeBase,
 	public ProgramState<Atom_viDMExchange, std::tuple<>, std::tuple<>>
 {
 private:

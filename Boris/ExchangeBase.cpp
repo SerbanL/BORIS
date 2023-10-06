@@ -2,11 +2,12 @@
 #include "ExchangeBase.h"
 #include "SuperMesh.h"
 #include "Mesh.h"
+#include "Atom_Mesh.h"
 #include "MeshParamsControl.h"
 
-ExchangeBase::ExchangeBase(Mesh *pMesh_)
+ExchangeBase::ExchangeBase(MeshBase *pMeshBase_)
 {
-	pMesh = pMesh_;
+	pMeshBase = pMeshBase_;
 }
 
 BError ExchangeBase::Initialize(void)
@@ -18,10 +19,10 @@ BError ExchangeBase::Initialize(void)
 	pMeshes.clear();
 	CMBNDcontacts.clear();
 
-	if (pMesh->GetMeshExchangeCoupling()) {
+	if (pMeshBase->GetMeshExchangeCoupling()) {
 
 		//ExchangeBase given friend access to Mesh
-		SuperMesh* pSMesh = pMesh->pSMesh;
+		SuperMesh* pSMesh = pMeshBase->pSMesh;
 
 		//now build pM
 		for (int idx = 0; idx < pSMesh->size(); idx++) {
@@ -29,17 +30,25 @@ BError ExchangeBase::Initialize(void)
 			//use MComputation_Enabled check, not magnetization_Enabled check as we only want to couple to other (anti)ferromagnetic meshes, not dipole meshes.
 			//additionally only couple like meshes, e.g. FM to FM, AFM to AFM, but not FM to AFM - for the latter the coupling should be through the exchange bias mechanism (surface exchange coupling).
 			//here we only make a list of all possible meshes which could be exchange coupled; the actual coupling is done, where applicable, in the respective exchange modules.
-			if ((*pSMesh)[idx]->MComputation_Enabled() && (*pSMesh)[idx]->GetMeshExchangeCoupling() && !(*pSMesh)[idx]->is_atomistic()) {
+			if ((*pSMesh)[idx]->MComputation_Enabled() && (*pSMesh)[idx]->GetMeshExchangeCoupling()) {
 
-				pMeshes.push_back(dynamic_cast<Mesh*>((*pSMesh)[idx]));
-				pM.push_back(&dynamic_cast<Mesh*>((*pSMesh)[idx])->M);
+				pMeshes.push_back((*pSMesh)[idx]);
+
+				if (!(*pSMesh)[idx]->is_atomistic()) {
+
+					pM.push_back(&dynamic_cast<Mesh*>((*pSMesh)[idx])->M);
+				}
+				else {
+
+					pM.push_back(&dynamic_cast<Atom_Mesh*>((*pSMesh)[idx])->M1);
+				}
 			}
 		}
 
 		//set cmbnd flags
 		for (int idx = 0; idx < pMeshes.size(); idx++) {
 
-			if (pMeshes[idx] == pMesh) {
+			if (pMeshes[idx] == pMeshBase) {
 
 				//set CMBND flags, even for 1 cell thickness in cmbnd direction
 				CMBNDcontacts = pM[idx]->set_cmbnd_flags(idx, pM, false);
@@ -48,16 +57,13 @@ BError ExchangeBase::Initialize(void)
 		}
 	}
 
-	//also reinforce coupled to dipoles status
-	if (pMesh->pSMesh->Get_Coupled_To_Dipoles()) pMesh->CoupleToDipoles(true);
-
 	return error;
 }
 
 //calculate exchange field at coupled cells in this mesh; accumulate energy density contribution in energy
 void ExchangeBase::CalculateExchangeCoupling(
 	double& energy, 
-	std::function<double(int, int, DBL3, DBL3, DBL3, Mesh&, Mesh&)> calculate_coupling)
+	std::function<double(int, int, DBL3, DBL3, DBL3, MeshBase&, MeshBase&)> calculate_coupling)
 {
 	for (int contact_idx = 0; contact_idx < CMBNDcontacts.size(); contact_idx++) {
 
@@ -66,11 +72,14 @@ void ExchangeBase::CalculateExchangeCoupling(
 		int idx_pri = CMBNDcontacts[contact_idx].mesh_idx.j;
 
 		//secondary and primary ferromagnetic meshes
-		Mesh& Mesh_pri = *pMeshes[idx_pri];
-		Mesh& Mesh_sec = *pMeshes[idx_sec];
+		MeshBase& Mesh_pri = *pMeshes[idx_pri];
+		MeshBase& Mesh_sec = *pMeshes[idx_sec];
 
-		SZ3 n = Mesh_pri.M.n;
-		DBL3 h = Mesh_pri.M.h;
+		SZ3 n = Mesh_pri.n;
+		DBL3 h = Mesh_pri.h;
+
+		VEC_VC<DBL3>& Mpri = Mesh_pri.is_atomistic() ? reinterpret_cast<Atom_Mesh*>(&Mesh_pri)->M1 : reinterpret_cast<Mesh*>(&Mesh_pri)->M;
+		VEC_VC<DBL3>& Msec = Mesh_sec.is_atomistic() ? reinterpret_cast<Atom_Mesh*>(&Mesh_sec)->M1 : reinterpret_cast<Mesh*>(&Mesh_sec)->M;
 
 		//cellsize perpendicular to the interface, pointing towards it from the primary side (normal direction).
 		//thus if primary is on the right hR is negative
@@ -88,15 +97,15 @@ void ExchangeBase::CalculateExchangeCoupling(
 			int j = ((box_idx / box_sizes.x) % box_sizes.y) + CMBNDcontacts[contact_idx].cells_box.s.j;
 			int k = (box_idx / (box_sizes.x * box_sizes.y)) + CMBNDcontacts[contact_idx].cells_box.s.k;
 
-			int cell1_idx = i + j * n.x + k * n.x*n.y;
+			int cell1_idx = i + j * n.x + k * n.x * n.y;
 
-			if (Mesh_pri.M.is_empty(cell1_idx) || Mesh_pri.M.is_not_cmbnd(cell1_idx)) continue;
+			if (Mpri.is_empty(cell1_idx) || Mpri.is_not_cmbnd(cell1_idx)) continue;
 
 			//calculate second primary cell index
-			int cell2_idx = (i + CMBNDcontacts[contact_idx].cell_shift.i) + (j + CMBNDcontacts[contact_idx].cell_shift.j) * n.x + (k + CMBNDcontacts[contact_idx].cell_shift.k) * n.x*n.y;
+			int cell2_idx = (i + CMBNDcontacts[contact_idx].cell_shift.i) + (j + CMBNDcontacts[contact_idx].cell_shift.j) * n.x + (k + CMBNDcontacts[contact_idx].cell_shift.k) * n.x * n.y;
 
 			//relative position of cell -1 in secondary mesh
-			DBL3 relpos_m1 = Mesh_pri.M.rect.s - Mesh_sec.M.rect.s + ((DBL3(i, j, k) + DBL3(0.5)) & h) + (CMBNDcontacts[contact_idx].hshift_primary + CMBNDcontacts[contact_idx].hshift_secondary) / 2;
+			DBL3 relpos_m1 = Mpri.rect.s - Msec.rect.s + ((DBL3(i, j, k) + DBL3(0.5)) & h) + (CMBNDcontacts[contact_idx].hshift_primary + CMBNDcontacts[contact_idx].hshift_secondary) / 2;
 
 			//stencil is used for weighted_average to obtain values in the secondary mesh : has size equal to primary cellsize area on interface with thickness set by secondary cellsize thickness
 			DBL3 stencil = h - mod(CMBNDcontacts[contact_idx].hshift_primary) + mod(CMBNDcontacts[contact_idx].hshift_secondary);
@@ -107,3 +116,4 @@ void ExchangeBase::CalculateExchangeCoupling(
 		energy += energy_;
 	}
 }
+

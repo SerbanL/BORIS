@@ -16,6 +16,8 @@ BError SuperMesh::InitializeAllModules(void)
 
 		if (!error) error = pMesh[idx]->InitializeAllModules();
 
+		if (pMesh[idx]->Is_Dormant()) continue;
+
 		total_nonempty_volume += pMesh[idx]->Get_NonEmpty_Magnetic_Volume();
 	}
 
@@ -30,7 +32,8 @@ BError SuperMesh::InitializeAllModules(void)
 
 		for (int idx = 0; idx < (int)pMesh.size(); idx++) {
 
-			energy_density_weights[idx] = pMesh[idx]->Get_NonEmpty_Magnetic_Volume() / total_nonempty_volume;
+			if (pMesh[idx]->Is_Dormant()) energy_density_weights[idx] = 0.0;
+			else energy_density_weights[idx] = pMesh[idx]->Get_NonEmpty_Magnetic_Volume() / total_nonempty_volume;
 		}
 	}
 
@@ -57,10 +60,18 @@ BError SuperMesh::InitializeAllModulesCUDA(void)
 
 	double total_nonempty_volume = 0.0;
 
+	//0. check synchronization to CPU quantities first
+	for (int idx = 0; idx < (int)pMesh.size(); idx++) {
+
+		if (!error) error = pMesh[idx]->CheckSynchronization_on_Initialization();
+	}
+
 	//1. initialize individual mesh modules
 	for (int idx = 0; idx < (int)pMesh.size(); idx++) {
 
 		if (!error) error = pMesh[idx]->InitializeAllModulesCUDA();
+
+		if (pMesh[idx]->Is_Dormant()) continue;
 
 		total_nonempty_volume += pMesh[idx]->Get_NonEmpty_Magnetic_Volume();
 	}
@@ -76,7 +87,8 @@ BError SuperMesh::InitializeAllModulesCUDA(void)
 
 		for (int idx = 0; idx < (int)pMesh.size(); idx++) {
 
-			energy_density_weights[idx] = pMesh[idx]->Get_NonEmpty_Magnetic_Volume() / total_nonempty_volume;
+			if (pMesh[idx]->Is_Dormant()) energy_density_weights[idx] = 0.0;
+			else energy_density_weights[idx] = pMesh[idx]->Get_NonEmpty_Magnetic_Volume() / total_nonempty_volume;
 		}
 	}
 
@@ -92,6 +104,9 @@ void SuperMesh::AdvanceTime(void)
 	//moving mesh algorithm, if enabled
 	odeSolver.MovingMeshAlgorithm(this);
 
+	//global field shifting algorithm, if enabled
+	GlobalFieldShifting_Algorithm();
+
 	do {
 
 		//prepare meshes for new iteration (typically involves setting some state flag)
@@ -105,6 +120,7 @@ void SuperMesh::AdvanceTime(void)
 		//first update the effective fields in all the meshes (skipping any that have been calculated on the super-mesh
 		for (int idx = 0; idx < (int)pMesh.size(); idx++) {
 
+			if (pMesh[idx]->Is_Dormant()) continue;
 			total_energy_density += (pMesh[idx]->UpdateModules() * energy_density_weights[idx]);
 		}
 
@@ -126,6 +142,10 @@ void SuperMesh::AdvanceTimeCUDA(void)
 {
 	//moving mesh algorithm, if enabled
 	odeSolver.MovingMeshAlgorithm(this);
+
+	//global field shifting algorithm, if enabled
+	GlobalFieldShifting_Algorithm();
+
 	do {
 		
 		//prepare meshes for new iteration (typically involves setting some state flag)
@@ -137,7 +157,8 @@ void SuperMesh::AdvanceTimeCUDA(void)
 		//first update the effective fields in all the meshes (skipping any that have been calculated on the super-mesh
 		for (int idx = 0; idx < (int)pMesh.size(); idx++) {
 
-				pMesh[idx]->UpdateModulesCUDA();
+			if (pMesh[idx]->Is_Dormant()) continue;
+			pMesh[idx]->UpdateModulesCUDA();
 		}
 		
 		//update effective field for super-mesh modules
@@ -166,6 +187,7 @@ void SuperMesh::ComputeFields(void)
 	//first update the effective fields in all the meshes (skipping any that have been calculated on the super-mesh
 	for (int idx = 0; idx < (int)pMesh.size(); idx++) {
 
+		if (pMesh[idx]->Is_Dormant()) continue;
 		total_energy_density += pMesh[idx]->UpdateModules();
 	}
 
@@ -186,7 +208,6 @@ void SuperMesh::ComputeFieldsCUDA(void)
 		cudaGetDevice(&device);
 		if (device != cudaDeviceSelect) cudaSetDevice(cudaDeviceSelect);
 	}
-	
 
 	//prepare meshes for new iteration (typically involves setting some state flag)
 	for (int idx = 0; idx < (int)pMesh.size(); idx++) {
@@ -197,6 +218,7 @@ void SuperMesh::ComputeFieldsCUDA(void)
 	//first update the effective fields in all the meshes (skipping any that have been calculated on the super-mesh
 	for (int idx = 0; idx < (int)pMesh.size(); idx++) {
 
+		if (pMesh[idx]->Is_Dormant()) continue;
 		pMesh[idx]->UpdateModulesCUDA();
 	}
 
@@ -214,6 +236,7 @@ void SuperMesh::UpdateTransportSolver(void)
 	//first update MOD_TRANSPORT module in all the meshes
 	for (int idx = 0; idx < (int)pMesh.size(); idx++) {
 
+		if (pMesh[idx]->Is_Dormant()) continue;
 		pMesh[idx]->UpdateTransportSolver();
 	}
 
@@ -227,6 +250,7 @@ void SuperMesh::UpdateTransportSolverCUDA(void)
 	//first update MOD_TRANSPORT module in all the meshes
 	for (int idx = 0; idx < (int)pMesh.size(); idx++) {
 
+		if (pMesh[idx]->Is_Dormant()) continue;
 		pMesh[idx]->UpdateTransportSolverCUDA();
 	}
 
@@ -239,6 +263,8 @@ void SuperMesh::UpdateTransportSolverCUDA(void)
 void SuperMesh::Iterate_MonteCarlo(double acceptance_rate)
 {
 	for (int idx = 0; idx < (int)pMesh.size(); idx++) {
+
+		if (pMesh[idx]->Is_Dormant()) continue;
 
 		//Iterate Monte Carlo Metropolis algorithm
 		pMesh[idx]->Iterate_MonteCarlo(acceptance_rate);
@@ -253,6 +279,8 @@ void SuperMesh::Iterate_MonteCarlo(double acceptance_rate)
 void SuperMesh::Iterate_MonteCarloCUDA(double acceptance_rate)
 {
 	for (int idx = 0; idx < (int)pMesh.size(); idx++) {
+
+		if (pMesh[idx]->Is_Dormant()) continue;
 
 		//Iterate Monte Carlo Metropolis algorithm
 		pMesh[idx]->Iterate_MonteCarloCUDA(acceptance_rate);

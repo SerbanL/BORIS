@@ -199,6 +199,13 @@ public:
 
 	virtual ~Mesh();
 
+	//----------------------------------- IMPORTANT CONTROL METHODS
+
+#if COMPILECUDA == 1
+	//check the shape_synchronization_lost flag when starting a simulation (called from SuperMesh::InitializeAllModulesCUDA)
+	BError CheckSynchronization_on_Initialization(void);
+#endif
+
 	//----------------------------------- OTHER CONTROL METHODS : MeshControl.cpp
 
 	//used by move mesh algorithm : shift mesh quantities (e.g. magnetization) by the given shift (metric units) value within this mesh. The shift is along the x-axis direction only (+ve or -ve).
@@ -436,7 +443,7 @@ public:
 
 	//----------------------------------- OTHER MESH SHAPE CONTROL : MeshShape.cpp
 
-	BError copy_mesh_data(MeshBase& copy_this);
+	BError copy_mesh_data(MeshBase& copy_this, Rect dstRect = Rect(), Rect srcRect = Rect());
 
 	//mask cells using bitmap image : white -> empty cells. black -> keep values. Apply mask up to given z depth number of cells depending on grayscale value (zDepth, all if 0).
 	BError applymask(double zDepth_m, std::string fileName, std::function<std::vector<unsigned char>(std::string, INT2)>& bitmap_loader);

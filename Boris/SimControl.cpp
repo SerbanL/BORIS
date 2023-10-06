@@ -22,42 +22,63 @@ void Simulation::Simulate(void)
 	//non-blocking std::mutex is needed here so we can stop the simulation from HandleCommand - it also uses the simulationMutex. If Simulation thread gets blocked by this std::mutex they'll wait on each other forever.
 	if (simulationMutex.try_lock()) {
 
-		CheckSaveDataConditions();
+		if (!simulation_timeout) {
 
-		if (simStages[stage_step.major].stage_type() == SS_MONTECARLO) {
+			CheckSaveDataConditions();
 
-			//Monte-Carlo stages are special - use Iterate_MonteCarlo to advance simulation instead
-#if COMPILECUDA == 1
-			if (cudaEnabled) {
+			if (simStages[stage_step.major].stage_type() == SS_MONTECARLO) {
 
-				SMesh.Iterate_MonteCarloCUDA(simStages[stage_step.major].get_value<double>(stage_step.minor));
-				if (SMesh.Get_MonteCarlo_ComputeFields()) SMesh.ComputeFieldsCUDA();
-			}
-			else {
+				//Monte-Carlo stages are special - use Iterate_MonteCarlo to advance simulation instead
+	#if COMPILECUDA == 1
+				if (cudaEnabled) {
 
+					SMesh.Iterate_MonteCarloCUDA(simStages[stage_step.major].get_value<double>(stage_step.minor));
+					if (SMesh.Get_MonteCarlo_ComputeFields()) SMesh.ComputeFieldsCUDA();
+				}
+				else {
+
+					SMesh.Iterate_MonteCarlo(simStages[stage_step.major].get_value<double>(stage_step.minor));
+					if (SMesh.Get_MonteCarlo_ComputeFields()) SMesh.ComputeFields();
+				}
+	#else
 				SMesh.Iterate_MonteCarlo(simStages[stage_step.major].get_value<double>(stage_step.minor));
 				if (SMesh.Get_MonteCarlo_ComputeFields()) SMesh.ComputeFields();
+	#endif
+				}
+			else {
+
+				//advance time for this iteration
+	#if COMPILECUDA == 1
+				if (cudaEnabled) SMesh.AdvanceTimeCUDA();
+				else SMesh.AdvanceTime();
+	#else
+				SMesh.AdvanceTime();
+	#endif
 			}
-#else
-			SMesh.Iterate_MonteCarlo(simStages[stage_step.major].get_value<double>(stage_step.minor));
-			if (SMesh.Get_MonteCarlo_ComputeFields()) SMesh.ComputeFields();
-#endif
+
+			if (iterUpdate && SMesh.GetIteration() % iterUpdate == 0) {
+
+				//check maximum temperature and start timer if reached
+				unsigned int gpu_temperature = mGPU.get_max_gpu_temperature();
+				if (gpu_temperature >= max_gpu_temperature) {
+
+					simulation_timeout = true;
+					timeout_tick_start_ms = GetSystemTickCount();
+					err_hndl.show_error(BError(BERROR_MAXGPUTEMPERATURE), true);
+				}
+
+				UpdateScreen_Quick();
+			}
+
+			//Check conditions for advancing simulation schedule
+			CheckSimulationSchedule();
 		}
+
 		else {
 
-			//advance time for this iteration
-#if COMPILECUDA == 1
-			if (cudaEnabled) SMesh.AdvanceTimeCUDA();
-			else SMesh.AdvanceTime();
-#else
-			SMesh.AdvanceTime();
-#endif
+			//TIMEOUT : maximum GPU temperature reached. Pause simulation for max_temperature_timeout_s.
+			if ((GetSystemTickCount() - timeout_tick_start_ms) > max_temperature_timeout_s * 1000) simulation_timeout = false;
 		}
-
-		if (iterUpdate && SMesh.GetIteration() % iterUpdate == 0) UpdateScreen_Quick();
-
-		//Check conditions for advancing simulation schedule
-		CheckSimulationSchedule();
 
 		//finished this iteration
 		simulationMutex.unlock();
@@ -167,6 +188,8 @@ bool Simulation::PrepareRunSimulation(void)
 
 	BD.DisplayConsoleMessage("Initialized. Simulation running. Started at: " + Get_Date_Time());
 	sim_start_ms = GetSystemTickCount();
+	timeout_tick_start_ms = sim_start_ms;
+	simulation_timeout = false;
 
 	return !initialization_error;
 }

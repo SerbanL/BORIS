@@ -9,6 +9,10 @@
 template <typename MType, typename VType>
 __device__ size_t mcuVEC_Managed<MType, VType>::global_idx_to_device_idx(int i_global, int j_global, int k_global, int& device) const
 {
+	//generate hint device with assumed partition along x (note pn_d[0] is always present and normally only the last device has different dimensions
+	device = i_global / pn_d[0].x;
+	if (device >= num_devices) device = num_devices - 1;
+
 	//check hint device first
 	if (pbox_d[device].contains(i_global, j_global, k_global)) {
 
@@ -43,6 +47,10 @@ __device__ size_t mcuVEC_Managed<MType, VType>::global_idx_to_device_idx(int i_g
 template <typename MType, typename VType>
 __device__ size_t mcuVEC_Managed<MType, VType>::global_idx_to_device_idx(const cuINT3& ijk_global, int& device) const
 {
+	//generate hint device with assumed partition along x (note pn_d[0] is always present and normally only the last device has different dimensions
+	device = ijk_global.i / pn_d[0].x;
+	if (device >= num_devices) device = num_devices - 1;
+
 	//check hint device first
 	if (pbox_d[device].contains(ijk_global)) {
 
@@ -74,6 +82,10 @@ __device__ size_t mcuVEC_Managed<MType, VType>::global_idx_to_device_idx(const c
 template <typename MType, typename VType>
 __device__ cuReal3 mcuVEC_Managed<MType, VType>::global_pos_to_device_pos(const cuReal3& rel_pos, int& device) const
 {
+	//generate hint device with assumed partition along x (note prect_d[0] is always present and normally only the last device has different dimensions
+	device = rel_pos.x / prect_d[0].size().x;
+	if (device >= num_devices) device = num_devices - 1;
+
 	//check hint device first
 	if (prect_d[device].contains(rel_pos + rect.s)) {
 

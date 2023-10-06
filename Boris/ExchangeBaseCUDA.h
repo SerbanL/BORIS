@@ -6,9 +6,11 @@
 #include "BorisCUDALib.h"
 #include "ErrorHandler.h"
 
-class MeshCUDA;
+class MeshBaseCUDA;
 class ManagedMeshCUDA;
 class ManagedMeshPolicyCUDA;
+class ManagedAtom_MeshCUDA;
+class ManagedAtom_MeshPolicyCUDA;
 class ExchangeBase;
 
 //cannot include BorisLib.h (or even just VEC_VC.h and VEC.h) since it contains C++14 (ProgramState and Introspection in particular) code which nvcc doesn't compile.
@@ -28,11 +30,16 @@ protected:
 	//vector of pointers to all ferromagnetic meshes in managed mesh cuda form
 	std::vector<mcu_obj<ManagedMeshCUDA, ManagedMeshPolicyCUDA>*> pContactingManagedMeshes;
 
+	//vector of pointers to all atomistic meshes in managed mesh cuda form
+	std::vector<mcu_obj<ManagedAtom_MeshCUDA, ManagedAtom_MeshPolicyCUDA>*> pContactingManagedAtomMeshes;
+
 	//as above but this vector contains the MeshCUDA pointers
-	std::vector<MeshCUDA*> pContactingMeshes;
+	//NOTE : pContactingManagedMeshes and pContactingManagedAtomMeshes have same size as pContactingMeshes
+	//However, a mesh which is not of the right type is set as nullptr, e.g. pContactingManagedMeshes has nullptr where there should be atomistic meshes
+	std::vector<MeshBaseCUDA*> pContactingMeshes;
 
 	//pointer to CUDA version of mesh object holding the effective field module holding this CUDA module (the primary mesh)
-	MeshCUDA* pMeshCUDA;
+	MeshBaseCUDA* pMeshBaseCUDA;
 
 	//pointer to cpu version of this (base for exchange-type module)
 	ExchangeBase* pExchBase;
@@ -43,9 +50,9 @@ protected:
 	BError Initialize(void);
 
 	//protected constructor - this class should not be instantiated by itself, but only used as a base for an exchange-type module for purposes of code reuse
-	ExchangeBaseCUDA(MeshCUDA* pMeshCUDA_, ExchangeBase* pExchBase_);
+	ExchangeBaseCUDA(MeshBaseCUDA* pMeshBaseCUDA_, ExchangeBase* pExchBase_);
 
-	virtual ~ExchangeBaseCUDA() {}
+	virtual ~ExchangeBaseCUDA();
 
 	virtual void CalculateExchangeCoupling(mcu_val<cuBReal>& energy) = 0;
 };

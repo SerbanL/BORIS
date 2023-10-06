@@ -15,6 +15,7 @@ void mcuVEC<VType, MType>::set_cmbnd_continuous(
 
 		size_t size = contact.contact_size(mGPU);
 		if (!size) continue;
+		
 		mng(mGPU)->set_cmbnd_continuous(size, man_mcuVEC_sec[mGPU]->get_dereferenced(), mcmbndFuncs_sec.get_deviceobject(mGPU), mcmbndFuncs_pri.get_deviceobject(mGPU), contact.get_deviceobject(mGPU));
 	}
 }

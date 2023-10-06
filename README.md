@@ -4,7 +4,7 @@ BORIS multi-GPU upgrade (also includes all single-GPU and CPU functionality of B
 
 # NOTES
 
-!!! IMPORTANT !!! Currently this is a pre-release version as upgrade is not fully finished (vast majority of codebase is upgraded and usable - compile as usual, instructions below). Currently missing Oersted field module and multi-mesh demag; all individual demag and dipole-dipole mesh modules are fully functional.
+The codebase is fully upgraded for multi-GPU use. This is a pre-release version as further testing is required.
 
 All Python scripts from previous versions will work on the new code, however older bsm files no longer compatible. To select more than one GPU simply use the selectcudadevice command, but pass it a list of GPU ids, e.g. ns.selectcudadevice([0, 1, 2, 3]) etc.
 
@@ -19,7 +19,7 @@ Latest manual rolled in with installer, also found here in the Manual directory 
 Standalone version here: https://www.researchgate.net/publication/331715880_Boris_Computational_Spintronics_User_Manual
 
 # External Dependencies
-CUDA 9.2 or newer : https://developer.nvidia.com/cuda-92-download-archive
+CUDA 11.7 or newer : https://developer.nvidia.com/cuda-11-7-0-download-archive
 
 Python3 development version : https://www.python.org/downloads/
 

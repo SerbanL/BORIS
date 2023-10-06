@@ -23,11 +23,11 @@ __global__ void cu_Demag_ConvProd_2D(
 
 		int j = (idx / N_xRegion.x) % N_xRegion.y;
 
-		if (j <= N_xRegion.y / 2) {
+		cuReIm FMx = cuSx_in[idx];
+		cuReIm FMy = cuSy_in[idx];
+		cuReIm FMz = cuSz_in[idx];
 
-			cuReIm FMx = cuSx_in[idx];
-			cuReIm FMy = cuSy_in[idx];
-			cuReIm FMz = cuSz_in[idx];
+		if (j <= N_xRegion.y / 2) {
 
 			cuSx_out[idx] = (Kdiag[idx].x  * FMx) + (K2D_odiag[idx] * FMy);
 			cuSy_out[idx] = (K2D_odiag[idx] * FMx) + (Kdiag[idx].y  * FMy);
@@ -36,12 +36,7 @@ __global__ void cu_Demag_ConvProd_2D(
 		else {
 
 			int i = idx % N_xRegion.x;
-
 			int ker_idx = i + (N_xRegion.y - j) * N_xRegion.x;
-
-			cuReIm FMx = cuSx_in[idx];
-			cuReIm FMy = cuSy_in[idx];
-			cuReIm FMz = cuSz_in[idx];
 
 			cuSx_out[idx] = (Kdiag[ker_idx].x  * FMx) + (-K2D_odiag[ker_idx] * FMy);
 			cuSy_out[idx] = (-K2D_odiag[ker_idx] * FMx) + (Kdiag[ker_idx].y  * FMy);
@@ -64,14 +59,14 @@ __global__ void cu_Demag_ConvProd_2D_transpose_xy(
 
 	if (idx < N_xRegion.dim()) {
 
+		cuReIm FMx = cuSx_in[idx];
+		cuReIm FMy = cuSy_in[idx];
+		cuReIm FMz = cuSz_in[idx];
+
 		int i = idx % N_xRegion.y;
 		int j = (idx / N_xRegion.y) % N_xRegion.x;
 
 		if (i <= N_xRegion.y / 2) {
-
-			cuReIm FMx = cuSx_in[idx];
-			cuReIm FMy = cuSy_in[idx];
-			cuReIm FMz = cuSz_in[idx];
 
 			int ker_idx = i + j * (N_xRegion.y / 2 + 1);
 
@@ -82,10 +77,6 @@ __global__ void cu_Demag_ConvProd_2D_transpose_xy(
 		else {
 
 			int ker_idx = (N_xRegion.y - i) + j * (N_xRegion.y / 2 + 1);
-
-			cuReIm FMx = cuSx_in[idx];
-			cuReIm FMy = cuSy_in[idx];
-			cuReIm FMz = cuSz_in[idx];
 
 			cuSx_out[idx] = (Kdiag[ker_idx].x  * FMx) + (-K2D_odiag[ker_idx] * FMy);
 			cuSy_out[idx] = (-K2D_odiag[ker_idx] * FMx) + (Kdiag[ker_idx].y  * FMy);
@@ -111,6 +102,10 @@ __global__ void cu_Demag_ConvProd_3D_transpose_xy(
 
 	if (idx < N_xRegion.dim()) {
 
+		cuReIm FMx = cuSx_in[idx];
+		cuReIm FMy = cuSy_in[idx];
+		cuReIm FMz = cuSz_in[idx];
+
 		int i = idx % N_xRegion.y;
 		int j = (idx / N_xRegion.y) % N_xRegion.x;
 		int k = idx / (N_xRegion.x * N_xRegion.y);
@@ -119,10 +114,6 @@ __global__ void cu_Demag_ConvProd_3D_transpose_xy(
 
 			if (i <= N_xRegion.y / 2) {
 
-				cuReIm FMx = cuSx_in[idx];
-				cuReIm FMy = cuSy_in[idx];
-				cuReIm FMz = cuSz_in[idx];
-
 				int ker_idx = i + j * (N_xRegion.y / 2 + 1) + k * N_xRegion.x * (N_xRegion.y / 2 + 1);
 
 				cuSx_out[idx] = (Kdiag[ker_idx].x * FMx) + (Kodiag[ker_idx].x * FMy) + (Kodiag[ker_idx].y * FMz);
@@ -130,10 +121,6 @@ __global__ void cu_Demag_ConvProd_3D_transpose_xy(
 				cuSz_out[idx] = (Kodiag[ker_idx].y * FMx) + (Kodiag[ker_idx].z * FMy) + (Kdiag[ker_idx].z * FMz);
 			}
 			else {
-
-				cuReIm FMx = cuSx_in[idx];
-				cuReIm FMy = cuSy_in[idx];
-				cuReIm FMz = cuSz_in[idx];
 
 				int ker_idx = (N_xRegion.y - i) + j * (N_xRegion.y / 2 + 1) + k * N_xRegion.x * (N_xRegion.y / 2 + 1);
 
@@ -146,10 +133,6 @@ __global__ void cu_Demag_ConvProd_3D_transpose_xy(
 
 			if (i <= N_xRegion.y / 2) {
 
-				cuReIm FMx = cuSx_in[idx];
-				cuReIm FMy = cuSy_in[idx];
-				cuReIm FMz = cuSz_in[idx];
-
 				int ker_idx = i + j * (N_xRegion.y / 2 + 1) + (N_xRegion.z - k) * N_xRegion.x * (N_xRegion.y / 2 + 1);
 
 				cuSx_out[idx] = (Kdiag[ker_idx].x * FMx) + (Kodiag[ker_idx].x * FMy) + (-Kodiag[ker_idx].y * FMz);
@@ -157,10 +140,6 @@ __global__ void cu_Demag_ConvProd_3D_transpose_xy(
 				cuSz_out[idx] = (-Kodiag[ker_idx].y * FMx) + (-Kodiag[ker_idx].z * FMy) + (Kdiag[ker_idx].z * FMz);
 			}
 			else {
-
-				cuReIm FMx = cuSx_in[idx];
-				cuReIm FMy = cuSy_in[idx];
-				cuReIm FMz = cuSz_in[idx];
 
 				int ker_idx = (N_xRegion.y - i) + j * (N_xRegion.y / 2 + 1) + (N_xRegion.z - k) * N_xRegion.x * (N_xRegion.y / 2 + 1);
 
@@ -948,8 +927,6 @@ __global__ void cu_Demag_ConvProd_q2D_32_transpose_xy(
 		X[15] = (x[7] - x[15]) * cuReIm(-c, -d);
 		X[23] = (x[7] - !x[15]) * cuReIm(b, -a);
 		X[31] = (x[7] + !x[15]) * cuReIm(-f, e);
-
-#undef x
 
 		//final radix4 stage
 

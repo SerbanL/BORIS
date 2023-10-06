@@ -10,6 +10,7 @@ class SuperMesh;
 #include "Convolution.h"
 #include "DemagKernel.h"
 #include "DemagKernelCollection.h"
+#include "EvalSpeedup.h"
 
 #include "SDemag_Demag.h"
 
@@ -25,7 +26,8 @@ class SuperMesh;
 class SDemag :
 	public Modules,
 	public Convolution<SDemag, DemagKernel>,
-	public ProgramState<SDemag, std::tuple<bool, SZ3, bool, int, INT3>, std::tuple<>>
+	public ProgramState<SDemag, std::tuple<bool, SZ3, bool, int, INT3>, std::tuple<>>,
+	public EvalSpeedup
 {
 #if COMPILECUDA == 1
 	friend SDemagCUDA;
@@ -93,25 +95,9 @@ private:
 	//these pbc images are applicable for supermesh or multilayered convolution only - in the case of multilayered convolution all meshes have the same pbc conditions applied.
 	INT3 demag_pbc_images = INT3();
 
-	//Evaluation speedup mode data
-
-	//times at which evaluations were done, used for extrapolation
-	double time_demag1 = 0.0, time_demag2 = 0.0, time_demag3 = 0.0, time_demag4 = 0.0, time_demag5 = 0.0, time_demag6 = 0.0;
-
-	int num_Hdemag_saved = 0;
-
 private:
 
-	//------------------ Helpers for multi-layered convolution control
-
-	//when SDemag created, it needs to add one SDemag_Demag module to each (anti)ferromagnetic mesh (or multiple if the 2D layering option is enabled).
-	BError Create_SDemag_Demag_Modules(void);
-
-	//delete all SDemag_Demag modules - these are only created by SDemag
-	void Destroy_SDemag_Demag_Modules(void);
-
-	//make sure the pSDemag_Demag list is up to date : if any mismatches found return false
-	bool Update_SDemag_Demag_List(void);
+	//------------------ Auxiliary
 
 	//set default value for n_common : largest value from all (anti)ferromagnetic meshes
 	void set_default_n_common(void);
@@ -126,11 +112,44 @@ private:
 	//get convolution rectangle for the given SDemag_Demag module (remember this might not be the rectangle of M in that mesh, but an adjusted rectangle to make the convolution work)
 	Rect get_convolution_rect(SDemag_Demag* demag_demag);
 
+	//Set PBC settings for M in all meshes
+	BError Set_Magnetic_PBC(void);
+private:
+
+	//-------- SUPERMESH DEMAG
+
+	//called from Initialize if using SMesh demag
+	BError Initialize_SMesh_Demag(void);
+
 	//initialize transfer object for supermesh convolution
 	BError Initialize_Mesh_Transfer(void);
 
-	//Set PBC settings for M in all meshes
-	BError Set_Magnetic_PBC(void);
+	//called from UpdateConfiguration if using Smesh demag
+	BError UpdateConfiguration_SMesh_Demag(UPDATECONFIG_ cfgMessage);
+
+	//called from UpdateField if using Smesh demag
+	void UpdateField_SMesh_Demag(void);
+
+	//-------- MULTICONVOLUTION DEMAG
+
+	//when SDemag created, it needs to add one SDemag_Demag module to each (anti)ferromagnetic mesh (or multiple if the 2D layering option is enabled).
+	BError Create_SDemag_Demag_Modules(void);
+
+	//delete all SDemag_Demag modules - these are only created by SDemag
+	void Destroy_SDemag_Demag_Modules(void);
+
+	//make sure the pSDemag_Demag list is up to date : if any mismatches found return false
+	bool Update_SDemag_Demag_List(void);
+
+	//called from Initialize if using multiconvolution demag
+	BError Initialize_MConv_Demag(void);
+
+	//called from UpdateConfiguration if using multiconvolution demag
+	BError UpdateConfiguration_MConv_Demag(UPDATECONFIG_ cfgMessage);
+
+	//called from UpdateField if using multiconvolution demag
+	void UpdateField_MConv_Demag(void);
+
 
 public:
 
@@ -192,7 +211,7 @@ public:
 	INT3 Get_PBC(void) { return demag_pbc_images; }
 
 #if COMPILECUDA == 1
-	cu_obj<cuVEC<cuReal3>>& GetDemagFieldCUDA(void) { return dynamic_cast<SDemagCUDA*>(pModuleCUDA)->GetDemagField(); }
+	mcu_VEC(cuReal3)& GetDemagFieldCUDA(void) { return dynamic_cast<SDemagCUDA*>(pModuleCUDA)->GetDemagField(); }
 #endif
 
 	//getters for multi-layered convolution

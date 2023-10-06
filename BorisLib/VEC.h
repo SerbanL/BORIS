@@ -226,7 +226,14 @@ public:
 
 	//copy values from copy_this but keep current dimensions - if necessary map values from copy_this to local dimensions
 	//can specify destination and source rectangles in relative coordinates
-	void copy_values(const VEC<VType>& copy_this, Rect dstRect = Rect(), Rect srcRect = Rect());
+	void copy_values(const VEC<VType>& copy_this, Rect dstRect = Rect(), Rect srcRect = Rect(), double multiplier = 1.0);
+
+	//copy values from copy_this but keep current dimensions - if necessary map values from copy_this to local dimensions
+	//can specify destination and source rectangles in relative coordinates
+	//this is intended for VECs where copy_this cellsize is much larger than that in this VEC, and instead of setting all values the same, thermalize_func generator will generate values
+	//e.g. this is useful for copying values from a micromagnetic mesh into an atomistic mesh, where the atomistic spins are generated according to a distribution setup in thermalize_func
+	//thermalize_func returns the value to set, and takes parameters VType (value in the larger cell from copy_this which is being copied), and int, int (index of larger cell from copy_this which is being copied, and index of destination cell)
+	void copy_values_thermalize(const VEC<VType>& copy_this, std::function<VType(VType, int, int)>& thermalize_func, Rect dstRect = Rect(), Rect srcRect = Rect());
 
 	//--------------------------------------------ARITHMETIC OPERATIONS ON ENTIRE VEC : VEC_arith.h
 

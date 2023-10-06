@@ -63,9 +63,9 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_2D_Self_onGPU(int inde
 
 	//Forward fft along y direction (out-of-place):
 	cuffterr = cufftPlanMany(&planTens2D_y, 1, ndims_y,
-		embed, (N.x / 2 + 1), 1,
-		embed, (N.x / 2 + 1), 1,
-		CUFFT_D2Z, (int)(N.x / 2 + 1));
+		embed, nxRegion, 1,
+		embed, nxRegion, 1,
+		CUFFT_D2Z, (int)nxRegion);
 
 	//-------------- FFT REAL TENSOR INTO REAL KERNELS
 
@@ -75,13 +75,13 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_2D_Self_onGPU(int inde
 		cufftExecD2Z(planTens2D_x, cuIn, cuOut);
 
 		//extract real parts from cuOut and place in cuIn
-		cuOut_to_cuIn_Re((N.x / 2 + 1) * N.y, cuIn, cuOut);
+		cuOut_to_cuIn_Re(nxRegion * N.y, cuIn, cuOut, N.x / 2 + 1, N.y, xRegion.i, xRegion.i + nxRegion);
 
 		//Now FFT along y from input to output
 		cufftExecD2Z(planTens2D_y, cuIn, cuOut);
 
 		//extract real parts from cuOut and place in kernel
-		(*kernels[index])()->Set_Kdiag_real((N.x / 2 + 1) * (N.y / 2 + 1) * (N.z / 2 + 1), cuOut, component, transpose_xy);
+		(*kernels[index])()->Set_Kdiag_real(nxRegion * (N.y / 2 + 1) * (N.z / 2 + 1), cuOut, cuN, cuxRegion, component, transpose_xy);
 	};
 
 	//diagonal components
@@ -105,13 +105,13 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_2D_Self_onGPU(int inde
 	cufftExecD2Z(planTens2D_x, cuInx, cuOut);
 
 	//extract imaginary parts from cuOut and place in cuIn
-	cuOut_to_cuIn_Im((N.x / 2 + 1) * N.y, cuInx, cuOut);
+	cuOut_to_cuIn_Im(nxRegion * N.y, cuInx, cuOut, N.x / 2 + 1, N.y, xRegion.i, xRegion.i + nxRegion);
 
 	//Now FFT along y from input to output
 	cufftExecD2Z(planTens2D_y, cuInx, cuOut);
 
 	//extract imaginary part from cuOut and place in kernel, also changing sign
-	(*kernels[index])()->Set_K2D_odiag((N.x / 2 + 1) * (N.y / 2 + 1) * (N.z / 2 + 1), cuOut, transpose_xy);
+	(*kernels[index])()->Set_K2D_odiag(nxRegion * (N.y / 2 + 1) * (N.z / 2 + 1), cuOut, cuN, cuxRegion, transpose_xy);
 
 	//-------------- CLEANUP
 
@@ -177,9 +177,9 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_2D_zShifted_onGPU(int 
 
 	//Forward fft along y direction (out-of-place):
 	cuffterr = cufftPlanMany(&planTens2D_y, 1, ndims_y,
-		embed, (N.x / 2 + 1), 1,
-		embed, (N.x / 2 + 1), 1,
-		CUFFT_D2Z, (int)(N.x / 2 + 1));
+		embed, nxRegion, 1,
+		embed, nxRegion, 1,
+		CUFFT_D2Z, (int)nxRegion);
 
 	//-------------- FFT REAL TENSOR INTO REAL KERNELS
 
@@ -189,13 +189,13 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_2D_zShifted_onGPU(int 
 		cufftExecD2Z(planTens2D_x, cuIn, cuOut);
 
 		//extract real parts from cuOut and place in cuIn
-		cuOut_to_cuIn_Re((N.x / 2 + 1) * N.y, cuIn, cuOut);
+		cuOut_to_cuIn_Re(nxRegion * N.y, cuIn, cuOut, N.x / 2 + 1, N.y, xRegion.i, xRegion.i + nxRegion);
 
 		//Now FFT along y from input to output
 		cufftExecD2Z(planTens2D_y, cuIn, cuOut);
 
 		//extract real parts from cuOut and place in kernel
-		(*kernels[index])()->Set_Kdiag_real((N.x / 2 + 1) * (N.y / 2 + 1), cuOut, component, transpose_xy);
+		(*kernels[index])()->Set_Kdiag_real(nxRegion * (N.y / 2 + 1), cuOut, cuN, cuxRegion, component, transpose_xy);
 	};
 
 	//diagonal components
@@ -209,15 +209,15 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_2D_zShifted_onGPU(int 
 		cufftExecD2Z(planTens2D_x, cuIn, cuOut);
 
 		//extract Im, Im, Re parts from cuOut and place in cuIn
-		if (component == 1) cuOut_to_cuIn_Im((N.x / 2 + 1) * N.y, cuIn, cuOut);
-		else if (component == 2) cuOut_to_cuIn_Im((N.x / 2 + 1) * N.y, cuIn, cuOut);
-		else if (component == 3) cuOut_to_cuIn_Re((N.x / 2 + 1) * N.y, cuIn, cuOut);
+		if (component == 1) cuOut_to_cuIn_Im(nxRegion * N.y, cuIn, cuOut, N.x / 2 + 1, N.y, xRegion.i, xRegion.i + nxRegion);
+		else if (component == 2) cuOut_to_cuIn_Im(nxRegion * N.y, cuIn, cuOut, N.x / 2 + 1, N.y, xRegion.i, xRegion.i + nxRegion);
+		else if (component == 3) cuOut_to_cuIn_Re(nxRegion * N.y, cuIn, cuOut, N.x / 2 + 1, N.y, xRegion.i, xRegion.i + nxRegion);
 
 		//Now FFT along y from input to output
 		cufftExecD2Z(planTens2D_y, cuIn, cuOut);
 
 		//extract -Im, Re, Im parts from cuOut and place in kernel
-		(*kernels[index])()->Set_Kodiag_real_2D((N.x / 2 + 1) * (N.y / 2 + 1), cuOut, component, transpose_xy);
+		(*kernels[index])()->Set_Kodiag_real_2D(nxRegion * (N.y / 2 + 1) * (N.z / 2 + 1), cuOut, cuN, cuxRegion, component, transpose_xy);
 	};
 
 	//off-diagonal component
@@ -264,6 +264,9 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_2D_xShifted_onGPU(int 
 	cu_arr<cufftDoubleComplex> cuOut;
 	if (!cuOut.resize((N.x / 2 + 1) * N.y)) return error(BERROR_OUTOFGPUMEMORY_CRIT);
 
+	cu_arr<cufftDoubleComplex> cuOut2;
+	if (!cuOut2.resize(nxRegion * N.y)) return error(BERROR_OUTOFGPUMEMORY_CRIT);
+
 	//-------------- CALCULATE DEMAG TENSOR
 
 	//Demag tensor components
@@ -305,8 +308,8 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_2D_xShifted_onGPU(int 
 	//Forward fft along y direction (out-of-place):
 	cuffterr = cufftPlanMany(&planTens2D_y, 1, ndims_y,
 		embed, (N.x / 2 + 1), 1,
-		embed, (N.x / 2 + 1), 1,
-		CUFFT_Z2Z, (int)(N.x / 2 + 1));
+		embed, nxRegion, 1,
+		CUFFT_Z2Z, (int)nxRegion);
 
 	//-------------- FFT REAL TENSOR INTO REAL KERNELS
 
@@ -316,10 +319,10 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_2D_xShifted_onGPU(int 
 		cufftExecD2Z(planTens2D_x, cuIn, cuOut);
 
 		//Now FFT along y from input to output
-		cufftExecZ2Z(planTens2D_y, cuOut, cuOut, CUFFT_FORWARD);
+		cufftExecZ2Z(planTens2D_y, cuOut + xRegion.i, cuOut2, CUFFT_FORWARD);
 
 		//extract real parts from cuOut and place in kernel
-		(*kernels[index])()->Set_Kdiag_cmpl((N.x / 2 + 1) * (N.y / 2 + 1), cuOut, component, transpose_xy);
+		(*kernels[index])()->Set_Kdiag_cmpl(nxRegion * (N.y / 2 + 1) * (N.z / 2 + 1), cuOut2, cuN, cuxRegion, component, transpose_xy);
 	};
 
 	//diagonal components
@@ -333,10 +336,10 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_2D_xShifted_onGPU(int 
 		cufftExecD2Z(planTens2D_x, cuIn, cuOut);
 
 		//Now FFT along y from input to output
-		cufftExecZ2Z(planTens2D_y, cuOut, cuOut, CUFFT_FORWARD);
+		cufftExecZ2Z(planTens2D_y, cuOut + xRegion.i, cuOut2, CUFFT_FORWARD);
 
 		//extract -Im, Re, Im parts from cuOut and place in kernel
-		(*kernels[index])()->Set_Kodiag_cmpl((N.x / 2 + 1) * (N.y / 2 + 1), cuOut, component, transpose_xy);
+		(*kernels[index])()->Set_Kodiag_cmpl(nxRegion * (N.y / 2 + 1) * (N.z / 2 + 1), cuOut2, cuN, cuxRegion, component, transpose_xy);
 	};
 
 	//off-diagonal component
@@ -383,6 +386,9 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_2D_Complex_Full_onGPU(
 	cu_arr<cufftDoubleComplex> cuOut;
 	if (!cuOut.resize((N.x / 2 + 1)*N.y)) return error(BERROR_OUTOFGPUMEMORY_CRIT);
 
+	cu_arr<cufftDoubleComplex> cuOut2;
+	if (!cuOut2.resize(nxRegion * N.y)) return error(BERROR_OUTOFGPUMEMORY_CRIT);
+
 	//-------------- CALCULATE DEMAG TENSOR
 
 	//Demag tensor components
@@ -424,8 +430,8 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_2D_Complex_Full_onGPU(
 	//Forward fft along y direction (out-of-place):
 	cuffterr = cufftPlanMany(&planTens2D_y, 1, ndims_y,
 		embed, (N.x / 2 + 1), 1,
-		embed, (N.x / 2 + 1), 1,
-		CUFFT_Z2Z, (int)(N.x / 2 + 1));
+		embed, nxRegion, 1,
+		CUFFT_Z2Z, (int)nxRegion);
 
 	//-------------- FFT REAL TENSOR INTO REAL KERNELS
 
@@ -435,11 +441,11 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_2D_Complex_Full_onGPU(
 		cufftExecD2Z(planTens2D_x, cuIn, cuOut);
 
 		//Now FFT along y from input to output
-		cufftExecZ2Z(planTens2D_y, cuOut, cuOut, CUFFT_FORWARD);
+		cufftExecZ2Z(planTens2D_y, cuOut + xRegion.i, cuOut2, CUFFT_FORWARD);
 
 		//extract real parts from cuOut and place in kernel
-		if (!odiag) (*kernels[index])()->Set_Kdiag_cmpl((N.x / 2 + 1) * N.y, cuOut, component, transpose_xy);
-		else (*kernels[index])()->Set_Kodiag_cmpl((N.x / 2 + 1) * N.y, cuOut, component, transpose_xy);
+		if (!odiag) (*kernels[index])()->Set_Kdiag_cmpl(nxRegion * (N.y / 2 + 1), cuOut2, cuN, cuxRegion, component, transpose_xy);
+		else (*kernels[index])()->Set_Kodiag_cmpl(nxRegion * (N.y / 2 + 1), cuOut2, cuN, cuxRegion, component, transpose_xy);
 	};
 
 	//diagonal components
@@ -529,15 +535,15 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_3D_Self_onGPU(int inde
 
 	//Forward fft along y direction (out-of-place):
 	cuffterr = cufftPlanMany(&planTens3D_y, 1, ndims_y,
-		embed, (N.x / 2 + 1), 1,
-		embed, (N.x / 2 + 1), 1,
-		CUFFT_D2Z, (int)(N.x / 2 + 1));
+		embed, nxRegion, 1,
+		embed, nxRegion, 1,
+		CUFFT_D2Z, (int)nxRegion);
 
 	//Forward fft along z direction (out-of-place):
 	cuffterr = cufftPlanMany(&planTens3D_z, 1, ndims_z,
-		embed, (N.x / 2 + 1) * (N.y / 2 + 1), 1,
-		embed, (N.x / 2 + 1) * (N.y / 2 + 1), 1,
-		CUFFT_D2Z, (int)(N.x / 2 + 1)*(N.y / 2 + 1));
+		embed, nxRegion * (N.y / 2 + 1), 1,
+		embed, nxRegion * (N.y / 2 + 1), 1,
+		CUFFT_D2Z, (int)nxRegion * (N.y / 2 + 1));
 
 	//-------------- FFT REAL TENSOR INTO REAL KERNELS
 
@@ -547,22 +553,22 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_3D_Self_onGPU(int inde
 		cufftExecD2Z(planTens3D_x, cuIn, cuOut);
 
 		//extract real parts from cuOut and place in cuIn
-		cuOut_to_cuIn_Re((N.x / 2 + 1) * N.y * N.z, cuIn, cuOut);
+		cuOut_to_cuIn_Re(nxRegion * N.y * N.z, cuIn, cuOut, N.x / 2 + 1, N.y, xRegion.i, xRegion.i + nxRegion);
 
 		//Now FFT along y from input to output
 		for (int k = 0; k < N.z; k++) {
 
-			cufftExecD2Z(planTens3D_y, cuIn + k * (N.x / 2 + 1) * N.y, cuOut + k * (N.x / 2 + 1) * (N.y / 2 + 1));
+			cufftExecD2Z(planTens3D_y, cuIn + k * nxRegion * N.y, cuOut + k * nxRegion * (N.y / 2 + 1));
 		}
 
 		//extract real parts from cuOut and place in cuIn
-		cuOut_to_cuIn_Re((N.x / 2 + 1) * (N.y / 2 + 1) * N.z, cuIn, cuOut);
+		cuOut_to_cuIn_Re(nxRegion * (N.y / 2 + 1) * N.z, cuIn, cuOut, nxRegion, N.y / 2 + 1, 0, nxRegion);
 
 		//Now FFT along z from input to output
 		cufftExecD2Z(planTens3D_z, cuIn, cuOut);
 
 		//extract real parts from cuOut and place in kernel
-		(*kernels[index])()->Set_Kdiag_real((N.x / 2 + 1) * (N.y / 2 + 1) * (N.z / 2 + 1), cuOut, component, transpose_xy);
+		(*kernels[index])()->Set_Kdiag_real(nxRegion * (N.y / 2 + 1) * (N.z / 2 + 1), cuOut, cuN, cuxRegion, component, transpose_xy);
 	};
 
 	auto fftodiagcomponent = [&](cu_arr<cufftDoubleReal>& cuIn, int component) -> void
@@ -571,26 +577,26 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_3D_Self_onGPU(int inde
 		cufftExecD2Z(planTens3D_x, cuIn, cuOut);
 
 		//extract real or imaginary parts from cuOut and place in cuIn, depending on the computed component
-		if (component == 1) cuOut_to_cuIn_Im((N.x / 2 + 1) * N.y * N.z, cuIn, cuOut);
-		else if (component == 2) cuOut_to_cuIn_Im((N.x / 2 + 1) * N.y * N.z, cuIn, cuOut);
-		else if (component == 3) cuOut_to_cuIn_Re((N.x / 2 + 1) * N.y * N.z, cuIn, cuOut);
+		if (component == 1) cuOut_to_cuIn_Im(nxRegion * N.y * N.z, cuIn, cuOut, N.x / 2 + 1, N.y, xRegion.i, xRegion.i + nxRegion);
+		else if (component == 2) cuOut_to_cuIn_Im(nxRegion * N.y * N.z, cuIn, cuOut, N.x / 2 + 1, N.y, xRegion.i, xRegion.i + nxRegion);
+		else if (component == 3) cuOut_to_cuIn_Re(nxRegion * N.y * N.z, cuIn, cuOut, N.x / 2 + 1, N.y, xRegion.i, xRegion.i + nxRegion);
 
 		//Now FFT along y from input to output
 		for (int k = 0; k < N.z; k++) {
 
-			cufftExecD2Z(planTens3D_y, cuIn + k * (N.x / 2 + 1) * N.y, cuOut + k * (N.x / 2 + 1) * (N.y / 2 + 1));
+			cufftExecD2Z(planTens3D_y, cuIn + k * nxRegion * N.y, cuOut + k * nxRegion * (N.y / 2 + 1));
 		}
 
 		//extract real or imaginary parts from cuOut and place in cuIn, depending on the computed component
-		if (component == 1) cuOut_to_cuIn_Im((N.x / 2 + 1) * (N.y / 2 + 1) * N.z, cuIn, cuOut);
-		else if (component == 2) cuOut_to_cuIn_Re((N.x / 2 + 1) * (N.y / 2 + 1) * N.z, cuIn, cuOut);
-		else if (component == 3) cuOut_to_cuIn_Im((N.x / 2 + 1) * (N.y / 2 + 1) * N.z, cuIn, cuOut);
+		if (component == 1) cuOut_to_cuIn_Im(nxRegion * (N.y / 2 + 1) * N.z, cuIn, cuOut, nxRegion, N.y / 2 + 1, 0, nxRegion);
+		else if (component == 2) cuOut_to_cuIn_Re(nxRegion * (N.y / 2 + 1) * N.z, cuIn, cuOut, nxRegion, N.y / 2 + 1, 0, nxRegion);
+		else if (component == 3) cuOut_to_cuIn_Im(nxRegion * (N.y / 2 + 1) * N.z, cuIn, cuOut, nxRegion, N.y / 2 + 1, 0, nxRegion);
 
 		//Now FFT along z from input to output
 		cufftExecD2Z(planTens3D_z, cuIn, cuOut);
 
 		//extract -Re, -Im, -Im parts from cuOut and place in kernel
-		(*kernels[index])()->Set_Kodiag_real_3D((N.x / 2 + 1) * (N.y / 2 + 1) * (N.z / 2 + 1), cuOut, component, transpose_xy);
+		(*kernels[index])()->Set_Kodiag_real_3D(nxRegion * (N.y / 2 + 1) * (N.z / 2 + 1), cuOut, cuN, cuxRegion, component, transpose_xy);
 	};
 
 	//-------------- CALCULATE DIAGONAL TENSOR ELEMENTS THEN TRANSFORM INTO KERNEL
@@ -645,6 +651,9 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_3D_zShifted_onGPU(int 
 	cu_arr<cufftDoubleComplex> cuOut;
 	if (!cuOut.resize((N.x / 2 + 1)*N.y*N.z)) return error(BERROR_OUTOFGPUMEMORY_CRIT);
 
+	cu_arr<cufftDoubleComplex> cuOut2;
+	if (!cuOut2.resize(nxRegion * N.y * N.z)) return error(BERROR_OUTOFGPUMEMORY_CRIT);
+
 	//-------------- DEMAG TENSOR
 
 	//Demag tensor components
@@ -684,14 +693,14 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_3D_zShifted_onGPU(int 
 	//Forward fft along y direction (out-of-place):
 	cuffterr = cufftPlanMany(&planTens3D_y, 1, ndims_y,
 		embed, (N.x / 2 + 1), 1,
-		embed, (N.x / 2 + 1), 1,
-		CUFFT_Z2Z, (int)(N.x / 2 + 1));
+		embed, nxRegion, 1,
+		CUFFT_Z2Z, (int)nxRegion);
 
 	//Forward fft along z direction (out-of-place):
 	cuffterr = cufftPlanMany(&planTens3D_z, 1, ndims_z,
-		embed, (N.x / 2 + 1) * (N.y / 2 + 1), 1,
-		embed, (N.x / 2 + 1) * (N.y / 2 + 1), 1,
-		CUFFT_Z2Z, (int)(N.x / 2 + 1)*(N.y / 2 + 1));
+		embed, nxRegion * (N.y / 2 + 1), 1,
+		embed, nxRegion * (N.y / 2 + 1), 1,
+		CUFFT_Z2Z, (int)nxRegion * (N.y / 2 + 1));
 
 	//-------------- FFT REAL TENSOR INTO REAL KERNELS
 
@@ -703,15 +712,15 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_3D_zShifted_onGPU(int 
 		//Now FFT along y from input to output
 		for (int k = 0; k < N.z; k++) {
 
-			cufftExecZ2Z(planTens3D_y, cuOut + k * (N.x / 2 + 1) * N.y, cuOut + k * (N.x / 2 + 1) * (N.y / 2 + 1), CUFFT_FORWARD);
+			cufftExecZ2Z(planTens3D_y, cuOut + k * (N.x / 2 + 1) * N.y + xRegion.i, cuOut2 + k * nxRegion * (N.y / 2 + 1), CUFFT_FORWARD);
 		}
 
 		//Now FFT along z from input to output
-		cufftExecZ2Z(planTens3D_z, cuOut, cuOut, CUFFT_FORWARD);
+		cufftExecZ2Z(planTens3D_z, cuOut2, cuOut2, CUFFT_FORWARD);
 
 		//extract and place in kernel
-		if (!odiag) (*kernels[index])()->Set_Kdiag_cmpl_reduced((N.x / 2 + 1) * (N.y / 2 + 1) * (N.z / 2 + 1), cuOut, component, transpose_xy);
-		else (*kernels[index])()->Set_Kodiag_cmpl_reduced((N.x / 2 + 1) * (N.y / 2 + 1) * (N.z / 2 + 1), cuOut, component, transpose_xy);
+		if (!odiag) (*kernels[index])()->Set_Kdiag_cmpl_reduced(nxRegion * (N.y / 2 + 1) * (N.z / 2 + 1), cuOut2, cuN, cuxRegion, component, transpose_xy);
+		else (*kernels[index])()->Set_Kodiag_cmpl_reduced(nxRegion * (N.y / 2 + 1) * (N.z / 2 + 1), cuOut2, cuN, cuxRegion, component, transpose_xy);
 	};
 
 	//-------------- CALCULATE DIAGONAL TENSOR ELEMENTS THEN TRANSFORM INTO KERNEL
@@ -766,6 +775,9 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_3D_xShifted_onGPU(int 
 	cu_arr<cufftDoubleComplex> cuOut;
 	if (!cuOut.resize((N.x / 2 + 1) * N.y * N.z)) return error(BERROR_OUTOFGPUMEMORY_CRIT);
 
+	cu_arr<cufftDoubleComplex> cuOut2;
+	if (!cuOut2.resize(nxRegion * N.y * N.z)) return error(BERROR_OUTOFGPUMEMORY_CRIT);
+
 	//-------------- DEMAG TENSOR
 
 	//Demag tensor components
@@ -805,14 +817,14 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_3D_xShifted_onGPU(int 
 	//Forward fft along y direction (out-of-place):
 	cuffterr = cufftPlanMany(&planTens3D_y, 1, ndims_y,
 		embed, (N.x / 2 + 1), 1,
-		embed, (N.x / 2 + 1), 1,
-		CUFFT_Z2Z, (int)(N.x / 2 + 1));
+		embed, nxRegion, 1,
+		CUFFT_Z2Z, (int)nxRegion);
 
 	//Forward fft along z direction (out-of-place):
 	cuffterr = cufftPlanMany(&planTens3D_z, 1, ndims_z,
-		embed, (N.x / 2 + 1) * (N.y / 2 + 1), 1,
-		embed, (N.x / 2 + 1) * (N.y / 2 + 1), 1,
-		CUFFT_Z2Z, (int)(N.x / 2 + 1) * (N.y / 2 + 1));
+		embed, nxRegion * (N.y / 2 + 1), 1,
+		embed, nxRegion * (N.y / 2 + 1), 1,
+		CUFFT_Z2Z, (int)nxRegion * (N.y / 2 + 1));
 
 	//-------------- FFT REAL TENSOR INTO REAL KERNELS
 
@@ -824,15 +836,15 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_3D_xShifted_onGPU(int 
 		//Now FFT along y from input to output
 		for (int k = 0; k < N.z; k++) {
 
-			cufftExecZ2Z(planTens3D_y, cuOut + k * (N.x / 2 + 1) * N.y, cuOut + k * (N.x / 2 + 1) * (N.y / 2 + 1), CUFFT_FORWARD);
+			cufftExecZ2Z(planTens3D_y, cuOut + k * (N.x / 2 + 1) * N.y + xRegion.i, cuOut2 + k * nxRegion * (N.y / 2 + 1), CUFFT_FORWARD);
 		}
 
 		//Now FFT along z from input to output
-		cufftExecZ2Z(planTens3D_z, cuOut, cuOut, CUFFT_FORWARD);
+		cufftExecZ2Z(planTens3D_z, cuOut2, cuOut2, CUFFT_FORWARD);
 
 		//extract and place in kernel
-		if (!odiag) (*kernels[index])()->Set_Kdiag_cmpl_reduced((N.x / 2 + 1) * (N.y / 2 + 1) * (N.z / 2 + 1), cuOut, component, transpose_xy);
-		else (*kernels[index])()->Set_Kodiag_cmpl_reduced((N.x / 2 + 1) * (N.y / 2 + 1) * (N.z / 2 + 1), cuOut, component, transpose_xy);
+		if (!odiag) (*kernels[index])()->Set_Kdiag_cmpl_reduced(nxRegion * (N.y / 2 + 1) * (N.z / 2 + 1), cuOut2, cuN, cuxRegion, component, transpose_xy);
+		else (*kernels[index])()->Set_Kodiag_cmpl_reduced(nxRegion * (N.y / 2 + 1) * (N.z / 2 + 1), cuOut2, cuN, cuxRegion, component, transpose_xy);
 	};
 
 	//-------------- CALCULATE DIAGONAL TENSOR ELEMENTS THEN TRANSFORM INTO KERNEL
@@ -887,6 +899,9 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_3D_Complex_Full_onGPU(
 	cu_arr<cufftDoubleComplex> cuOut;
 	if (!cuOut.resize((N.x / 2 + 1)*N.y*N.z)) return error(BERROR_OUTOFGPUMEMORY_CRIT);
 
+	cu_arr<cufftDoubleComplex> cuOut2;
+	if (!cuOut2.resize(nxRegion * N.y * N.z)) return error(BERROR_OUTOFGPUMEMORY_CRIT);
+
 	//-------------- DEMAG TENSOR
 
 	//Demag tensor components
@@ -926,14 +941,14 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_3D_Complex_Full_onGPU(
 	//Forward fft along y direction (out-of-place):
 	cuffterr = cufftPlanMany(&planTens3D_y, 1, ndims_y,
 		embed, (N.x / 2 + 1), 1,
-		embed, (N.x / 2 + 1), 1,
-		CUFFT_Z2Z, (int)(N.x / 2 + 1));
+		embed, nxRegion, 1,
+		CUFFT_Z2Z, (int)nxRegion);
 
 	//Forward fft along z direction (out-of-place):
 	cuffterr = cufftPlanMany(&planTens3D_z, 1, ndims_z,
-		embed, (N.x / 2 + 1) * N.y, 1,
-		embed, (N.x / 2 + 1) * N.y, 1,
-		CUFFT_Z2Z, (int)(N.x / 2 + 1)*N.y);
+		embed, nxRegion * N.y, 1,
+		embed, nxRegion * N.y, 1,
+		CUFFT_Z2Z, (int)nxRegion * N.y);
 
 	//-------------- FFT REAL TENSOR INTO REAL KERNELS
 
@@ -945,15 +960,15 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_3D_Complex_Full_onGPU(
 		//Now FFT along y from input to output
 		for (int k = 0; k < N.z; k++) {
 
-			cufftExecZ2Z(planTens3D_y, cuOut + k * (N.x / 2 + 1) * N.y, cuOut + k * (N.x / 2 + 1) * N.y, CUFFT_FORWARD);
+			cufftExecZ2Z(planTens3D_y, cuOut + k * (N.x / 2 + 1) * N.y + xRegion.i, cuOut2 + k * nxRegion * N.y, CUFFT_FORWARD);
 		}
 
 		//Now FFT along z from input to output
-		cufftExecZ2Z(planTens3D_z, cuOut, cuOut, CUFFT_FORWARD);
+		cufftExecZ2Z(planTens3D_z, cuOut2, cuOut2, CUFFT_FORWARD);
 
 		//extract and place in kernel
-		if (!odiag) (*kernels[index])()->Set_Kdiag_cmpl((N.x / 2 + 1) * N.y * N.z, cuOut, component, transpose_xy);
-		else (*kernels[index])()->Set_Kodiag_cmpl((N.x / 2 + 1) * N.y * N.z, cuOut, component, transpose_xy);
+		if (!odiag) (*kernels[index])()->Set_Kdiag_cmpl(nxRegion * N.y * N.z, cuOut2, cuN, cuxRegion, component, transpose_xy);
+		else (*kernels[index])()->Set_Kodiag_cmpl(nxRegion * N.y * N.z, cuOut2, cuN, cuxRegion, component, transpose_xy);
 	};
 
 	//-------------- CALCULATE DIAGONAL TENSOR ELEMENTS THEN TRANSFORM INTO KERNEL

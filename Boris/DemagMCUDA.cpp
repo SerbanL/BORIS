@@ -16,8 +16,7 @@
 
 DemagMCUDA::DemagMCUDA(MeshCUDA* pMeshCUDA_) :
 	ModulesCUDA(),
-	Hdemag(mGPU), Hdemag2(mGPU), Hdemag3(mGPU), Hdemag4(mGPU), Hdemag5(mGPU), Hdemag6(mGPU),
-	selfDemagCoeff(mGPU)
+	EvalSpeedupCUDA()
 {
 	Uninitialize();
 
@@ -101,6 +100,13 @@ BError DemagMCUDA::Initialize(void)
 		return error(BERROR_MGPU_MUSTBEXAXIS);
 	}
 
+	//number of cells along x must be greater or equal to number of devices used (x partitioning used)
+	if (pMeshCUDA->n.x < mGPU.get_num_devices()) {
+
+		Uninitialize();
+		return error(BERROR_MGPU_XCELLS);
+	}
+
 	if (!initialized) {
 
 		/////////////////////////////////////////////////////////////
@@ -177,34 +183,28 @@ BError DemagMCUDA::Initialize(void)
 			}
 		}
 
-		/////////////////////////////////////////////////////////////
-		//Eval speedup
+		//initialize eval speedup if needed
+		if (pMeshCUDA->GetEvaluationSpeedup()) {
 
-		selfDemagCoeff.from_cpu(DemagTFunc().SelfDemag_PBC(pMeshCUDA->h, pMeshCUDA->n, pMeshCUDA->M.Get_PBC()));
+			EvalSpeedupCUDA::Initialize_EvalSpeedup(
+				DemagTFunc().SelfDemag_PBC(pMeshCUDA->h, pMeshCUDA->n, pMeshCUDA->M.Get_PBC()),
+				pMeshCUDA->GetEvaluationSpeedup(),
+				pMeshCUDA->h, pMeshCUDA->meshRect);
 
-		//make sure to allocate memory for Hdemag if we need it
-		if (pMeshCUDA->GetEvaluationSpeedup() >= 6) { if (!Hdemag6.resize(pMeshCUDA->h, pMeshCUDA->meshRect)) return error(BERROR_OUTOFGPUMEMORY_CRIT); }
-		else Hdemag6.clear();
+			if (pMeshCUDA->GetMeshType() == MESH_FERROMAGNETIC) {
 
-		if (pMeshCUDA->GetEvaluationSpeedup() >= 5) { if (!Hdemag5.resize(pMeshCUDA->h, pMeshCUDA->meshRect)) return error(BERROR_OUTOFGPUMEMORY_CRIT); }
-		else Hdemag5.clear();
+				EvalSpeedupCUDA::Initialize_EvalSpeedup_Mode_FM(pMeshCUDA->M, pMeshCUDA->Heff);
+			}
+			else if (pMeshCUDA->GetMeshType() == MESH_ANTIFERROMAGNETIC) {
 
-		if (pMeshCUDA->GetEvaluationSpeedup() >= 4) { if (!Hdemag4.resize(pMeshCUDA->h, pMeshCUDA->meshRect)) return error(BERROR_OUTOFGPUMEMORY_CRIT); }
-		else Hdemag4.clear();
-
-		if (pMeshCUDA->GetEvaluationSpeedup() >= 3) { if (!Hdemag3.resize(pMeshCUDA->h, pMeshCUDA->meshRect)) return error(BERROR_OUTOFGPUMEMORY_CRIT); }
-		else Hdemag3.clear();
-
-		if (pMeshCUDA->GetEvaluationSpeedup() >= 2) { if (!Hdemag2.resize(pMeshCUDA->h, pMeshCUDA->meshRect)) return error(BERROR_OUTOFGPUMEMORY_CRIT); }
-		else Hdemag2.clear();
-
-		if (pMeshCUDA->GetEvaluationSpeedup() >= 1) { if (!Hdemag.resize(pMeshCUDA->h, pMeshCUDA->meshRect)) return error(BERROR_OUTOFGPUMEMORY_CRIT); }
-		else Hdemag.clear();
+				EvalSpeedupCUDA::Initialize_EvalSpeedup_Mode_AFM(pMeshCUDA->M, pMeshCUDA->M2, pMeshCUDA->Heff, pMeshCUDA->Heff2);
+			}
+		}
 
 		if (!error) initialized = true;
 	}
 
-	num_Hdemag_saved = 0;
+	EvalSpeedupCUDA::num_Hdemag_saved = 0;
 
 	//Make sure display data has memory allocated (or freed) as required
 	error = Update_Module_Display_VECs(
@@ -243,32 +243,21 @@ BError DemagMCUDA::UpdateConfiguration(UPDATECONFIG_ cfgMessage)
 		error = pDemagMCUDA[mGPU]->UpdateConfiguration(cfgMessage);
 	}
 
-	//unititialize this module also if not all submodules are still all initialized
 	if (!Submodules_Initialized()) {
 
+		//uninitialize this module also if not all submodules are still all initialized
 		Uninitialize();
-
-		//if memory needs to be allocated for Hdemag, it will be done through Initialize 
-		Hdemag.clear();
-		Hdemag2.clear();
-		Hdemag3.clear();
-		Hdemag4.clear();
-		Hdemag5.clear();
-		Hdemag6.clear();
+		EvalSpeedupCUDA::UpdateConfiguration_EvalSpeedup();
 	}
-
-	num_Hdemag_saved = 0;
 
 	return error;
 }
 
 void DemagMCUDA::UpdateField(void)
 {	
-	///////////////////////////////////////////////////////////////////////////////////////////////
-	///////////////////////////////////////// NO SPEEDUP //////////////////////////////////////////
-	///////////////////////////////////////////////////////////////////////////////////////////////
+	bool eval_speedup = EvalSpeedupCUDA::Check_if_EvalSpeedup(pMeshCUDA->GetEvaluationSpeedup(), pMeshCUDA->Check_Step_Update());
 
-	if (!pMeshCUDA->GetEvaluationSpeedup() || (num_Hdemag_saved < pMeshCUDA->GetEvaluationSpeedup() && !pMeshCUDA->Check_Step_Update())) {
+	std::function<void(mcu_VEC(cuReal3)&)> do_evaluation = [&](mcu_VEC(cuReal3)& H) -> void {
 
 		if (pMeshCUDA->CurrentTimeStepSolved()) ZeroEnergy();
 
@@ -280,16 +269,16 @@ void DemagMCUDA::UpdateField(void)
 			///////////////////////////////////////////////////////////////////////////////////////////////
 			//Copy M data to linear regions so we can transfer
 			///////////////////////////////////////////////////////////////////////////////////////////////
-			
+
 			for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
 				pDemagMCUDA[mGPU]->Copy_M_Input_xRegion(mGPU.get_halfprecision_transfer());
 			}
-			
+
 			///////////////////////////////////////////////////////////////////////////////////////////////
 			//Transfer data between devices before x FFT
 			///////////////////////////////////////////////////////////////////////////////////////////////
-			
+
 			if (mGPU.get_halfprecision_transfer()) {
 
 				for (int device_from = 0; device_from < mGPU.get_num_devices(); device_from++) {
@@ -316,17 +305,17 @@ void DemagMCUDA::UpdateField(void)
 			///////////////////////////////////////////////////////////////////////////////////////////////
 			//Forward x FFT for all devices (first step)
 			///////////////////////////////////////////////////////////////////////////////////////////////
-			
+
 			for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
 				if (pMeshCUDA->GetMeshType() == MESH_FERROMAGNETIC) {
 
 					if (!mGPU.get_halfprecision_transfer())
 						pDemagMCUDA[mGPU]->ForwardFFT_mGPU_first(pMeshCUDA->M.get_deviceobject(mGPU), pDemagMCUDA[mGPU]->Real_yRegion_arr, pDemagMCUDA[mGPU]->Complex_yRegion_arr);
-					else 
+					else
 						pDemagMCUDA[mGPU]->ForwardFFT_mGPU_first(
-							pMeshCUDA->M.get_deviceobject(mGPU), 
-							pDemagMCUDA[mGPU]->Real_yRegion_half_arr, pDemagMCUDA[mGPU]->normalization_M, 
+							pMeshCUDA->M.get_deviceobject(mGPU),
+							pDemagMCUDA[mGPU]->Real_yRegion_half_arr, pDemagMCUDA[mGPU]->normalization_M,
 							pDemagMCUDA[mGPU]->Complex_yRegion_half_arr, pDemagMCUDA[mGPU]->normalization);
 				}
 
@@ -336,16 +325,16 @@ void DemagMCUDA::UpdateField(void)
 						pDemagMCUDA[mGPU]->ForwardFFT_AveragedInputs_mGPU_first(pMeshCUDA->M.get_deviceobject(mGPU), pMeshCUDA->M2.get_deviceobject(mGPU), pDemagMCUDA[mGPU]->Real_yRegion_arr, pDemagMCUDA[mGPU]->Complex_yRegion_arr);
 					else
 						pDemagMCUDA[mGPU]->ForwardFFT_AveragedInputs_mGPU_first(
-							pMeshCUDA->M.get_deviceobject(mGPU), pMeshCUDA->M2.get_deviceobject(mGPU), 
+							pMeshCUDA->M.get_deviceobject(mGPU), pMeshCUDA->M2.get_deviceobject(mGPU),
 							pDemagMCUDA[mGPU]->Real_yRegion_half_arr, pDemagMCUDA[mGPU]->normalization_M,
 							pDemagMCUDA[mGPU]->Complex_yRegion_half_arr, pDemagMCUDA[mGPU]->normalization);
 				}
 			}
-			
+
 			///////////////////////////////////////////////////////////////////////////////////////////////
 			//Transfer data between devices after x FFT
 			///////////////////////////////////////////////////////////////////////////////////////////////
-			
+
 			if (mGPU.get_halfprecision_transfer()) {
 
 				for (int device_from = 0; device_from < mGPU.get_num_devices(); device_from++) {
@@ -372,28 +361,28 @@ void DemagMCUDA::UpdateField(void)
 			///////////////////////////////////////////////////////////////////////////////////////////////
 			//Forward FFT for all devices (last step)
 			///////////////////////////////////////////////////////////////////////////////////////////////
-			
+
 			for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
 				if (!mGPU.get_halfprecision_transfer())
 					pDemagMCUDA[mGPU]->ForwardFFT_mGPU_last(pDemagMCUDA[mGPU]->Complex_xRegion_arr);
-				else 
+				else
 					pDemagMCUDA[mGPU]->ForwardFFT_mGPU_last(pDemagMCUDA[mGPU]->Complex_xRegion_half_arr, pDemagMCUDA[mGPU]->normalization);
 			}
-			
+
 			///////////////////////////////////////////////////////////////////////////////////////////////
 			//Kernel multiplications
 			///////////////////////////////////////////////////////////////////////////////////////////////
-			
+
 			for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
 				pDemagMCUDA[mGPU]->KernelMultiplication();
 			}
-			
+
 			///////////////////////////////////////////////////////////////////////////////////////////////
 			//Inverse FFT for all devices
 			///////////////////////////////////////////////////////////////////////////////////////////////
-			
+
 			for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
 				if (!mGPU.get_halfprecision_transfer())
@@ -401,11 +390,11 @@ void DemagMCUDA::UpdateField(void)
 				else
 					pDemagMCUDA[mGPU]->InverseFFT_mGPU_first(pDemagMCUDA[mGPU]->Complex_xRegion_half_arr, pDemagMCUDA[mGPU]->normalization);
 			}
-			
+
 			///////////////////////////////////////////////////////////////////////////////////////////////
 			//Transfer data between devices before x IFFT
 			///////////////////////////////////////////////////////////////////////////////////////////////
-			
+
 			if (mGPU.get_halfprecision_transfer()) {
 
 				for (int device_from = 0; device_from < mGPU.get_num_devices(); device_from++) {
@@ -432,7 +421,7 @@ void DemagMCUDA::UpdateField(void)
 			///////////////////////////////////////////////////////////////////////////////////////////////
 			//x IFFT
 			///////////////////////////////////////////////////////////////////////////////////////////////
-			
+
 			for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
 				if (!mGPU.get_halfprecision_transfer())
@@ -440,13 +429,13 @@ void DemagMCUDA::UpdateField(void)
 				else
 					pDemagMCUDA[mGPU]->InverseFFT_mGPU_last(pDemagMCUDA[mGPU]->Complex_yRegion_half_arr, pDemagMCUDA[mGPU]->normalization, pDemagMCUDA[mGPU]->Real_yRegion_half_arr, pDemagMCUDA[mGPU]->normalization);
 			}
-			
+
 			///////////////////////////////////////////////////////////////////////////////////////////////
 			//Transfer data between devices before finishing
 			///////////////////////////////////////////////////////////////////////////////////////////////
-			
+
 			if (mGPU.get_halfprecision_transfer()) {
-				
+
 				for (int device_from = 0; device_from < mGPU.get_num_devices(); device_from++) {
 					for (int device_to = 0; device_to < mGPU.get_num_devices(); device_to++) {
 
@@ -471,27 +460,27 @@ void DemagMCUDA::UpdateField(void)
 			///////////////////////////////////////////////////////////////////////////////////////////////
 			//Finish convolution, setting output in Heff
 			///////////////////////////////////////////////////////////////////////////////////////////////
-			
+
 			for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
 				if (pMeshCUDA->GetMeshType() == MESH_FERROMAGNETIC) {
-					
+
 					if (!mGPU.get_halfprecision_transfer()) {
 
 						if (Module_Heff.linear_size_cpu()) {
 
 							pDemagMCUDA[mGPU]->InverseFFT_mGPU_finish(
 								pDemagMCUDA[mGPU]->Real_xRegion_arr,
-								pMeshCUDA->M.get_deviceobject(mGPU), pMeshCUDA->Heff.get_deviceobject(mGPU),
-								energy(mGPU), pMeshCUDA->CurrentTimeStepSolved(), false,
+								pMeshCUDA->M.get_deviceobject(mGPU), H.get_deviceobject(mGPU),
+								energy(mGPU), pMeshCUDA->CurrentTimeStepSolved(), eval_speedup,
 								Module_Heff.get_managed_object(mGPU), Module_energy.get_managed_object(mGPU));
 						}
 						else {
 
 							pDemagMCUDA[mGPU]->InverseFFT_mGPU_finish(
 								pDemagMCUDA[mGPU]->Real_xRegion_arr,
-								pMeshCUDA->M.get_deviceobject(mGPU), pMeshCUDA->Heff.get_deviceobject(mGPU),
-								energy(mGPU), pMeshCUDA->CurrentTimeStepSolved(), false);
+								pMeshCUDA->M.get_deviceobject(mGPU), H.get_deviceobject(mGPU),
+								energy(mGPU), pMeshCUDA->CurrentTimeStepSolved(), eval_speedup);
 						}
 					}
 					else {
@@ -500,52 +489,93 @@ void DemagMCUDA::UpdateField(void)
 
 							pDemagMCUDA[mGPU]->InverseFFT_mGPU_finish(
 								pDemagMCUDA[mGPU]->Real_xRegion_half_arr, pDemagMCUDA[mGPU]->normalization,
-								pMeshCUDA->M.get_deviceobject(mGPU), pMeshCUDA->Heff.get_deviceobject(mGPU),
-								energy(mGPU), pMeshCUDA->CurrentTimeStepSolved(), false,
+								pMeshCUDA->M.get_deviceobject(mGPU), H.get_deviceobject(mGPU),
+								energy(mGPU), pMeshCUDA->CurrentTimeStepSolved(), eval_speedup,
 								Module_Heff.get_managed_object(mGPU), Module_energy.get_managed_object(mGPU));
 						}
 						else {
 
 							pDemagMCUDA[mGPU]->InverseFFT_mGPU_finish(
 								pDemagMCUDA[mGPU]->Real_xRegion_half_arr, pDemagMCUDA[mGPU]->normalization,
-								pMeshCUDA->M.get_deviceobject(mGPU), pMeshCUDA->Heff.get_deviceobject(mGPU),
-								energy(mGPU), pMeshCUDA->CurrentTimeStepSolved(), false);
+								pMeshCUDA->M.get_deviceobject(mGPU), H.get_deviceobject(mGPU),
+								energy(mGPU), pMeshCUDA->CurrentTimeStepSolved(), eval_speedup);
 						}
 					}
 				}
 				else if (pMeshCUDA->GetMeshType() == MESH_ANTIFERROMAGNETIC) {
 
-					if (!mGPU.get_halfprecision_transfer()) {
+					if (!eval_speedup) {
 
-						if (Module_Heff.linear_size_cpu())
-							pDemagMCUDA[mGPU]->InverseFFT_AveragedInputs_DuplicatedOutputs_mGPU_finish(
-								pDemagMCUDA[mGPU]->Real_xRegion_arr,
-								pMeshCUDA->M.get_deviceobject(mGPU), pMeshCUDA->M2.get_deviceobject(mGPU),
-								pMeshCUDA->Heff.get_deviceobject(mGPU), pMeshCUDA->Heff2.get_deviceobject(mGPU),
-								energy(mGPU), pMeshCUDA->CurrentTimeStepSolved(), false,
-								Module_Heff.get_managed_object(mGPU), Module_energy.get_managed_object(mGPU));
-						else
-							pDemagMCUDA[mGPU]->InverseFFT_AveragedInputs_DuplicatedOutputs_mGPU_finish(
-								pDemagMCUDA[mGPU]->Real_xRegion_arr,
-								pMeshCUDA->M.get_deviceobject(mGPU), pMeshCUDA->M2.get_deviceobject(mGPU),
-								pMeshCUDA->Heff.get_deviceobject(mGPU), pMeshCUDA->Heff2.get_deviceobject(mGPU),
-								energy(mGPU), pMeshCUDA->CurrentTimeStepSolved(), false);
+						if (!mGPU.get_halfprecision_transfer()) {
+
+							if (Module_Heff.linear_size_cpu())
+								pDemagMCUDA[mGPU]->InverseFFT_AveragedInputs_DuplicatedOutputs_mGPU_finish(
+									pDemagMCUDA[mGPU]->Real_xRegion_arr,
+									pMeshCUDA->M.get_deviceobject(mGPU), pMeshCUDA->M2.get_deviceobject(mGPU),
+									pMeshCUDA->Heff.get_deviceobject(mGPU), pMeshCUDA->Heff2.get_deviceobject(mGPU),
+									energy(mGPU), pMeshCUDA->CurrentTimeStepSolved(), false,
+									Module_Heff.get_managed_object(mGPU), Module_energy.get_managed_object(mGPU));
+							else
+								pDemagMCUDA[mGPU]->InverseFFT_AveragedInputs_DuplicatedOutputs_mGPU_finish(
+									pDemagMCUDA[mGPU]->Real_xRegion_arr,
+									pMeshCUDA->M.get_deviceobject(mGPU), pMeshCUDA->M2.get_deviceobject(mGPU),
+									pMeshCUDA->Heff.get_deviceobject(mGPU), pMeshCUDA->Heff2.get_deviceobject(mGPU),
+									energy(mGPU), pMeshCUDA->CurrentTimeStepSolved(), false);
+						}
+						else {
+
+							if (Module_Heff.linear_size_cpu())
+								pDemagMCUDA[mGPU]->InverseFFT_AveragedInputs_DuplicatedOutputs_mGPU_finish(
+									pDemagMCUDA[mGPU]->Real_xRegion_half_arr, pDemagMCUDA[mGPU]->normalization,
+									pMeshCUDA->M.get_deviceobject(mGPU), pMeshCUDA->M2.get_deviceobject(mGPU),
+									pMeshCUDA->Heff.get_deviceobject(mGPU), pMeshCUDA->Heff2.get_deviceobject(mGPU),
+									energy(mGPU), pMeshCUDA->CurrentTimeStepSolved(), false,
+									Module_Heff.get_managed_object(mGPU), Module_energy.get_managed_object(mGPU));
+							else
+								pDemagMCUDA[mGPU]->InverseFFT_AveragedInputs_DuplicatedOutputs_mGPU_finish(
+									pDemagMCUDA[mGPU]->Real_xRegion_half_arr, pDemagMCUDA[mGPU]->normalization,
+									pMeshCUDA->M.get_deviceobject(mGPU), pMeshCUDA->M2.get_deviceobject(mGPU),
+									pMeshCUDA->Heff.get_deviceobject(mGPU), pMeshCUDA->Heff2.get_deviceobject(mGPU),
+									energy(mGPU), pMeshCUDA->CurrentTimeStepSolved(), false);
+						}
 					}
 					else {
 
-						if (Module_Heff.linear_size_cpu())
-							pDemagMCUDA[mGPU]->InverseFFT_AveragedInputs_DuplicatedOutputs_mGPU_finish(
-								pDemagMCUDA[mGPU]->Real_xRegion_half_arr, pDemagMCUDA[mGPU]->normalization,
-								pMeshCUDA->M.get_deviceobject(mGPU), pMeshCUDA->M2.get_deviceobject(mGPU),
-								pMeshCUDA->Heff.get_deviceobject(mGPU), pMeshCUDA->Heff2.get_deviceobject(mGPU),
-								energy(mGPU), pMeshCUDA->CurrentTimeStepSolved(), false,
-								Module_Heff.get_managed_object(mGPU), Module_energy.get_managed_object(mGPU));
-						else
-							pDemagMCUDA[mGPU]->InverseFFT_AveragedInputs_DuplicatedOutputs_mGPU_finish(
-								pDemagMCUDA[mGPU]->Real_xRegion_half_arr, pDemagMCUDA[mGPU]->normalization,
-								pMeshCUDA->M.get_deviceobject(mGPU), pMeshCUDA->M2.get_deviceobject(mGPU),
-								pMeshCUDA->Heff.get_deviceobject(mGPU), pMeshCUDA->Heff2.get_deviceobject(mGPU),
-								energy(mGPU), pMeshCUDA->CurrentTimeStepSolved(), false);
+						for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
+
+							if (!mGPU.get_halfprecision_transfer()) {
+
+								if (Module_Heff.linear_size_cpu())
+									pDemagMCUDA[mGPU]->InverseFFT_AveragedInputs_SingleOutput_mGPU_finish(
+										pDemagMCUDA[mGPU]->Real_xRegion_arr,
+										pMeshCUDA->M.get_deviceobject(mGPU), pMeshCUDA->M2.get_deviceobject(mGPU),
+										H.get_deviceobject(mGPU),
+										energy(mGPU), true, true,
+										Module_Heff.get_managed_object(mGPU), Module_energy.get_managed_object(mGPU));
+								else
+									pDemagMCUDA[mGPU]->InverseFFT_AveragedInputs_SingleOutput_mGPU_finish(
+										pDemagMCUDA[mGPU]->Real_xRegion_arr,
+										pMeshCUDA->M.get_deviceobject(mGPU), pMeshCUDA->M2.get_deviceobject(mGPU),
+										H.get_deviceobject(mGPU),
+										energy(mGPU), true, true);
+							}
+							else {
+
+								if (Module_Heff.linear_size_cpu())
+									pDemagMCUDA[mGPU]->InverseFFT_AveragedInputs_SingleOutput_mGPU_finish(
+										pDemagMCUDA[mGPU]->Real_xRegion_half_arr, pDemagMCUDA[mGPU]->normalization,
+										pMeshCUDA->M.get_deviceobject(mGPU), pMeshCUDA->M2.get_deviceobject(mGPU),
+										H.get_deviceobject(mGPU),
+										energy(mGPU), true, true,
+										Module_Heff.get_managed_object(mGPU), Module_energy.get_managed_object(mGPU));
+								else
+									pDemagMCUDA[mGPU]->InverseFFT_AveragedInputs_SingleOutput_mGPU_finish(
+										pDemagMCUDA[mGPU]->Real_xRegion_half_arr, pDemagMCUDA[mGPU]->normalization,
+										pMeshCUDA->M.get_deviceobject(mGPU), pMeshCUDA->M2.get_deviceobject(mGPU),
+										H.get_deviceobject(mGPU),
+										energy(mGPU), true, true);
+							}
+						}
 					}
 				}
 			}
@@ -559,668 +589,75 @@ void DemagMCUDA::UpdateField(void)
 
 				if (Module_Heff.linear_size_cpu())
 					pDemagMCUDA[0]->Convolute(
-						pMeshCUDA->M.get_deviceobject(0), pMeshCUDA->Heff.get_deviceobject(0),
-						energy(0), pMeshCUDA->CurrentTimeStepSolved(), false,
+						pMeshCUDA->M.get_deviceobject(0), H.get_deviceobject(0),
+						energy(0), pMeshCUDA->CurrentTimeStepSolved(), eval_speedup,
 						&Module_Heff.get_deviceobject(0), &Module_energy.get_deviceobject(0));
 				else
 					pDemagMCUDA[0]->Convolute(
-						pMeshCUDA->M.get_deviceobject(0), pMeshCUDA->Heff.get_deviceobject(0),
-						energy(0), pMeshCUDA->CurrentTimeStepSolved(), false);
+						pMeshCUDA->M.get_deviceobject(0), H.get_deviceobject(0),
+						energy(0), pMeshCUDA->CurrentTimeStepSolved(), eval_speedup);
 			}
 
 			else if (pMeshCUDA->GetMeshType() == MESH_ANTIFERROMAGNETIC) {
 
-				if (Module_Heff.linear_size_cpu())
-					pDemagMCUDA[0]->Convolute_AveragedInputs_DuplicatedOutputs(
-						pMeshCUDA->M.get_deviceobject(0), pMeshCUDA->M2.get_deviceobject(0), pMeshCUDA->Heff.get_deviceobject(0), pMeshCUDA->Heff2.get_deviceobject(0),
-						energy(0), pMeshCUDA->CurrentTimeStepSolved(), false,
-						&Module_Heff.get_deviceobject(0), &Module_energy.get_deviceobject(0));
-				else
-					pDemagMCUDA[0]->Convolute_AveragedInputs_DuplicatedOutputs(
-						pMeshCUDA->M.get_deviceobject(0), pMeshCUDA->M2.get_deviceobject(0), pMeshCUDA->Heff.get_deviceobject(0), pMeshCUDA->Heff2.get_deviceobject(0),
-						energy(0), pMeshCUDA->CurrentTimeStepSolved(), false);
+				if (!eval_speedup) {
+
+					if (Module_Heff.linear_size_cpu())
+						pDemagMCUDA[0]->Convolute_AveragedInputs_DuplicatedOutputs(
+							pMeshCUDA->M.get_deviceobject(0), pMeshCUDA->M2.get_deviceobject(0), pMeshCUDA->Heff.get_deviceobject(0), pMeshCUDA->Heff2.get_deviceobject(0),
+							energy(0), pMeshCUDA->CurrentTimeStepSolved(), false,
+							&Module_Heff.get_deviceobject(0), &Module_energy.get_deviceobject(0));
+					else
+						pDemagMCUDA[0]->Convolute_AveragedInputs_DuplicatedOutputs(
+							pMeshCUDA->M.get_deviceobject(0), pMeshCUDA->M2.get_deviceobject(0), pMeshCUDA->Heff.get_deviceobject(0), pMeshCUDA->Heff2.get_deviceobject(0),
+							energy(0), pMeshCUDA->CurrentTimeStepSolved(), false);
+				}
+				else {
+
+					if (Module_Heff.linear_size_cpu())
+						pDemagMCUDA[0]->Convolute_AveragedInputs(
+							pMeshCUDA->M.get_deviceobject(0), pMeshCUDA->M2.get_deviceobject(0), H.get_deviceobject(0),
+							energy(0), true, true,
+							&Module_Heff.get_deviceobject(0), &Module_energy.get_deviceobject(0));
+					else
+						pDemagMCUDA[0]->Convolute_AveragedInputs(
+							pMeshCUDA->M.get_deviceobject(0), pMeshCUDA->M2.get_deviceobject(0), H.get_deviceobject(0),
+							energy(0), true, true);
+				}
 			}
 		}
-	}
+	};
 
-	///////////////////////////////////////////////////////////////////////////////////////////////
-	//////////////////////////////////////// EVAL SPEEDUP /////////////////////////////////////////
-	///////////////////////////////////////////////////////////////////////////////////////////////
+	if (!eval_speedup) {
+
+		///////////////////////////////////////////////////////////////////////////////////////////////
+		///////////////////////////////////////// NO SPEEDUP //////////////////////////////////////////
+		///////////////////////////////////////////////////////////////////////////////////////////////
+
+		do_evaluation(pMeshCUDA->Heff);
+	}
 
 	else {
 
-		//use evaluation speedup method (Hdemag will have memory allocated - this was done in the Initialize method)
+		///////////////////////////////////////////////////////////////////////////////////////////////
+		//////////////////////////////////////// EVAL SPEEDUP /////////////////////////////////////////
+		///////////////////////////////////////////////////////////////////////////////////////////////
 
-		//update if required by ODE solver or if we don't have enough previous evaluations saved to extrapolate
-		if (pMeshCUDA->Check_Step_Update() || num_Hdemag_saved < pMeshCUDA->GetEvaluationSpeedup()) {
+		std::function<void(void)> do_transfer_in = [&](void) -> void {
 
-			mcu_VEC(cuReal3)* pHdemag;
+			//empty, as there's nothing to transfer in
+		};
 
-			if (num_Hdemag_saved < pMeshCUDA->GetEvaluationSpeedup()) {
+		std::function<void(mcu_VEC(cuReal3)&)> do_transfer_out = [&](mcu_VEC(cuReal3)& H) -> void {
 
-				//don't have enough evaluations, so save next one
-				switch (num_Hdemag_saved)
-				{
-				case 0:
-					pHdemag = &Hdemag;
-					time_demag1 = pMeshCUDA->Get_EvalStep_Time();
-					break;
-				case 1:
-					pHdemag = &Hdemag2;
-					time_demag2 = pMeshCUDA->Get_EvalStep_Time();
-					break;
-				case 2:
-					pHdemag = &Hdemag3;
-					time_demag3 = pMeshCUDA->Get_EvalStep_Time();
-					break;
-				case 3:
-					pHdemag = &Hdemag4;
-					time_demag4 = pMeshCUDA->Get_EvalStep_Time();
-					break;
-				case 4:
-					pHdemag = &Hdemag5;
-					time_demag5 = pMeshCUDA->Get_EvalStep_Time();
-					break;
-				case 5:
-					pHdemag = &Hdemag6;
-					time_demag6 = pMeshCUDA->Get_EvalStep_Time();
-					break;
-				}
+			//empty, as there's nothing to transfer out
+		};
 
-				num_Hdemag_saved++;
-			}
-			else {
-
-				//have enough evaluations saved, so just cycle between them now
-
-				//QUINTIC
-				if (pMeshCUDA->GetEvaluationSpeedup() == 6) {
-
-					//1, 2, 3, 4, 5, 6 -> next is 1
-					if (time_demag6 > time_demag5 && time_demag5 > time_demag4 && time_demag4 > time_demag3 && time_demag3 > time_demag2 && time_demag2 > time_demag1) {
-
-						pHdemag = &Hdemag;
-						time_demag1 = pMeshCUDA->Get_EvalStep_Time();
-					}
-					//2, 3, 4, 5, 6, 1 -> next is 2
-					else if (time_demag1 > time_demag2) {
-
-						pHdemag = &Hdemag2;
-						time_demag2 = pMeshCUDA->Get_EvalStep_Time();
-					}
-					//3, 4, 5, 6, 1, 2 -> next is 3
-					else if (time_demag2 > time_demag3) {
-
-						pHdemag = &Hdemag3;
-						time_demag3 = pMeshCUDA->Get_EvalStep_Time();
-					}
-					//4, 5, 6, 1, 2, 3 -> next is 4
-					else if (time_demag3 > time_demag4) {
-
-						pHdemag = &Hdemag4;
-						time_demag4 = pMeshCUDA->Get_EvalStep_Time();
-					}
-					//5, 6, 1, 2, 3, 4 -> next is 5
-					else if (time_demag4 > time_demag5) {
-
-						pHdemag = &Hdemag5;
-						time_demag5 = pMeshCUDA->Get_EvalStep_Time();
-					}
-					else {
-
-						pHdemag = &Hdemag6;
-						time_demag6 = pMeshCUDA->Get_EvalStep_Time();
-					}
-				}
-				//QUARTIC
-				else if (pMeshCUDA->GetEvaluationSpeedup() == 5) {
-
-					//1, 2, 3, 4, 5 -> next is 1
-					if (time_demag5 > time_demag4 && time_demag4 > time_demag3 && time_demag3 > time_demag2 && time_demag2 > time_demag1) {
-
-						pHdemag = &Hdemag;
-						time_demag1 = pMeshCUDA->Get_EvalStep_Time();
-					}
-					//2, 3, 4, 5, 1 -> next is 2
-					else if (time_demag1 > time_demag2) {
-
-						pHdemag = &Hdemag2;
-						time_demag2 = pMeshCUDA->Get_EvalStep_Time();
-					}
-					//3, 4, 5, 1, 2 -> next is 3
-					else if (time_demag2 > time_demag3) {
-
-						pHdemag = &Hdemag3;
-						time_demag3 = pMeshCUDA->Get_EvalStep_Time();
-					}
-					//4, 5, 1, 2, 3 -> next is 4
-					else if (time_demag3 > time_demag4) {
-
-						pHdemag = &Hdemag4;
-						time_demag4 = pMeshCUDA->Get_EvalStep_Time();
-					}
-					else {
-
-						pHdemag = &Hdemag5;
-						time_demag5 = pMeshCUDA->Get_EvalStep_Time();
-					}
-				}
-				//CUBIC
-				else if (pMeshCUDA->GetEvaluationSpeedup() == 4) {
-
-					//1, 2, 3, 4 -> next is 1
-					if (time_demag4 > time_demag3 && time_demag3 > time_demag2 && time_demag2 > time_demag1) {
-
-						pHdemag = &Hdemag;
-						time_demag1 = pMeshCUDA->Get_EvalStep_Time();
-					}
-					//2, 3, 4, 1 -> next is 2
-					else if (time_demag1 > time_demag2) {
-
-						pHdemag = &Hdemag2;
-						time_demag2 = pMeshCUDA->Get_EvalStep_Time();
-					}
-					//3, 4, 1, 2 -> next is 3
-					else if (time_demag2 > time_demag3) {
-
-						pHdemag = &Hdemag3;
-						time_demag3 = pMeshCUDA->Get_EvalStep_Time();
-					}
-					else {
-
-						pHdemag = &Hdemag4;
-						time_demag4 = pMeshCUDA->Get_EvalStep_Time();
-					}
-				}
-				//QUADRATIC
-				else if (pMeshCUDA->GetEvaluationSpeedup() == 3) {
-
-					//1, 2, 3 -> next is 1
-					if (time_demag3 > time_demag2 && time_demag2 > time_demag1) {
-
-						pHdemag = &Hdemag;
-						time_demag1 = pMeshCUDA->Get_EvalStep_Time();
-					}
-					//2, 3, 1 -> next is 2
-					else if (time_demag1 > time_demag2) {
-
-						pHdemag = &Hdemag2;
-						time_demag2 = pMeshCUDA->Get_EvalStep_Time();
-					}
-					//3, 1, 2 -> next is 3, leading to 1, 2, 3 again
-					else {
-
-						pHdemag = &Hdemag3;
-						time_demag3 = pMeshCUDA->Get_EvalStep_Time();
-					}
-				}
-				//LINEAR
-				else if (pMeshCUDA->GetEvaluationSpeedup() == 2) {
-
-					//1, 2 -> next is 1
-					if (time_demag2 > time_demag1) {
-
-						pHdemag = &Hdemag;
-						time_demag1 = pMeshCUDA->Get_EvalStep_Time();
-					}
-					//2, 1 -> next is 2, leading to 1, 2 again
-					else {
-
-						pHdemag = &Hdemag2;
-						time_demag2 = pMeshCUDA->Get_EvalStep_Time();
-					}
-				}
-				//STEP
-				else {
-
-					pHdemag = &Hdemag;
-				}
-			}
-
-			//do evaluation
-			ZeroEnergy();
-			
-			///////////////////////////////////////////////////////////////////////////////////////////////
-			//MULTIPLE DEVICES DEMAG
-			///////////////////////////////////////////////////////////////////////////////////////////////
-			if (mGPU.get_num_devices() > 1) {
-
-				///////////////////////////////////////////////////////////////////////////////////////////////
-				//Copy M data to linear regions so we can transfer
-				///////////////////////////////////////////////////////////////////////////////////////////////
-
-				for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
-
-					pDemagMCUDA[mGPU]->Copy_M_Input_xRegion(mGPU.get_halfprecision_transfer());
-				}
-
-				///////////////////////////////////////////////////////////////////////////////////////////////
-				//Transfer data between devices before x FFT
-				///////////////////////////////////////////////////////////////////////////////////////////////
-				
-				if (mGPU.get_halfprecision_transfer()) {
-
-					for (int device_from = 0; device_from < mGPU.get_num_devices(); device_from++) {
-						for (int device_to = 0; device_to < mGPU.get_num_devices(); device_to++) {
-
-							if (device_to == device_from) continue;
-							M_Input_transfer_half[device_from][device_to]->transfer(device_to, device_from);
-						}
-					}
-					mGPU.synchronize();
-				}
-				else {
-					for (int device_from = 0; device_from < mGPU.get_num_devices(); device_from++) {
-						for (int device_to = 0; device_to < mGPU.get_num_devices(); device_to++) {
-
-							if (device_to == device_from) continue;
-							M_Input_transfer[device_from][device_to]->transfer(device_to, device_from);
-						}
-					}
-					mGPU.synchronize();
-				}
-
-				///////////////////////////////////////////////////////////////////////////////////////////////
-				//Forward x FFT for all devices (first step)
-				///////////////////////////////////////////////////////////////////////////////////////////////
-
-				for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
-
-					if (pMeshCUDA->GetMeshType() == MESH_FERROMAGNETIC) {
-
-						if (!mGPU.get_halfprecision_transfer())
-							pDemagMCUDA[mGPU]->ForwardFFT_mGPU_first(pMeshCUDA->M.get_deviceobject(mGPU), pDemagMCUDA[mGPU]->Real_yRegion_arr, pDemagMCUDA[mGPU]->Complex_yRegion_arr);
-						else
-							pDemagMCUDA[mGPU]->ForwardFFT_mGPU_first(
-								pMeshCUDA->M.get_deviceobject(mGPU),
-								pDemagMCUDA[mGPU]->Real_yRegion_half_arr, pDemagMCUDA[mGPU]->normalization_M,
-								pDemagMCUDA[mGPU]->Complex_yRegion_half_arr, pDemagMCUDA[mGPU]->normalization);
-					}
-
-					else if (pMeshCUDA->GetMeshType() == MESH_ANTIFERROMAGNETIC) {
-
-						if (!mGPU.get_halfprecision_transfer())
-							pDemagMCUDA[mGPU]->ForwardFFT_AveragedInputs_mGPU_first(pMeshCUDA->M.get_deviceobject(mGPU), pMeshCUDA->M2.get_deviceobject(mGPU), pDemagMCUDA[mGPU]->Real_yRegion_arr, pDemagMCUDA[mGPU]->Complex_yRegion_arr);
-						else
-							pDemagMCUDA[mGPU]->ForwardFFT_AveragedInputs_mGPU_first(
-								pMeshCUDA->M.get_deviceobject(mGPU), pMeshCUDA->M2.get_deviceobject(mGPU),
-								pDemagMCUDA[mGPU]->Real_yRegion_half_arr, pDemagMCUDA[mGPU]->normalization_M,
-								pDemagMCUDA[mGPU]->Complex_yRegion_half_arr, pDemagMCUDA[mGPU]->normalization);
-					}
-				}
-
-				///////////////////////////////////////////////////////////////////////////////////////////////
-				//Transfer data between devices after x FFT
-				///////////////////////////////////////////////////////////////////////////////////////////////
-				
-				if (mGPU.get_halfprecision_transfer()) {
-
-					for (int device_from = 0; device_from < mGPU.get_num_devices(); device_from++) {
-						for (int device_to = 0; device_to < mGPU.get_num_devices(); device_to++) {
-
-							if (device_to == device_from) continue;
-							xFFT_Data_transfer_half[device_from][device_to]->transfer(device_to, device_from);
-						}
-					}
-					mGPU.synchronize();
-				}
-				else {
-
-					for (int device_from = 0; device_from < mGPU.get_num_devices(); device_from++) {
-						for (int device_to = 0; device_to < mGPU.get_num_devices(); device_to++) {
-
-							if (device_to == device_from) continue;
-							xFFT_Data_transfer[device_from][device_to]->transfer(device_to, device_from);
-						}
-					}
-					mGPU.synchronize();
-				}
-
-				///////////////////////////////////////////////////////////////////////////////////////////////
-				//Forward FFT for all devices (last step)
-				///////////////////////////////////////////////////////////////////////////////////////////////
-
-				for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
-
-					if (!mGPU.get_halfprecision_transfer())
-						pDemagMCUDA[mGPU]->ForwardFFT_mGPU_last(pDemagMCUDA[mGPU]->Complex_xRegion_arr);
-					else
-						pDemagMCUDA[mGPU]->ForwardFFT_mGPU_last(pDemagMCUDA[mGPU]->Complex_xRegion_half_arr, pDemagMCUDA[mGPU]->normalization);
-				}
-
-				///////////////////////////////////////////////////////////////////////////////////////////////
-				//Kernel multiplications
-				///////////////////////////////////////////////////////////////////////////////////////////////
-
-				for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
-
-					pDemagMCUDA[mGPU]->KernelMultiplication();
-				}
-
-				///////////////////////////////////////////////////////////////////////////////////////////////
-				//Inverse FFT for all devices
-				///////////////////////////////////////////////////////////////////////////////////////////////
-
-				for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
-
-					if (!mGPU.get_halfprecision_transfer())
-						pDemagMCUDA[mGPU]->InverseFFT_mGPU_first(pDemagMCUDA[mGPU]->Complex_xRegion_arr);
-					else
-						pDemagMCUDA[mGPU]->InverseFFT_mGPU_first(pDemagMCUDA[mGPU]->Complex_xRegion_half_arr, pDemagMCUDA[mGPU]->normalization);
-				}
-
-				///////////////////////////////////////////////////////////////////////////////////////////////
-				//Transfer data between devices before x IFFT
-				///////////////////////////////////////////////////////////////////////////////////////////////
-
-				if (mGPU.get_halfprecision_transfer()) {
-
-					for (int device_from = 0; device_from < mGPU.get_num_devices(); device_from++) {
-						for (int device_to = 0; device_to < mGPU.get_num_devices(); device_to++) {
-
-							if (device_to == device_from) continue;
-							xIFFT_Data_transfer_half[device_from][device_to]->transfer(device_to, device_from);
-						}
-					}
-					mGPU.synchronize();
-				}
-				else {
-
-					for (int device_from = 0; device_from < mGPU.get_num_devices(); device_from++) {
-						for (int device_to = 0; device_to < mGPU.get_num_devices(); device_to++) {
-
-							if (device_to == device_from) continue;
-							xIFFT_Data_transfer[device_from][device_to]->transfer(device_to, device_from);
-						}
-					}
-					mGPU.synchronize();
-				}
-
-				///////////////////////////////////////////////////////////////////////////////////////////////
-				//x IFFT
-				///////////////////////////////////////////////////////////////////////////////////////////////
-
-				for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
-
-					if (!mGPU.get_halfprecision_transfer())
-						pDemagMCUDA[mGPU]->InverseFFT_mGPU_last(pDemagMCUDA[mGPU]->Complex_yRegion_arr, pDemagMCUDA[mGPU]->Real_yRegion_arr);
-					else
-						pDemagMCUDA[mGPU]->InverseFFT_mGPU_last(pDemagMCUDA[mGPU]->Complex_yRegion_half_arr, pDemagMCUDA[mGPU]->normalization, pDemagMCUDA[mGPU]->Real_yRegion_half_arr, pDemagMCUDA[mGPU]->normalization);
-				}
-
-				///////////////////////////////////////////////////////////////////////////////////////////////
-				//Transfer data between devices before finishing
-				///////////////////////////////////////////////////////////////////////////////////////////////
-				
-				if (mGPU.get_halfprecision_transfer()) {
-
-					for (int device_from = 0; device_from < mGPU.get_num_devices(); device_from++) {
-						for (int device_to = 0; device_to < mGPU.get_num_devices(); device_to++) {
-
-							if (device_to == device_from) continue;
-							Out_Data_transfer_half[device_from][device_to]->transfer(device_to, device_from);
-						}
-					}
-					mGPU.synchronize();
-				}
-				else {
-
-					for (int device_from = 0; device_from < mGPU.get_num_devices(); device_from++) {
-						for (int device_to = 0; device_to < mGPU.get_num_devices(); device_to++) {
-
-							if (device_to == device_from) continue;
-							Out_Data_transfer[device_from][device_to]->transfer(device_to, device_from);
-						}
-					}
-					mGPU.synchronize();
-				}
-
-				///////////////////////////////////////////////////////////////////////////////////////////////
-				//Finish convolution, setting output in Heff
-				///////////////////////////////////////////////////////////////////////////////////////////////
-
-				if (pMeshCUDA->GetMeshType() == MESH_FERROMAGNETIC) {
-
-					for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
-
-						if (!mGPU.get_halfprecision_transfer()) {
-
-							if (Module_Heff.linear_size_cpu()) {
-
-								pDemagMCUDA[mGPU]->InverseFFT_mGPU_finish(
-									pDemagMCUDA[mGPU]->Real_xRegion_arr,
-									pMeshCUDA->M.get_deviceobject(mGPU), pHdemag->get_deviceobject(mGPU),
-									energy(mGPU), true, true,
-									Module_Heff.get_managed_object(mGPU), Module_energy.get_managed_object(mGPU));
-							}
-							else {
-
-								pDemagMCUDA[mGPU]->InverseFFT_mGPU_finish(
-									pDemagMCUDA[mGPU]->Real_xRegion_arr,
-									pMeshCUDA->M.get_deviceobject(mGPU), pHdemag->get_deviceobject(mGPU),
-									energy(mGPU), true, true);
-							}
-						}
-						else {
-						
-							if (Module_Heff.linear_size_cpu()) {
-
-								pDemagMCUDA[mGPU]->InverseFFT_mGPU_finish(
-									pDemagMCUDA[mGPU]->Real_xRegion_half_arr, pDemagMCUDA[mGPU]->normalization,
-									pMeshCUDA->M.get_deviceobject(mGPU), pHdemag->get_deviceobject(mGPU),
-									energy(mGPU), true, true,
-									Module_Heff.get_managed_object(mGPU), Module_energy.get_managed_object(mGPU));
-							}
-							else {
-
-								pDemagMCUDA[mGPU]->InverseFFT_mGPU_finish(
-									pDemagMCUDA[mGPU]->Real_xRegion_half_arr, pDemagMCUDA[mGPU]->normalization,
-									pMeshCUDA->M.get_deviceobject(mGPU), pHdemag->get_deviceobject(mGPU),
-									energy(mGPU), true, true);
-							}
-						}
-					}
-
-					//add contribution to Heff and subtract self demag from *pHDemag
-					Demag_EvalSpeedup_AddField_SubSelf(pMeshCUDA->Heff, *pHdemag, pMeshCUDA->M);
-				}
-				else if (pMeshCUDA->GetMeshType() == MESH_ANTIFERROMAGNETIC) {
-
-					for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
-
-						if (!mGPU.get_halfprecision_transfer()) {
-
-							if (Module_Heff.linear_size_cpu())
-								pDemagMCUDA[mGPU]->InverseFFT_AveragedInputs_SingleOutput_mGPU_finish(
-									pDemagMCUDA[mGPU]->Real_xRegion_arr,
-									pMeshCUDA->M.get_deviceobject(mGPU), pMeshCUDA->M2.get_deviceobject(mGPU),
-									pHdemag->get_deviceobject(mGPU),
-									energy(mGPU), true, true,
-									Module_Heff.get_managed_object(mGPU), Module_energy.get_managed_object(mGPU));
-							else
-								pDemagMCUDA[mGPU]->InverseFFT_AveragedInputs_SingleOutput_mGPU_finish(
-									pDemagMCUDA[mGPU]->Real_xRegion_arr,
-									pMeshCUDA->M.get_deviceobject(mGPU), pMeshCUDA->M2.get_deviceobject(mGPU),
-									pHdemag->get_deviceobject(mGPU),
-									energy(mGPU), true, true);
-						}
-						else {
-
-							if (Module_Heff.linear_size_cpu())
-								pDemagMCUDA[mGPU]->InverseFFT_AveragedInputs_SingleOutput_mGPU_finish(
-									pDemagMCUDA[mGPU]->Real_xRegion_half_arr, pDemagMCUDA[mGPU]->normalization,
-									pMeshCUDA->M.get_deviceobject(mGPU), pMeshCUDA->M2.get_deviceobject(mGPU),
-									pHdemag->get_deviceobject(mGPU),
-									energy(mGPU), true, true,
-									Module_Heff.get_managed_object(mGPU), Module_energy.get_managed_object(mGPU));
-							else
-								pDemagMCUDA[mGPU]->InverseFFT_AveragedInputs_SingleOutput_mGPU_finish(
-									pDemagMCUDA[mGPU]->Real_xRegion_half_arr, pDemagMCUDA[mGPU]->normalization,
-									pMeshCUDA->M.get_deviceobject(mGPU), pMeshCUDA->M2.get_deviceobject(mGPU),
-									pHdemag->get_deviceobject(mGPU),
-									energy(mGPU), true, true);
-						}
-					}
-
-					//add contribution to Heff and Heff2 and subtract self demag from *pHDemag
-					Demag_EvalSpeedup_AddField_SubSelf(pMeshCUDA->Heff, pMeshCUDA->Heff2, *pHdemag, pMeshCUDA->M, pMeshCUDA->M2);
-				}
-			}
-			///////////////////////////////////////////////////////////////////////////////////////////////
-			//SINGLE DEVICE DEMAG
-			///////////////////////////////////////////////////////////////////////////////////////////////
-			else {
-
-				if (pMeshCUDA->GetMeshType() == MESH_FERROMAGNETIC) {
-
-					if (Module_Heff.linear_size_cpu())
-						pDemagMCUDA[0]->Convolute(
-							pMeshCUDA->M.get_deviceobject(0), pHdemag->get_deviceobject(0),
-							energy(0), true, true,
-							&Module_Heff.get_deviceobject(0), &Module_energy.get_deviceobject(0));
-					else
-						pDemagMCUDA[0]->Convolute(
-							pMeshCUDA->M.get_deviceobject(0), pHdemag->get_deviceobject(0),
-							energy(0), true, true);
-
-					//add contribution to Heff and subtract self demag from *pHDemag
-					Demag_EvalSpeedup_AddField_SubSelf(pMeshCUDA->Heff, *pHdemag, pMeshCUDA->M);
-				}
-
-				else if (pMeshCUDA->GetMeshType() == MESH_ANTIFERROMAGNETIC) {
-					
-					if (Module_Heff.linear_size_cpu())
-						pDemagMCUDA[0]->Convolute_AveragedInputs(
-							pMeshCUDA->M.get_deviceobject(0), pMeshCUDA->M2.get_deviceobject(0), pHdemag->get_deviceobject(0),
-							energy(0), true, true,
-							&Module_Heff.get_deviceobject(0), &Module_energy.get_deviceobject(0));
-					else
-						pDemagMCUDA[0]->Convolute_AveragedInputs(
-							pMeshCUDA->M.get_deviceobject(0), pMeshCUDA->M2.get_deviceobject(0), pHdemag->get_deviceobject(0),
-							energy(0), true, true);
-
-					//add contribution to Heff and Heff2 and subtract self demag from *pHDemag
-					Demag_EvalSpeedup_AddField_SubSelf(pMeshCUDA->Heff, pMeshCUDA->Heff2, *pHdemag, pMeshCUDA->M, pMeshCUDA->M2);
-				}
-			}
-		}
-		else {
-
-			//not required to update, and we have enough previous evaluations: use previous Hdemag saves to extrapolate for current evaluation
-
-			cuBReal a1 = 1.0, a2 = 0.0, a3 = 0.0, a4 = 0.0, a5 = 0.0, a6 = 0.0;
-			cuBReal time = pMeshCUDA->Get_EvalStep_Time();
-
-			//QUINTIC
-			if (pMeshCUDA->GetEvaluationSpeedup() == 6) {
-
-				a1 = (time - time_demag2) * (time - time_demag3) * (time - time_demag4) * (time - time_demag5) * (time - time_demag6) / ((time_demag1 - time_demag2) * (time_demag1 - time_demag3) * (time_demag1 - time_demag4) * (time_demag1 - time_demag5) * (time_demag1 - time_demag6));
-				a2 = (time - time_demag1) * (time - time_demag3) * (time - time_demag4) * (time - time_demag5) * (time - time_demag6) / ((time_demag2 - time_demag1) * (time_demag2 - time_demag3) * (time_demag2 - time_demag4) * (time_demag2 - time_demag5) * (time_demag2 - time_demag6));
-				a3 = (time - time_demag1) * (time - time_demag2) * (time - time_demag4) * (time - time_demag5) * (time - time_demag6) / ((time_demag3 - time_demag1) * (time_demag3 - time_demag2) * (time_demag3 - time_demag4) * (time_demag3 - time_demag5) * (time_demag3 - time_demag6));
-				a4 = (time - time_demag1) * (time - time_demag2) * (time - time_demag3) * (time - time_demag5) * (time - time_demag6) / ((time_demag4 - time_demag1) * (time_demag4 - time_demag2) * (time_demag4 - time_demag3) * (time_demag4 - time_demag5) * (time_demag4 - time_demag6));
-				a5 = (time - time_demag1) * (time - time_demag2) * (time - time_demag3) * (time - time_demag4) * (time - time_demag6) / ((time_demag5 - time_demag1) * (time_demag5 - time_demag2) * (time_demag5 - time_demag3) * (time_demag5 - time_demag4) * (time_demag5 - time_demag6));
-				a6 = (time - time_demag1) * (time - time_demag2) * (time - time_demag3) * (time - time_demag4) * (time - time_demag5) / ((time_demag6 - time_demag1) * (time_demag6 - time_demag2) * (time_demag6 - time_demag3) * (time_demag6 - time_demag4) * (time_demag6 - time_demag5));
-
-				if (pMeshCUDA->GetMeshType() == MESH_ANTIFERROMAGNETIC) {
-
-					//add contribution to Heff and Heff2, together with self demag
-					Demag_EvalSpeedup_AddExtrapField_AddSelf(pMeshCUDA->Heff, pMeshCUDA->Heff2, a1, a2, a3, a4, a5, a6, pMeshCUDA->M, pMeshCUDA->M2);
-				}
-				else {
-
-					//add contribution to Heff, together with self demag
-					Demag_EvalSpeedup_AddExtrapField_AddSelf(pMeshCUDA->Heff, a1, a2, a3, a4, a5, a6, pMeshCUDA->M);
-				}
-			}
-			//QUARTIC
-			else if (pMeshCUDA->GetEvaluationSpeedup() == 5) {
-
-				a1 = (time - time_demag2) * (time - time_demag3) * (time - time_demag4) * (time - time_demag5) / ((time_demag1 - time_demag2) * (time_demag1 - time_demag3) * (time_demag1 - time_demag4) * (time_demag1 - time_demag5));
-				a2 = (time - time_demag1) * (time - time_demag3) * (time - time_demag4) * (time - time_demag5) / ((time_demag2 - time_demag1) * (time_demag2 - time_demag3) * (time_demag2 - time_demag4) * (time_demag2 - time_demag5));
-				a3 = (time - time_demag1) * (time - time_demag2) * (time - time_demag4) * (time - time_demag5) / ((time_demag3 - time_demag1) * (time_demag3 - time_demag2) * (time_demag3 - time_demag4) * (time_demag3 - time_demag5));
-				a4 = (time - time_demag1) * (time - time_demag2) * (time - time_demag3) * (time - time_demag5) / ((time_demag4 - time_demag1) * (time_demag4 - time_demag2) * (time_demag4 - time_demag3) * (time_demag4 - time_demag5));
-				a5 = (time - time_demag1) * (time - time_demag2) * (time - time_demag3) * (time - time_demag4) / ((time_demag5 - time_demag1) * (time_demag5 - time_demag2) * (time_demag5 - time_demag3) * (time_demag5 - time_demag4));
-
-				if (pMeshCUDA->GetMeshType() == MESH_ANTIFERROMAGNETIC) {
-
-					//add contribution to Heff and Heff2, together with self demag
-					Demag_EvalSpeedup_AddExtrapField_AddSelf(pMeshCUDA->Heff, pMeshCUDA->Heff2, a1, a2, a3, a4, a5, pMeshCUDA->M, pMeshCUDA->M2);
-				}
-				else {
-
-					//add contribution to Heff, together with self demag
-					Demag_EvalSpeedup_AddExtrapField_AddSelf(pMeshCUDA->Heff, a1, a2, a3, a4, a5, pMeshCUDA->M);
-				}
-			}
-			//CUBIC
-			else if (pMeshCUDA->GetEvaluationSpeedup() == 4) {
-
-				a1 = (time - time_demag2) * (time - time_demag3) * (time - time_demag4) / ((time_demag1 - time_demag2) * (time_demag1 - time_demag3) * (time_demag1 - time_demag4));
-				a2 = (time - time_demag1) * (time - time_demag3) * (time - time_demag4) / ((time_demag2 - time_demag1) * (time_demag2 - time_demag3) * (time_demag2 - time_demag4));
-				a3 = (time - time_demag1) * (time - time_demag2) * (time - time_demag4) / ((time_demag3 - time_demag1) * (time_demag3 - time_demag2) * (time_demag3 - time_demag4));
-				a4 = (time - time_demag1) * (time - time_demag2) * (time - time_demag3) / ((time_demag4 - time_demag1) * (time_demag4 - time_demag2) * (time_demag4 - time_demag3));
-
-				if (pMeshCUDA->GetMeshType() == MESH_ANTIFERROMAGNETIC) {
-
-					//add contribution to Heff and Heff2, together with self demag
-					Demag_EvalSpeedup_AddExtrapField_AddSelf(pMeshCUDA->Heff, pMeshCUDA->Heff2, a1, a2, a3, a4, pMeshCUDA->M, pMeshCUDA->M2);
-				}
-				else {
-
-					//add contribution to Heff, together with self demag
-					Demag_EvalSpeedup_AddExtrapField_AddSelf(pMeshCUDA->Heff, a1, a2, a3, a4, pMeshCUDA->M);
-				}
-			}
-			//QUADRATIC
-			else if (pMeshCUDA->GetEvaluationSpeedup() == 3) {
-
-				a1 = (time - time_demag2) * (time - time_demag3) / ((time_demag1 - time_demag2) * (time_demag1 - time_demag3));
-				a2 = (time - time_demag1) * (time - time_demag3) / ((time_demag2 - time_demag1) * (time_demag2 - time_demag3));
-				a3 = (time - time_demag1) * (time - time_demag2) / ((time_demag3 - time_demag1) * (time_demag3 - time_demag2));
-
-				if (pMeshCUDA->GetMeshType() == MESH_ANTIFERROMAGNETIC) {
-
-					//add contribution to Heff and Heff2, together with self demag
-					Demag_EvalSpeedup_AddExtrapField_AddSelf(pMeshCUDA->Heff, pMeshCUDA->Heff2, a1, a2, a3, pMeshCUDA->M, pMeshCUDA->M2);
-				}
-				else {
-
-					//add contribution to Heff, together with self demag
-					Demag_EvalSpeedup_AddExtrapField_AddSelf(pMeshCUDA->Heff, a1, a2, a3, pMeshCUDA->M);
-				}
-			}
-			//LINEAR
-			else if (pMeshCUDA->GetEvaluationSpeedup() == 2) {
-
-				a1 = (time - time_demag2) / (time_demag1 - time_demag2);
-				a2 = (time - time_demag1) / (time_demag2 - time_demag1);
-
-				if (pMeshCUDA->GetMeshType() == MESH_ANTIFERROMAGNETIC) {
-
-					//add contribution to Heff and Heff2, together with self demag
-					Demag_EvalSpeedup_AddExtrapField_AddSelf(pMeshCUDA->Heff, pMeshCUDA->Heff2, a1, a2, pMeshCUDA->M, pMeshCUDA->M2);
-				}
-				else {
-
-					//add contribution to Heff, together with self demag
-					Demag_EvalSpeedup_AddExtrapField_AddSelf(pMeshCUDA->Heff, a1, a2, pMeshCUDA->M);
-				}
-			}
-			//STEP
-			else {
-
-				if (pMeshCUDA->GetMeshType() == MESH_ANTIFERROMAGNETIC) {
-
-					//add contribution to Heff and Heff2, together with self demag
-					Demag_EvalSpeedup_AddExtrapField_AddSelf(pMeshCUDA->Heff, pMeshCUDA->Heff2, pMeshCUDA->M, pMeshCUDA->M2);
-				}
-				else {
-
-					//add contribution to Heff, together with self demag
-					Demag_EvalSpeedup_AddExtrapField_AddSelf(pMeshCUDA->Heff, pMeshCUDA->M);
-				}
-			}
-		}
+		EvalSpeedupCUDA::UpdateField_EvalSpeedup(
+			pMeshCUDA->GetEvaluationSpeedup(), pMeshCUDA->Check_Step_Update(),
+			pMeshCUDA->Get_EvalStep_Time(),
+			do_evaluation,
+			do_transfer_in, do_transfer_out);
 	}
 }
 

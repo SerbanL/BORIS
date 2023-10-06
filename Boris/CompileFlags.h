@@ -7,7 +7,7 @@
 //This is useful for debugging and testing, and also for reducing compilation time when developing new modules.
 
 //First develop new module in CPU code only with COMPILECUDA 0 - CUDA compilation is by far the most costly.
-//Making CUDA versions of modules should be mostly a cut-and-paste job after the cpu version is done.
+//Making CUDA versions of modules should be mostly a copy-and-paste job after the cpu version is done.
 
 //----------------------------------------------------------------- OPERATING SYSTEM
 
@@ -146,7 +146,7 @@
 #define MODULE_COMPILATION_CUST	4
 
 //Set this
-#define MODULE_COMPILATION	MODULE_COMPILATION_CUST
+#define MODULE_COMPILATION	MODULE_COMPILATION_ALL
 
 //full
 #if MODULE_COMPILATION == MODULE_COMPILATION_ALL
@@ -215,19 +215,19 @@
 #define MODULE_COMPILATION_ZEEMAN
 #define MODULE_COMPILATION_MOPTICAL
 
-#define MODULE_COMPILATION_TRANSPORT
-#define MODULE_COMPILATION_TMR
+//#define MODULE_COMPILATION_TRANSPORT
+//#define MODULE_COMPILATION_TMR
 
-#define MODULE_COMPILATION_MELASTIC
+//#define MODULE_COMPILATION_MELASTIC
 #define MODULE_COMPILATION_HEAT
 
 #if ATOMISTIC == 1
 #define MODULE_COMPILATION_ATOM_DIPOLEDIPOLE
 #endif
 
-////#define MODULE_COMPILATION_OERSTED
-#define MODULE_COMPILATION_STRAYFIELD
-////#define MODULE_COMPILATION_SDEMAG
+//#define MODULE_COMPILATION_OERSTED
+//#define MODULE_COMPILATION_STRAYFIELD
+#define MODULE_COMPILATION_SDEMAG
 
 #endif
 

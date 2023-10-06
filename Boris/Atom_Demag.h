@@ -2,11 +2,13 @@
 
 #include "BorisLib.h"
 #include "Modules.h"
-#include "DemagBase.h"
 
 class Atom_Mesh;
 
 #if defined(MODULE_COMPILATION_DEMAG) && ATOMISTIC == 1
+
+#include "DemagBase.h"
+#include "EvalSpeedup.h"
 
 #include "Convolution.h"
 #include "DemagKernel.h"
@@ -19,7 +21,8 @@ class Atom_Demag :
 	public Modules,
 	public DemagBase,
 	public Convolution<Atom_Demag, DemagKernel>,
-	public ProgramState<Atom_Demag, std::tuple<INT3>, std::tuple<>>
+	public ProgramState<Atom_Demag, std::tuple<INT3>, std::tuple<>>,
+	public EvalSpeedup
 {
 
 #if COMPILECUDA == 1
@@ -80,8 +83,7 @@ public:
 #else
 
 class Atom_Demag :
-	public Modules,
-	public DemagBase
+	public Modules
 {
 
 private:

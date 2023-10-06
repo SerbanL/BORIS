@@ -1,8 +1,5 @@
 #pragma once
 
-//TO DO:
-//mesh transfer
-
 //////////////// mcuObject POLICY CLASS for managed cuVEC
 
 #include "mcuObject.h"
@@ -21,6 +18,11 @@
 //Differs from CMBNDInfoCUDA (which is used for single GPU computations) as:
 //mCMBNDInfoCUDA holds a CMBNDInfoCUDA cuda for each device, which describes the contact between the sub-cuVEC on each device (primary one managed here), and the entire logical cuVEC to which it is in contact (the secondary one, which will be spread across multiple devices)
 struct mCMBNDInfoCUDA;
+
+template <typename VType> class mcuTransfer;
+struct mcuTransfer_Info;
+
+class mcuBorisRand;
 
 //VType : VEC value type, e.g. float, cuFLT3, etc.
 //MType : managed type, e.g. cuVEC, or cuVEC_VC
@@ -49,6 +51,18 @@ private:
 	//vector of size number of devices, each holding a cu_obj managed version of mcuVEC (mcuVEC_Managed) on the respective device - can be extracted to pass into a CUDA kernel
 	//mcuVEC_Managed class holds pointers to all the cuVECs from all available devices so we can access them using UVA
 	std::vector<cu_obj<mcuVEC_Managed<MType, VType>>*> man_mcuVEC;
+	//for cuVEC_VC<VType> managed object, we also need to set the managed mcuVEC in its base, cuVEC<VType>, which means we need to keep a converted object here
+	std::vector<cu_obj<mcuVEC_Managed<cuVEC<VType>, VType>>*> man_mcuVEC_Base;
+
+	//----------------- Mesh transfer
+
+	//vectors of size number of devices, each holding a cu_obj managed mcuTransfer object, which directs mesh transfers for each respective device (to and from)
+
+	//separate object to manage transfer info
+	std::vector<std::pair<cu_obj<mcuTransfer<VType>>*, mcuTransfer_Info>> transfer;
+
+	//secondary mesh transfer object, can be configured differently
+	std::vector<std::pair<cu_obj<mcuTransfer<VType>>*, mcuTransfer_Info>> transfer2;
 
 	//----------------- (cuVEC)
 
@@ -139,6 +153,13 @@ private:
 	//--------------------------------------------man_mcuVEC Auxiliary : mcuVEC_mng.h
 
 	void synch_dimensions(void);
+
+	//--------------------------------------------AUXILIARY (transfers) : mcuVEC_MeshTransfer.h
+
+	void clear_transfer(void);
+	void make_transfer(void);
+	void clear_transfer2(void);
+	void make_transfer2(void);
 
 	//--------------------------------------------AUXILIARY : mcuVEC_halo.h
 
@@ -254,11 +275,11 @@ public:
 	
 	//not applicable to cuVEC
 	template <typename VType_ = VType, typename MType_ = MType, std::enable_if_t<std::is_same<MType_, cuVEC<VType_>>::value>* = nullptr>
-	void exchange_halos(void) {}
+	void exchange_halos(bool force_exchange = false) {}
 
 	//for cuVEC_VC
 	template <typename VType_ = VType, typename MType_ = MType, std::enable_if_t<std::is_same<MType_, cuVEC_VC<VType_>>::value>* = nullptr>
-	void exchange_halos(void);
+	void exchange_halos(bool force_exchange = false);
 
 	//--------------------------------------------Others
 
@@ -277,6 +298,7 @@ public:
 
 	const cuRect& device_rect(int idx) const { return prect_d[idx]; }
 	const cuBox& device_box(int idx) const { return pbox_d[idx]; }
+	cuBox* devices_boxes(void) { return pbox_d; }
 
 	//given a box (relative to entire cuVEC), return sub-box for given device idx (relative to device cuVEC)
 	cuBox device_sub_box(cuBox box, int idx) { return (box.IsNull() ? pbox_d[idx] - pbox_d[idx].s : box.get_intersection(pbox_d[idx]) - pbox_d[idx].s); }
@@ -486,12 +508,16 @@ public:
 	template <typename VType_ = VType, typename MType_ = MType, std::enable_if_t<std::is_same<MType_, cuVEC_VC<VType_>>::value>* = nullptr>
 	void clear_robin_conditions(void);
 
+	//similar to set_ngbrFlags, but only recalculate shape-related flags (neighbors) directly from stored values (zero value means empty cell), usable at runtime if shape changes. Applicable to cuVEC_VC only
+	template <typename VType_ = VType, typename MType_ = MType, std::enable_if_t<std::is_same<MType_, cuVEC_VC<VType_>>::value>* = nullptr>
+	void set_ngbrFlags_shapeonly(void);
+
 	//when enabled then set_faces_and_edges_flags method will be called by set_ngbrFlags every time it is executed
 	//if false then faces and edges flags not calculated to avoid extra unnecessary initialization work
 	template <typename VType_ = VType, typename MType_ = MType, std::enable_if_t<std::is_same<MType_, cuVEC_VC<VType_>>::value>* = nullptr>
 	void set_calculate_faces_and_edges(bool status);
 
-	//--------------------------------------------MULTIPLE ENTRIES SETTERS : mcuVEC_oper.h
+	//--------------------------------------------MULTIPLE ENTRIES SETTERS - SHAPE CHANGERS : mcuVEC_shape.h
 
 	//set value in box
 	void setbox(cuBox box, VType value = VType());
@@ -501,18 +527,16 @@ public:
 
 	//delete rectangle, where the rectangle is relative to this VEC's rectangle, by setting empty cell values - all cells become empty cells. Applicable to cuVEC_VC only
 	template <typename VType_ = VType, typename MType_ = MType, std::enable_if_t<std::is_same<MType_, cuVEC_VC<VType_>>::value>* = nullptr>
-	void delrect(cuRect rectangle);
-
-	//set value in all cells
-	void set(VType value);
-
-	//re-normalize all non-zero values to have the new magnitude (multiply by new_norm and divide by current magnitude)
-	template <typename PType = decltype(cu_GetMagnitude(std::declval<VType>()))>
-	void renormalize(PType new_norm);
+	void delrect(cuRect rectangle, bool recalculate_flags = true);
 
 	//mask values in cells using bitmap image : white -> empty cells. black -> keep values. Apply mask up to given z depth number of cells depending on grayscale value (zDepth, all if 0). Applicable to cuVEC_VC only
 	template <typename VType_ = VType, typename MType_ = MType, std::enable_if_t<std::is_same<MType_, cuVEC_VC<VType_>>::value>* = nullptr>
 	bool apply_bitmap_mask(std::vector<unsigned char>& bitmap, int zDepth = 0);
+
+	//--------------------------------------------MULTIPLE ENTRIES SETTERS : mcuVEC_oper.h
+
+	//set value in all cells
+	void set(VType value);
 
 	//exactly the same as assign value - do not use assign as it is slow (sets flags). Applicable to cuVEC_VC only
 	template <typename VType_ = VType, typename MType_ = MType, std::enable_if_t<std::is_same<MType_, cuVEC_VC<VType_>>::value>* = nullptr>
@@ -522,9 +546,28 @@ public:
 	template <typename VType_ = VType, typename MType_ = MType, std::enable_if_t<std::is_same<MType_, cuVEC_VC<VType_>>::value>* = nullptr>
 	void setrectnonempty(const cuRect& rectangle, VType value = VType());
 
+	//re-normalize all non-zero values to have the new magnitude (multiply by new_norm and divide by current magnitude)
+	template <typename PType = decltype(cu_GetMagnitude(std::declval<VType>()))>
+	void renormalize(PType new_norm);
+
+	//copy values from copy_this but keep current dimensions - if necessary map values from copy_this to local dimensions; from flags only copy the shape but not the boundary condition values or anything else - these are reset
+	void copy_values(mcu_obj<cuVEC<VType>, mcuVEC<VType, cuVEC<VType>>>& copy_this, cuBox cells_box_dst, cuBox cells_box_src, cuBReal multiplier = 1.0);
+	template <typename VType_ = VType, typename MType_ = MType, std::enable_if_t<std::is_same<MType_, cuVEC_VC<VType_>>::value>* = nullptr>
+	void copy_values(mcu_obj<cuVEC_VC<VType>, mcuVEC<VType, cuVEC_VC<VType>>>& copy_this, cuBox cells_box_dst, cuBox cells_box_src, cuBReal multiplier = 1.0, bool recalculate_flags = true);
+
+	//copy values from copy_this but keep current dimensions - if necessary map values from copy_this to local dimensions
+	//can specify destination and source rectangles in relative coordinates
+	//this is intended for VECs where copy_this cellsize is much larger than that in this VEC, and instead of setting all values the same, thermalize_func generator will generate values
+	//e.g. this is useful for copying values from a micromagnetic mesh into an atomistic mesh, where the atomistic spins are generated according to a distribution setup in obj.thermalize_func
+	//obj.thermalize_func returns the value to set, and takes parameters VType (value in the larger cell from copy_this which is being copied), and int, int (index of larger cell from copy_this which is being copied, and index of destination cell)
+	//index in copy_this is for the entire mcuVEC, whilst index of destination cell is relative to respective device
+	//NOTE : can only be called in cu files (where it is possible to include mcuVEC_oper.cuh), otherwise explicit template parameters would have to be declared, which is too restrictive.
+	template <typename Class_Thermalize, typename Class_ThermalizePolicy, typename VType_ = VType, typename MType_ = MType, std::enable_if_t<std::is_same<MType_, cuVEC_VC<VType_>>::value>* = nullptr>
+	void copy_values_thermalize(mcu_obj<cuVEC_VC<VType>, mcuVEC<VType, cuVEC_VC<VType>>>& copy_this, mcu_obj<Class_Thermalize, Class_ThermalizePolicy>& obj, cuBox cells_box_dst, cuBox cells_box_src, mcu_obj<cuBorisRand<>, mcuBorisRand>& prng, bool recalculate_flags = true);
+
 	//shift all the values in this cuVEC by the given delta (units same as cuVEC<VType>::h). Shift values in given shift_rect (absolute coordinates). Applicable to cuVEC_VC only
 	template <typename VType_ = VType, typename MType_ = MType, std::enable_if_t<std::is_same<MType_, cuVEC_VC<VType_>>::value>* = nullptr>
-	void shift_x(cuBReal delta, cuRect shift_rect);
+	void shift_x(cuBReal delta, cuRect shift_rect, bool recalculate_flags = true);
 
 	//--------------------------------------------VEC GENERATORS : mcuVEC_generate.h
 
@@ -694,7 +737,104 @@ public:
 
 	//--------------------------------------------MESH TRANSFER : mcuVEC_MeshTransfer.h
 
-	//TO DO
+	//SINGLE INPUT, SINGLE OUTPUT
+
+	//copy pre-calculated transfer info from cpu memory. return false if not enough memory to copy
+	template <typename MTypeIn, typename MTypeOut, typename cpuTransfer>
+	bool copy_transfer_info(
+		const std::vector<mcu_obj<MTypeIn, mcuVEC<VType, MTypeIn>>*>& meshes_in,
+		const std::vector<mcu_obj<MTypeOut, mcuVEC<VType, MTypeOut>>*>& meshes_out,
+		cpuTransfer& vec_transfer);
+
+	//same but for secondary mesh transfer
+	template <typename MTypeIn, typename MTypeOut, typename cpuTransfer>
+	bool copy_transfer2_info(
+		const std::vector<mcu_obj<MTypeIn, mcuVEC<VType, MTypeIn>>*>& meshes_in, 
+		const std::vector<mcu_obj<MTypeOut, mcuVEC<VType, MTypeOut>>*>& meshes_out, 
+		cpuTransfer& vec_transfer);
+
+	//MULTIPLE INPUTS, SINGLE OUTPUT
+
+	//copy pre-calculated transfer info from cpu memory. return false if not enough memory to copy
+	//meshes_in1 and meshes_in2 vectors must have same sizes
+	//All mcuVECs in meshes_in1 should be non-empty
+	//Some mcuVECs in meshes_in2 allowed to be empty (in this case single input is used), but otherwise should have exactly same dimensions as the corresponding mcuVECs in meshes_in1
+	template <typename MTypeIn, typename MTypeOut, typename cpuTransfer>
+	bool copy_transfer_info_averagedinputs(
+		const std::vector<mcu_obj<MTypeIn, mcuVEC<VType, MTypeIn>>*>& meshes_in1,
+		const std::vector<mcu_obj<MTypeIn, mcuVEC<VType, MTypeIn>>*>& meshes_in2,
+		const std::vector<mcu_obj<MTypeOut, mcuVEC<VType, MTypeOut>>*>& meshes_out, cpuTransfer& vec_transfer);
+
+	//same but for secondary mesh transfer
+	template <typename MTypeIn, typename MTypeOut, typename cpuTransfer>
+	bool copy_transfer2_info_averagedinputs(
+		const std::vector<mcu_obj<MTypeIn, mcuVEC<VType, MTypeIn>>*>& meshes_in1,
+		const std::vector<mcu_obj<MTypeIn, mcuVEC<VType, MTypeIn>>*>& meshes_in2,
+		const std::vector<mcu_obj<MTypeOut, mcuVEC<VType, MTypeOut>>*>& meshes_out, cpuTransfer& vec_transfer);
+
+	template <typename MTypeIn, typename MTypeInR, typename MTypeOut, typename cpuTransfer>
+	bool copy_transfer_info_multipliedinputs(
+		const std::vector<mcu_obj<MTypeIn, mcuVEC<VType, MTypeIn>>*>& meshes_in1,
+		const std::vector<mcu_obj<MTypeInR, mcuVEC<cuBReal, MTypeInR>>*>& meshes_in2,
+		const std::vector<mcu_obj<MTypeOut, mcuVEC<VType, MTypeOut>>*>& meshes_out, cpuTransfer& vec_transfer);
+
+	//same but for secondary mesh transfer
+	template <typename MTypeIn, typename MTypeInR, typename MTypeOut, typename cpuTransfer>
+	bool copy_transfer2_info_multipliedinputs(
+		const std::vector<mcu_obj<MTypeIn, mcuVEC<VType, MTypeIn>>*>& meshes_in1,
+		const std::vector<mcu_obj<MTypeInR, mcuVEC<cuBReal, MTypeInR>>*>& meshes_in2,
+		const std::vector<mcu_obj<MTypeOut, mcuVEC<VType, MTypeOut>>*>& meshes_out, cpuTransfer& vec_transfer);
+
+	//MULTIPLE INPUTS, MULTIPLE OUTPUT
+
+	//copy pre-calculated transfer info from cpu memory. return false if not enough memory to copy
+	//meshes_in1 and meshes_in2 vectors must have same sizes; same for meshes_out1, meshes_out2
+	//All mcuVECs in meshes_in1 and meshes_out1 should be non-empty
+	//Some mcuVECs in meshes_in2 and meshes_out2 allowed to be empty (in this single input/output is used), but otherwise should have exactly same dimensions as the corresponding mcuVECs in meshes_in1, meshes_out1
+	//Also if a mcuVEC in meshes_in2 is non-empty the corresponding VEC in meshes_out2 should also be non-empty.
+	template <typename MTypeIn, typename MTypeOut, typename cpuTransfer>
+	bool copy_transfer_info_averagedinputs_duplicatedoutputs(
+		const std::vector<mcu_obj<MTypeIn, mcuVEC<VType, MTypeIn>>*>& meshes_in1,
+		const std::vector<mcu_obj<MTypeIn, mcuVEC<VType, MTypeIn>>*>& meshes_in2,
+		const std::vector<mcu_obj<MTypeOut, mcuVEC<VType, MTypeOut>>*>& meshes_out1,
+		const std::vector<mcu_obj<MTypeOut, mcuVEC<VType, MTypeOut>>*>& meshes_out2,
+		cpuTransfer& vec_transfer);
+
+	//same but for secondary mesh transfer
+	template <typename MTypeIn, typename MTypeOut, typename cpuTransfer>
+	bool copy_transfer2_info_averagedinputs_duplicatedoutputs(
+		const std::vector<mcu_obj<MTypeIn, mcuVEC<VType, MTypeIn>>*>& meshes_in1,
+		const std::vector<mcu_obj<MTypeIn, mcuVEC<VType, MTypeIn>>*>& meshes_in2,
+		const std::vector<mcu_obj<MTypeOut, mcuVEC<VType, MTypeOut>>*>& meshes_out1,
+		const std::vector<mcu_obj<MTypeOut, mcuVEC<VType, MTypeOut>>*>& meshes_out2,
+		cpuTransfer& vec_transfer);
+
+	//SINGLE INPUT, SINGLE OUTPUT
+
+	//do the actual transfer of values to and from this mesh using these. with clear_input true then set values in this mesh, otherwise add to it.
+	//by default this mesh is cleared first
+	void transfer_in(bool clear_input = true);
+	void transfer2_in(bool clear_input = true);
+
+	//transfer to output meshes. with clear_output true then set values in output meshes, otherwise add to them
+	//by default we add into output meshes
+	void transfer_out(bool clear_output = false);
+	void transfer2_out(bool clear_output = false);
+
+	//AVERAGED INPUT
+
+	void transfer_in_averaged(bool clear_input = true);
+	void transfer2_in_averaged(bool clear_input = true);
+
+	//MULTIPLIED INPUTS
+
+	void transfer_in_multiplied(bool clear_input = true);
+	void transfer2_in_multiplied(bool clear_input = true);
+
+	//DUPLICATED OUTPUT
+
+	void transfer_out_duplicated(bool clear_output = false);
+	void transfer2_out_duplicated(bool clear_output = false);
 
 	//--------------------------------------------Managed mcuVEC Getter
 

@@ -21,7 +21,7 @@ __global__ void set_cmbnd_continuous_kernel(
 	CMBNDInfoCUDA& contact)
 {
 	int box_idx = blockIdx.x * blockDim.x + threadIdx.x;
-
+	
 	cuINT3 box_sizes = contact.cells_box.size();
 
 	if (box_idx < box_sizes.dim()) {
@@ -55,7 +55,7 @@ __global__ void set_cmbnd_continuous_kernel(
 		//potential values at cells -2 and 2
 		VType V_2 = V_pri[cell2_idx];
 		VType V_m2 = V_sec.weighted_average(relpos_m1 + contact.hshift_secondary, stencil);
-
+		
 		//obtain a and b values used to define the flux as f(V) = a + b V', both on primary and secondary
 
 		//a values
@@ -69,7 +69,7 @@ __global__ void set_cmbnd_continuous_kernel(
 		//V'' values at cell positions -1 and 1
 		VType Vdiff2_pri = cmbndFuncs_pri.diff2_pri(cell1_idx, contact.hshift_secondary);
 		VType Vdiff2_sec = cmbndFuncs_sec.diff2_sec(relpos_m1, stencil, contact.hshift_secondary);
-
+		
 		//Formula for V1
 		V_pri[cell1_idx] = (V_m2 * 2 * b_val_sec / 3 + V_2 * (b_val_pri + b_val_sec / 3)
 			- Vdiff2_sec * b_val_sec * hL * hL - Vdiff2_pri * b_val_pri * hR * hR

@@ -3,11 +3,12 @@
 #include "BorisLib.h"
 #include "Modules.h"
 
+#ifdef MODULE_COMPILATION_DEMAG
+
 class Mesh;
 
 #include "DemagBase.h"
-
-#ifdef MODULE_COMPILATION_DEMAG
+#include "EvalSpeedup.h"
 
 #include "Convolution.h"
 #include "DemagKernel.h"
@@ -20,7 +21,8 @@ class Demag :
 	public Modules,
 	public DemagBase,
 	public Convolution<Demag, DemagKernel>,
-	public ProgramState<Demag, std::tuple<INT3>, std::tuple<>>
+	public ProgramState<Demag, std::tuple<INT3>, std::tuple<>>,
+	public EvalSpeedup
 {
 
 #if COMPILECUDA == 1
@@ -71,8 +73,7 @@ public:
 #else
 
 class Demag :
-	public Modules,
-	public DemagBase
+	public Modules
 {
 
 private:

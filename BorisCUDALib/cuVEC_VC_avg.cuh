@@ -201,3 +201,35 @@ __host__ VType cuVEC_VC<VType>::sum_nonempty(size_t arr_size, cuRect rectangle, 
 		return VType();
 	}
 }
+
+//------------------------------------------------------------------- AVERAGE NONEMPTY device function
+
+//average in given rectangle (relative coordinates), excluding zero points (assumed empty).
+template <typename VType>
+__device__ VType cuVEC_VC<VType>::average_nonempty(const cuRect& rectangle)
+{
+	cuBox box = cuVEC<VType>::box_from_rect_max(rectangle + cuVEC<VType>::rect.s);
+
+	VType av = VType();
+	int count = 0;
+
+	for (int i = (box.s.x >= 0 ? box.s.x : 0); i < (box.e.x <= cuVEC<VType>::n.x ? box.e.x : cuVEC<VType>::n.x); i++) {
+		for (int j = (box.s.y >= 0 ? box.s.y : 0); j < (box.e.y <= cuVEC<VType>::n.y ? box.e.y : cuVEC<VType>::n.y); j++) {
+			for (int k = (box.s.z >= 0 ? box.s.z : 0); k < (box.e.z <= cuVEC<VType>::n.z ? box.e.z : cuVEC<VType>::n.z); k++) {
+
+				int idx = i + j * cuVEC<VType>::n.x + k * cuVEC<VType>::n.x * cuVEC<VType>::n.y;
+
+				if (is_not_empty(idx)) {
+
+					//get running average
+					VType value = cuVEC<VType>::quantity[idx];
+
+					count++;
+					av = (av * (count - 1) + value) / count;
+				}
+			}
+		}
+	}
+
+	return av;
+}

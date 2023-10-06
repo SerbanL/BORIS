@@ -27,7 +27,7 @@ BError SuperMesh::UpdateConfiguration(UPDATECONFIG_ cfgMessage)
 	//identify all existing magnetic meshes with magnetic dynamics computations enabled (thus both micromagnetic and atomistic meshes)
 	for (int idx = 0; idx < (int)pMesh.size(); idx++) {
 
-		if (pMesh[idx]->MComputation_Enabled()) {
+		if (pMesh[idx]->MComputation_Enabled() && !pMesh[idx]->Is_Dormant()) {
 
 			//build super-mesh rectangle to include it
 			sMeshRect_fm += pMesh[idx]->GetMeshRect();
@@ -48,10 +48,10 @@ BError SuperMesh::UpdateConfiguration(UPDATECONFIG_ cfgMessage)
 	//calculate electric super-mesh from currently set meshes and super-mesh cellsize
 	sMeshRect_e = Rect();
 
-	//identify all existing ferrommagnetic meshes
+	//identify all existing magnetic meshes
 	for (int idx = 0; idx < (int)pMesh.size(); idx++) {
 
-		if (pMesh[idx]->EComputation_Enabled()) {
+		if (pMesh[idx]->EComputation_Enabled() && !pMesh[idx]->Is_Dormant()) {
 
 			//build super-mesh rectangle to include it
 			sMeshRect_e += pMesh[idx]->GetMeshRect();

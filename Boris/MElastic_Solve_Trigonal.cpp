@@ -46,7 +46,7 @@ double MElastic::Calculate_MElastic_Field_Trigonal(void)
 				DBL2 MEc2 = pMesh->MEc2;
 				DBL2 MEc3 = pMesh->MEc3;
 				pMesh->update_parameters_mcoarse(idx, pMesh->Ms_AFM, Ms_AFM, pMesh->MEc, MEc, pMesh->MEc2, MEc2, pMesh->MEc3, MEc3, pMesh->mcanis_ea1, mcanis_ea1, pMesh->mcanis_ea2, mcanis_ea2, pMesh->mcanis_ea3, mcanis_ea3);
-
+				
 				double& B21 = MEc.i;
 				double& B22 = MEc.j;
 				double& B3 = MEc2.i;

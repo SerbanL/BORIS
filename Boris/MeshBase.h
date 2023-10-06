@@ -49,6 +49,12 @@ private:
 
 protected:
 
+	//--------Status
+
+	//set to true if shape synchronization between GPU and CPU quantities is lost at runtime (e.g. track shifting algorithm)
+	//if restarting simulation must re-synchronize shapes otherwise some modules initializations will be wrong (e.g. exchange)
+	bool shape_synchronization_lost = false;
+
 	//--------Auxiliary
 
 	int OmpThreads;
@@ -282,7 +288,20 @@ public:
 	virtual void Iterate_MonteCarloCUDA(double acceptance_rate) {}
 #endif
 
+#if COMPILECUDA == 1
+	//check the shape_synchronization_lost flag when starting a simulation (called from SuperMesh::InitializeAllModulesCUDA)
+	virtual BError CheckSynchronization_on_Initialization(void) = 0;
+#endif
+	//related to CheckSynchronization_on_Initialization : called at run-time to set shape_synchronization_lost flag
+	void Set_Shape_Synchronization_Lost(void) { shape_synchronization_lost = true; }
+
 	//----------------------------------- ALGORITHMS
+
+	//implement track shifting - called during PrepareNewIteration if this is a dormant mesh with track shifting configured (non-zero trackWindow_velocity and idTrackShiftMesh vector not empty)
+	virtual void Track_Shift_Algorithm(void) = 0;
+
+	//setup track shifting algoithm for the holder mesh, with simulation window mesh, to be moved at set velocity and clipping during a simulation
+	virtual BError Setup_Track_Shifting(std::vector<int> sim_meshIds, DBL3 velocity, DBL3 clipping) = 0;
 
 	//for dormant meshes this is a fast call useable at runtime: just shift mesh rectangle and primary quantities, no UpdateConfiguration will be issued
 	//if not a dormant mesh, then UpdateConfiguration must be called
@@ -555,7 +574,7 @@ public:
 	//Set/Get multilayered demag exclusion : will need to call UpdateConfiguration from the supermesh when the flag is changed, so the correct SDemag_Demag modules and related settings are set from the SDemag module.
 	//Thus only call Set_Demag_Exclusion directly from SMesh.
 	void Set_Demag_Exclusion(bool exclude_from_multiconvdemag_) { exclude_from_multiconvdemag = exclude_from_multiconvdemag_; }
-	bool Get_Demag_Exclusion(void) { return exclude_from_multiconvdemag; }
+	bool Get_Demag_Exclusion(void) { return exclude_from_multiconvdemag || dormant || idTrackShiftMesh.size(); }
 
 	void Set_Dormant(bool dormant_) { dormant = dormant_; }
 	bool Is_Dormant(void) { return dormant || idTrackShiftMesh.size(); }
@@ -636,7 +655,7 @@ public:
 
 	//----------------------------------- OTHER MESH SHAPE CONTROL
 
-	virtual BError copy_mesh_data(MeshBase& copy_this) = 0;
+	virtual BError copy_mesh_data(MeshBase& copy_this, Rect dstRect = Rect(), Rect srcRect = Rect()) = 0;
 
 	//mask cells using bitmap image : white -> empty cells. black -> keep values. Apply mask up to given z depth number of cells depending on grayscale value (zDepth, all if 0).
 	virtual BError applymask(double zDepth_m, std::string fileName, std::function<std::vector<unsigned char>(std::string, INT2)>& bitmap_loader) = 0;

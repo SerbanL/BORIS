@@ -31,6 +31,7 @@
 #include "cuVEC_VC_nprops.cuh"
 #include "cuVEC_VC_arith.cuh"
 #include "cuVEC_VC_cmbnd.cuh"
+#include "cuVEC_VC_extract.cuh"
 #include "cuVEC_VC_solve.cuh"
 
 #include "cuVEC_mcuVEC.cuh"
@@ -38,8 +39,10 @@
 
 #include "mGPU_transfer.cuh"
 
+#include "mcuVEC_oper.cuh"
 #include "mcuVEC_solve.cuh"
 #include "mcuVEC_histo.cuh"
 #include "mcuVEC_cmbnd.cuh"
 
 #include "mcuVEC_Managed_avg.cuh"
+#include "mcuVEC_MeshTransfer.cuh"

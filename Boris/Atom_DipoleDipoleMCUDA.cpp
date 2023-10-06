@@ -16,9 +16,8 @@
 
 Atom_DipoleDipoleMCUDA::Atom_DipoleDipoleMCUDA(Atom_MeshCUDA* paMeshCUDA_) :
 	ModulesCUDA(),
-	M(mGPU), Hd(mGPU),
-	Hdemag(mGPU), Hdemag2(mGPU), Hdemag3(mGPU), Hdemag4(mGPU), Hdemag5(mGPU), Hdemag6(mGPU),
-	selfDemagCoeff(mGPU)
+	EvalSpeedupCUDA(),
+	M(mGPU), Hd(mGPU)
 {
 	Uninitialize();
 
@@ -111,24 +110,18 @@ BError Atom_DipoleDipoleMCUDA::Initialize(void)
 			//M and Hd used only if using macrocell
 			if (!M.resize(paMeshCUDA->h_dm, paMeshCUDA->meshRect)) return error(BERROR_OUTOFGPUMEMORY_CRIT);
 			if (!Hd.resize(paMeshCUDA->h_dm, paMeshCUDA->meshRect)) return error(BERROR_OUTOFGPUMEMORY_CRIT);
-
-			//there must be an integer number of spins in each macrocell
-			for (int idx = 0; idx < mGPU.get_num_devices(); idx++) {
-
-				cuSZ3 dn = paMeshCUDA->M1.device_n(idx);
-				cuSZ3 dn_m = M.device_n(idx);
-
-				if (dn.x % dn_m.x || dn.y % dn_m.y || dn.z % dn_m.z) {
-
-					Uninitialize();
-					return error(BERROR_ATOMDMCELL);
-				}
-			}
 		}
 		else {
 
 			M.clear();
 			Hd.clear();
+		}
+
+		//number of cells along x must be greater or equal to number of devices used (x partitioning used)
+		if (paMeshCUDA->n_dm.x < mGPU.get_num_devices()) {
+
+			Uninitialize();
+			return error(BERROR_MGPU_XCELLS);
 		}
 
 		/////////////////////////////////////////////////////////////
@@ -208,31 +201,21 @@ BError Atom_DipoleDipoleMCUDA::Initialize(void)
 		/////////////////////////////////////////////////////////////
 		//Eval speedup
 
-		selfDemagCoeff.from_cpu(DipoleDipoleTFunc().SelfDemag_PBC(paMeshCUDA->h_dm, paMeshCUDA->n_dm, paMeshCUDA->M1.Get_PBC()));
+		if (paMeshCUDA->GetEvaluationSpeedup()) {
 
-		//make sure to allocate memory for Hdemag if we need it
-		if (paMeshCUDA->GetEvaluationSpeedup() >= 6) { if (!Hdemag6.resize(paMeshCUDA->h_dm, paMeshCUDA->meshRect)) return error(BERROR_OUTOFGPUMEMORY_CRIT); }
-		else Hdemag6.clear();
+			EvalSpeedupCUDA::Initialize_EvalSpeedup(
+				(using_macrocell ? DipoleDipoleTFunc().SelfDemag_PBC(paMeshCUDA->h_dm, paMeshCUDA->n_dm, paMeshCUDA->M1.Get_PBC()) : DBL3()),
+				paMeshCUDA->GetEvaluationSpeedup(),
+				paMeshCUDA->h_dm, paMeshCUDA->meshRect);
 
-		if (paMeshCUDA->GetEvaluationSpeedup() >= 5) { if (!Hdemag5.resize(paMeshCUDA->h_dm, paMeshCUDA->meshRect)) return error(BERROR_OUTOFGPUMEMORY_CRIT); }
-		else Hdemag5.clear();
-
-		if (paMeshCUDA->GetEvaluationSpeedup() >= 4) { if (!Hdemag4.resize(paMeshCUDA->h_dm, paMeshCUDA->meshRect)) return error(BERROR_OUTOFGPUMEMORY_CRIT); }
-		else Hdemag4.clear();
-
-		if (paMeshCUDA->GetEvaluationSpeedup() >= 3) { if (!Hdemag3.resize(paMeshCUDA->h_dm, paMeshCUDA->meshRect)) return error(BERROR_OUTOFGPUMEMORY_CRIT); }
-		else Hdemag3.clear();
-
-		if (paMeshCUDA->GetEvaluationSpeedup() >= 2) { if (!Hdemag2.resize(paMeshCUDA->h_dm, paMeshCUDA->meshRect)) return error(BERROR_OUTOFGPUMEMORY_CRIT); }
-		else Hdemag2.clear();
-
-		if (paMeshCUDA->GetEvaluationSpeedup() >= 1) { if (!Hdemag.resize(paMeshCUDA->h_dm, paMeshCUDA->meshRect)) return error(BERROR_OUTOFGPUMEMORY_CRIT); }
-		else Hdemag.clear();
+			if (using_macrocell) EvalSpeedupCUDA::Initialize_EvalSpeedup_Mode_Atom(M, Hd);
+			else EvalSpeedupCUDA::Initialize_EvalSpeedup_Mode_FM(paMeshCUDA->M1, paMeshCUDA->Heff1);
+		}
 
 		if (!error) initialized = true;
 	}
 
-	num_Hdemag_saved = 0;
+	EvalSpeedupCUDA::num_Hdemag_saved = 0;
 
 	//Make sure display data has memory allocated (or freed) as required
 	error = Update_Module_Display_VECs(
@@ -271,35 +254,21 @@ BError Atom_DipoleDipoleMCUDA::UpdateConfiguration(UPDATECONFIG_ cfgMessage)
 		error = pDipoleDipoleMCUDA[mGPU]->UpdateConfiguration(cfgMessage);
 	}
 
-	//unititialize this module also if not all submodules are still all initialized
+	//uninitialize this module also if not all submodules are still all initialized
 	if (!Submodules_Initialized()) {
 
 		Uninitialize();
-
-		//if memory needs to be allocated for Hdemag, it will be done through Initialize 
-		Hdemag.clear();
-		Hdemag2.clear();
-		Hdemag3.clear();
-		Hdemag4.clear();
-		Hdemag5.clear();
-		Hdemag6.clear();
+		EvalSpeedupCUDA::UpdateConfiguration_EvalSpeedup();
 	}
-
-	num_Hdemag_saved = 0;
 
 	return error;
 }
 
 void Atom_DipoleDipoleMCUDA::UpdateField(void)
 {
-	///////////////////////////////////////////////////////////////////////////////////////////////
-	///////////////////////////////////////// NO SPEEDUP //////////////////////////////////////////
-	///////////////////////////////////////////////////////////////////////////////////////////////
+	bool eval_speedup = EvalSpeedupCUDA::Check_if_EvalSpeedup(paMeshCUDA->GetEvaluationSpeedup(), paMeshCUDA->Check_Step_Update());
 
-	if (!paMeshCUDA->GetEvaluationSpeedup() || (num_Hdemag_saved < paMeshCUDA->GetEvaluationSpeedup() && !paMeshCUDA->Check_Step_Update())) {
-
-		//transfer magnetic moments to macrocell
-		if (using_macrocell) Transfer_Moments_to_Macrocell();
+	std::function<void(mcu_VEC(cuReal3)&)> do_evaluation = [&](mcu_VEC(cuReal3)& H) -> void {
 
 		if (paMeshCUDA->CurrentTimeStepSolved()) ZeroEnergy();
 
@@ -352,7 +321,7 @@ void Atom_DipoleDipoleMCUDA::UpdateField(void)
 
 				if (!mGPU.get_halfprecision_transfer())
 					pDipoleDipoleMCUDA[mGPU]->ForwardFFT_mGPU_first(
-						(using_macrocell ? M.get_deviceobject(mGPU) : paMeshCUDA->M1.get_deviceobject(mGPU)), 
+						(using_macrocell ? M.get_deviceobject(mGPU) : paMeshCUDA->M1.get_deviceobject(mGPU)),
 						pDipoleDipoleMCUDA[mGPU]->Real_yRegion_arr, pDipoleDipoleMCUDA[mGPU]->Complex_yRegion_arr);
 				else
 					pDipoleDipoleMCUDA[mGPU]->ForwardFFT_mGPU_first(
@@ -403,7 +372,7 @@ void Atom_DipoleDipoleMCUDA::UpdateField(void)
 			///////////////////////////////////////////////////////////////////////////////////////////////
 			//Kernel multiplications
 			///////////////////////////////////////////////////////////////////////////////////////////////
-			
+
 			for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
 				pDipoleDipoleMCUDA[mGPU]->KernelMultiplication();
@@ -499,16 +468,16 @@ void Atom_DipoleDipoleMCUDA::UpdateField(void)
 
 						pDipoleDipoleMCUDA[mGPU]->InverseFFT_mGPU_finish(
 							pDipoleDipoleMCUDA[mGPU]->Real_xRegion_arr,
-							(using_macrocell ? M.get_deviceobject(mGPU) : paMeshCUDA->M1.get_deviceobject(mGPU)), (using_macrocell ? Hd.get_deviceobject(mGPU) : paMeshCUDA->Heff1.get_deviceobject(mGPU)),
-							energy(mGPU), paMeshCUDA->CurrentTimeStepSolved(), using_macrocell,
+							(using_macrocell ? M.get_deviceobject(mGPU) : paMeshCUDA->M1.get_deviceobject(mGPU)), H.get_deviceobject(mGPU),
+							energy(mGPU), paMeshCUDA->CurrentTimeStepSolved(), using_macrocell || eval_speedup,
 							Module_Heff.get_managed_object(mGPU), Module_energy.get_managed_object(mGPU));
 					}
 					else {
 
 						pDipoleDipoleMCUDA[mGPU]->InverseFFT_mGPU_finish(
 							pDipoleDipoleMCUDA[mGPU]->Real_xRegion_arr,
-							(using_macrocell ? M.get_deviceobject(mGPU) : paMeshCUDA->M1.get_deviceobject(mGPU)), (using_macrocell ? Hd.get_deviceobject(mGPU) : paMeshCUDA->Heff1.get_deviceobject(mGPU)),
-							energy(mGPU), paMeshCUDA->CurrentTimeStepSolved(), using_macrocell);
+							(using_macrocell ? M.get_deviceobject(mGPU) : paMeshCUDA->M1.get_deviceobject(mGPU)), H.get_deviceobject(mGPU),
+							energy(mGPU), paMeshCUDA->CurrentTimeStepSolved(), using_macrocell || eval_speedup);
 					}
 				}
 				else {
@@ -517,16 +486,16 @@ void Atom_DipoleDipoleMCUDA::UpdateField(void)
 
 						pDipoleDipoleMCUDA[mGPU]->InverseFFT_mGPU_finish(
 							pDipoleDipoleMCUDA[mGPU]->Real_xRegion_half_arr, pDipoleDipoleMCUDA[mGPU]->normalization,
-							(using_macrocell ? M.get_deviceobject(mGPU) : paMeshCUDA->M1.get_deviceobject(mGPU)), (using_macrocell ? Hd.get_deviceobject(mGPU) : paMeshCUDA->Heff1.get_deviceobject(mGPU)),
-							energy(mGPU), paMeshCUDA->CurrentTimeStepSolved(), using_macrocell,
+							(using_macrocell ? M.get_deviceobject(mGPU) : paMeshCUDA->M1.get_deviceobject(mGPU)), H.get_deviceobject(mGPU),
+							energy(mGPU), paMeshCUDA->CurrentTimeStepSolved(), using_macrocell || eval_speedup,
 							Module_Heff.get_managed_object(mGPU), Module_energy.get_managed_object(mGPU));
 					}
 					else {
 
 						pDipoleDipoleMCUDA[mGPU]->InverseFFT_mGPU_finish(
 							pDipoleDipoleMCUDA[mGPU]->Real_xRegion_half_arr, pDipoleDipoleMCUDA[mGPU]->normalization,
-							(using_macrocell ? M.get_deviceobject(mGPU) : paMeshCUDA->M1.get_deviceobject(mGPU)), (using_macrocell ? Hd.get_deviceobject(mGPU) : paMeshCUDA->Heff1.get_deviceobject(mGPU)),
-							energy(mGPU), paMeshCUDA->CurrentTimeStepSolved(), using_macrocell);
+							(using_macrocell ? M.get_deviceobject(mGPU) : paMeshCUDA->M1.get_deviceobject(mGPU)), H.get_deviceobject(mGPU),
+							energy(mGPU), paMeshCUDA->CurrentTimeStepSolved(), using_macrocell || eval_speedup);
 					}
 				}
 			}
@@ -538,574 +507,55 @@ void Atom_DipoleDipoleMCUDA::UpdateField(void)
 
 			if (Module_Heff.linear_size_cpu())
 				pDipoleDipoleMCUDA[0]->Convolute(
-					(using_macrocell ? M.get_deviceobject(0) : paMeshCUDA->M1.get_deviceobject(0)), (using_macrocell ? Hd.get_deviceobject(0) : paMeshCUDA->Heff1.get_deviceobject(0)),
-					energy(0), paMeshCUDA->CurrentTimeStepSolved(), using_macrocell,
+					(using_macrocell ? M.get_deviceobject(0) : paMeshCUDA->M1.get_deviceobject(0)), H.get_deviceobject(0),
+					energy(0), paMeshCUDA->CurrentTimeStepSolved(), using_macrocell || eval_speedup,
 					&Module_Heff.get_deviceobject(0), &Module_energy.get_deviceobject(0));
 			else
 				pDipoleDipoleMCUDA[0]->Convolute(
-					(using_macrocell ? M.get_deviceobject(0) : paMeshCUDA->M1.get_deviceobject(0)), (using_macrocell ? Hd.get_deviceobject(0) : paMeshCUDA->Heff1.get_deviceobject(0)),
-					energy(0), paMeshCUDA->CurrentTimeStepSolved(), using_macrocell);
+					(using_macrocell ? M.get_deviceobject(0) : paMeshCUDA->M1.get_deviceobject(0)), H.get_deviceobject(0),
+					energy(0), paMeshCUDA->CurrentTimeStepSolved(), using_macrocell || eval_speedup);
 		}
+	};
+
+	std::function<void(void)> do_transfer_in = [&](void) -> void {
+
+		//transfer magnetic moments to macrocell
+		if (using_macrocell) Transfer_Moments_to_Macrocell();
+	};
+
+	std::function<void(mcu_VEC(cuReal3)&)> do_transfer_out = [&](mcu_VEC(cuReal3)& H) -> void {
 
 		//transfer demagnetising field to atomistic mesh effective field : all atomistic cells within the macrocell receive the same field
-		if (using_macrocell) Transfer_DipoleDipole_Field(Hd);
-	}
+		if (using_macrocell) Transfer_DipoleDipole_Field(H);
+	};
 
-	///////////////////////////////////////////////////////////////////////////////////////////////
-	//////////////////////////////////////// EVAL SPEEDUP /////////////////////////////////////////
-	///////////////////////////////////////////////////////////////////////////////////////////////
+	if (!eval_speedup) {
+
+		///////////////////////////////////////////////////////////////////////////////////////////////
+		///////////////////////////////////////// NO SPEEDUP //////////////////////////////////////////
+		///////////////////////////////////////////////////////////////////////////////////////////////
+
+		//transfer into M
+		do_transfer_in();
+
+		//convolution
+		do_evaluation(using_macrocell ? Hd : paMeshCUDA->Heff1);
+
+		//transfer from Hd to Heff
+		if (using_macrocell) do_transfer_out(Hd);
+	}
 
 	else {
 
-		//use evaluation speedup method (Hdemag will have memory allocated - this was done in the Initialize method)
-
-		//update if required by ODE solver or if we don't have enough previous evaluations saved to extrapolate
-		if (paMeshCUDA->Check_Step_Update() || num_Hdemag_saved < paMeshCUDA->GetEvaluationSpeedup()) {
-
-			mcu_VEC(cuReal3)* pHdemag;
-
-			if (num_Hdemag_saved < paMeshCUDA->GetEvaluationSpeedup()) {
-
-				//don't have enough evaluations, so save next one
-				switch (num_Hdemag_saved)
-				{
-				case 0:
-					pHdemag = &Hdemag;
-					time_demag1 = paMeshCUDA->Get_EvalStep_Time();
-					break;
-				case 1:
-					pHdemag = &Hdemag2;
-					time_demag2 = paMeshCUDA->Get_EvalStep_Time();
-					break;
-				case 2:
-					pHdemag = &Hdemag3;
-					time_demag3 = paMeshCUDA->Get_EvalStep_Time();
-					break;
-				case 3:
-					pHdemag = &Hdemag4;
-					time_demag4 = paMeshCUDA->Get_EvalStep_Time();
-					break;
-				case 4:
-					pHdemag = &Hdemag5;
-					time_demag5 = paMeshCUDA->Get_EvalStep_Time();
-					break;
-				case 5:
-					pHdemag = &Hdemag6;
-					time_demag6 = paMeshCUDA->Get_EvalStep_Time();
-					break;
-				}
-
-				num_Hdemag_saved++;
-			}
-			else {
-
-				//have enough evaluations saved, so just cycle between them now
-
-				//QUINTIC
-				if (paMeshCUDA->GetEvaluationSpeedup() == 6) {
-
-					//1, 2, 3, 4, 5, 6 -> next is 1
-					if (time_demag6 > time_demag5 && time_demag5 > time_demag4 && time_demag4 > time_demag3 && time_demag3 > time_demag2 && time_demag2 > time_demag1) {
-
-						pHdemag = &Hdemag;
-						time_demag1 = paMeshCUDA->Get_EvalStep_Time();
-					}
-					//2, 3, 4, 5, 6, 1 -> next is 2
-					else if (time_demag1 > time_demag2) {
-
-						pHdemag = &Hdemag2;
-						time_demag2 = paMeshCUDA->Get_EvalStep_Time();
-					}
-					//3, 4, 5, 6, 1, 2 -> next is 3
-					else if (time_demag2 > time_demag3) {
-
-						pHdemag = &Hdemag3;
-						time_demag3 = paMeshCUDA->Get_EvalStep_Time();
-					}
-					//4, 5, 6, 1, 2, 3 -> next is 4
-					else if (time_demag3 > time_demag4) {
-
-						pHdemag = &Hdemag4;
-						time_demag4 = paMeshCUDA->Get_EvalStep_Time();
-					}
-					//5, 6, 1, 2, 3, 4 -> next is 5
-					else if (time_demag4 > time_demag5) {
-
-						pHdemag = &Hdemag5;
-						time_demag5 = paMeshCUDA->Get_EvalStep_Time();
-					}
-					else {
-
-						pHdemag = &Hdemag6;
-						time_demag6 = paMeshCUDA->Get_EvalStep_Time();
-					}
-				}
-				//QUARTIC
-				else if (paMeshCUDA->GetEvaluationSpeedup() == 5) {
-
-					//1, 2, 3, 4, 5 -> next is 1
-					if (time_demag5 > time_demag4 && time_demag4 > time_demag3 && time_demag3 > time_demag2 && time_demag2 > time_demag1) {
-
-						pHdemag = &Hdemag;
-						time_demag1 = paMeshCUDA->Get_EvalStep_Time();
-					}
-					//2, 3, 4, 5, 1 -> next is 2
-					else if (time_demag1 > time_demag2) {
-
-						pHdemag = &Hdemag2;
-						time_demag2 = paMeshCUDA->Get_EvalStep_Time();
-					}
-					//3, 4, 5, 1, 2 -> next is 3
-					else if (time_demag2 > time_demag3) {
-
-						pHdemag = &Hdemag3;
-						time_demag3 = paMeshCUDA->Get_EvalStep_Time();
-					}
-					//4, 5, 1, 2, 3 -> next is 4
-					else if (time_demag3 > time_demag4) {
-
-						pHdemag = &Hdemag4;
-						time_demag4 = paMeshCUDA->Get_EvalStep_Time();
-					}
-					else {
-
-						pHdemag = &Hdemag5;
-						time_demag5 = paMeshCUDA->Get_EvalStep_Time();
-					}
-				}
-				//CUBIC
-				else if (paMeshCUDA->GetEvaluationSpeedup() == 4) {
-
-					//1, 2, 3, 4 -> next is 1
-					if (time_demag4 > time_demag3 && time_demag3 > time_demag2 && time_demag2 > time_demag1) {
-
-						pHdemag = &Hdemag;
-						time_demag1 = paMeshCUDA->Get_EvalStep_Time();
-					}
-					//2, 3, 4, 1 -> next is 2
-					else if (time_demag1 > time_demag2) {
-
-						pHdemag = &Hdemag2;
-						time_demag2 = paMeshCUDA->Get_EvalStep_Time();
-					}
-					//3, 4, 1, 2 -> next is 3
-					else if (time_demag2 > time_demag3) {
-
-						pHdemag = &Hdemag3;
-						time_demag3 = paMeshCUDA->Get_EvalStep_Time();
-					}
-					else {
-
-						pHdemag = &Hdemag4;
-						time_demag4 = paMeshCUDA->Get_EvalStep_Time();
-					}
-				}
-				//QUADRATIC
-				else if (paMeshCUDA->GetEvaluationSpeedup() == 3) {
-
-					//1, 2, 3 -> next is 1
-					if (time_demag3 > time_demag2 && time_demag2 > time_demag1) {
-
-						pHdemag = &Hdemag;
-						time_demag1 = paMeshCUDA->Get_EvalStep_Time();
-					}
-					//2, 3, 1 -> next is 2
-					else if (time_demag3 > time_demag2 && time_demag1 > time_demag2) {
-
-						pHdemag = &Hdemag2;
-						time_demag2 = paMeshCUDA->Get_EvalStep_Time();
-					}
-					//3, 1, 2 -> next is 3, leading to 1, 2, 3 again
-					else {
-
-						pHdemag = &Hdemag3;
-						time_demag3 = paMeshCUDA->Get_EvalStep_Time();
-					}
-				}
-				//LINEAR
-				else if (paMeshCUDA->GetEvaluationSpeedup() == 2) {
-
-					//1, 2 -> next is 1
-					if (time_demag2 > time_demag1) {
-
-						pHdemag = &Hdemag;
-						time_demag1 = paMeshCUDA->Get_EvalStep_Time();
-					}
-					//2, 1 -> next is 2, leading to 1, 2 again
-					else {
-
-						pHdemag = &Hdemag2;
-						time_demag2 = paMeshCUDA->Get_EvalStep_Time();
-					}
-				}
-				//STEP
-				else {
-
-					pHdemag = &Hdemag;
-				}
-			}
-
-			//do evaluation
-			ZeroEnergy();
-
-			if (using_macrocell) Transfer_Moments_to_Macrocell();
-
-			///////////////////////////////////////////////////////////////////////////////////////////////
-			//MULTIPLE DEVICES DEMAG
-			///////////////////////////////////////////////////////////////////////////////////////////////
-			if (mGPU.get_num_devices() > 1) {
-
-				///////////////////////////////////////////////////////////////////////////////////////////////
-				//Copy M data to linear regions so we can transfer
-				///////////////////////////////////////////////////////////////////////////////////////////////
-
-				for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
-
-					pDipoleDipoleMCUDA[mGPU]->Copy_M_Input_xRegion(mGPU.get_halfprecision_transfer());
-				}
-
-				///////////////////////////////////////////////////////////////////////////////////////////////
-				//Transfer data between devices before x FFT
-				///////////////////////////////////////////////////////////////////////////////////////////////
-
-				if (mGPU.get_halfprecision_transfer()) {
-
-					for (int device_from = 0; device_from < mGPU.get_num_devices(); device_from++) {
-						for (int device_to = 0; device_to < mGPU.get_num_devices(); device_to++) {
-
-							if (device_to == device_from) continue;
-							M_Input_transfer_half[device_from][device_to]->transfer(device_to, device_from);
-						}
-					}
-					mGPU.synchronize();
-				}
-				else {
-
-					for (int device_from = 0; device_from < mGPU.get_num_devices(); device_from++) {
-						for (int device_to = 0; device_to < mGPU.get_num_devices(); device_to++) {
-
-							if (device_to == device_from) continue;
-							M_Input_transfer[device_from][device_to]->transfer(device_to, device_from);
-						}
-					}
-					mGPU.synchronize();
-				}
-
-				///////////////////////////////////////////////////////////////////////////////////////////////
-				//Forward x FFT for all devices (first step)
-				///////////////////////////////////////////////////////////////////////////////////////////////
-
-				for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
-
-					if (!mGPU.get_halfprecision_transfer())
-						pDipoleDipoleMCUDA[mGPU]->ForwardFFT_mGPU_first(
-							(using_macrocell ? M.get_deviceobject(mGPU) : paMeshCUDA->M1.get_deviceobject(mGPU)), 
-							pDipoleDipoleMCUDA[mGPU]->Real_yRegion_arr, pDipoleDipoleMCUDA[mGPU]->Complex_yRegion_arr);
-					else
-						pDipoleDipoleMCUDA[mGPU]->ForwardFFT_mGPU_first(
-							(using_macrocell ? M.get_deviceobject(mGPU) : paMeshCUDA->M1.get_deviceobject(mGPU)),
-							pDipoleDipoleMCUDA[mGPU]->Real_yRegion_half_arr, pDipoleDipoleMCUDA[mGPU]->normalization_M,
-							pDipoleDipoleMCUDA[mGPU]->Complex_yRegion_half_arr, pDipoleDipoleMCUDA[mGPU]->normalization);
-				}
-
-				///////////////////////////////////////////////////////////////////////////////////////////////
-				//Transfer data between devices after x FFT
-				///////////////////////////////////////////////////////////////////////////////////////////////
-
-				if (mGPU.get_halfprecision_transfer()) {
-
-					for (int device_from = 0; device_from < mGPU.get_num_devices(); device_from++) {
-						for (int device_to = 0; device_to < mGPU.get_num_devices(); device_to++) {
-
-							if (device_to == device_from) continue;
-							xFFT_Data_transfer_half[device_from][device_to]->transfer(device_to, device_from);
-						}
-					}
-					mGPU.synchronize();
-				}
-				else {
-
-					for (int device_from = 0; device_from < mGPU.get_num_devices(); device_from++) {
-						for (int device_to = 0; device_to < mGPU.get_num_devices(); device_to++) {
-
-							if (device_to == device_from) continue;
-							xFFT_Data_transfer[device_from][device_to]->transfer(device_to, device_from);
-						}
-					}
-					mGPU.synchronize();
-				}
-
-				///////////////////////////////////////////////////////////////////////////////////////////////
-				//Forward FFT for all devices (last step)
-				///////////////////////////////////////////////////////////////////////////////////////////////
-
-				for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
-
-					if (!mGPU.get_halfprecision_transfer())
-						pDipoleDipoleMCUDA[mGPU]->ForwardFFT_mGPU_last(pDipoleDipoleMCUDA[mGPU]->Complex_xRegion_arr);
-					else
-						pDipoleDipoleMCUDA[mGPU]->ForwardFFT_mGPU_last(pDipoleDipoleMCUDA[mGPU]->Complex_xRegion_half_arr, pDipoleDipoleMCUDA[mGPU]->normalization);
-				}
-
-				///////////////////////////////////////////////////////////////////////////////////////////////
-				//Kernel multiplications
-				///////////////////////////////////////////////////////////////////////////////////////////////
-
-				for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
-
-					pDipoleDipoleMCUDA[mGPU]->KernelMultiplication();
-				}
-
-				///////////////////////////////////////////////////////////////////////////////////////////////
-				//Inverse FFT for all devices
-				///////////////////////////////////////////////////////////////////////////////////////////////
-
-				for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
-
-					if (!mGPU.get_halfprecision_transfer())
-						pDipoleDipoleMCUDA[mGPU]->InverseFFT_mGPU_first(pDipoleDipoleMCUDA[mGPU]->Complex_xRegion_arr);
-					else
-						pDipoleDipoleMCUDA[mGPU]->InverseFFT_mGPU_first(pDipoleDipoleMCUDA[mGPU]->Complex_xRegion_half_arr, pDipoleDipoleMCUDA[mGPU]->normalization);
-				}
-
-				///////////////////////////////////////////////////////////////////////////////////////////////
-				//Transfer data between devices before x IFFT
-				///////////////////////////////////////////////////////////////////////////////////////////////
-
-				if (mGPU.get_halfprecision_transfer()) {
-
-					for (int device_from = 0; device_from < mGPU.get_num_devices(); device_from++) {
-						for (int device_to = 0; device_to < mGPU.get_num_devices(); device_to++) {
-
-							if (device_to == device_from) continue;
-							xIFFT_Data_transfer_half[device_from][device_to]->transfer(device_to, device_from);
-						}
-					}
-					mGPU.synchronize();
-				}
-				else {
-
-					for (int device_from = 0; device_from < mGPU.get_num_devices(); device_from++) {
-						for (int device_to = 0; device_to < mGPU.get_num_devices(); device_to++) {
-
-							if (device_to == device_from) continue;
-							xIFFT_Data_transfer[device_from][device_to]->transfer(device_to, device_from);
-						}
-					}
-					mGPU.synchronize();
-				}
-
-				///////////////////////////////////////////////////////////////////////////////////////////////
-				//x IFFT
-				///////////////////////////////////////////////////////////////////////////////////////////////
-
-				for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
-
-					if (!mGPU.get_halfprecision_transfer())
-						pDipoleDipoleMCUDA[mGPU]->InverseFFT_mGPU_last(pDipoleDipoleMCUDA[mGPU]->Complex_yRegion_arr, pDipoleDipoleMCUDA[mGPU]->Real_yRegion_arr);
-					else
-						pDipoleDipoleMCUDA[mGPU]->InverseFFT_mGPU_last(pDipoleDipoleMCUDA[mGPU]->Complex_yRegion_half_arr, pDipoleDipoleMCUDA[mGPU]->normalization, pDipoleDipoleMCUDA[mGPU]->Real_yRegion_half_arr, pDipoleDipoleMCUDA[mGPU]->normalization);
-				}
-
-				///////////////////////////////////////////////////////////////////////////////////////////////
-				//Transfer data between devices before finishing
-				///////////////////////////////////////////////////////////////////////////////////////////////
-
-				if (mGPU.get_halfprecision_transfer()) {
-
-					for (int device_from = 0; device_from < mGPU.get_num_devices(); device_from++) {
-						for (int device_to = 0; device_to < mGPU.get_num_devices(); device_to++) {
-
-							if (device_to == device_from) continue;
-							Out_Data_transfer_half[device_from][device_to]->transfer(device_to, device_from);
-						}
-					}
-					mGPU.synchronize();
-				}
-				else {
-
-					for (int device_from = 0; device_from < mGPU.get_num_devices(); device_from++) {
-						for (int device_to = 0; device_to < mGPU.get_num_devices(); device_to++) {
-
-							if (device_to == device_from) continue;
-							Out_Data_transfer[device_from][device_to]->transfer(device_to, device_from);
-						}
-					}
-					mGPU.synchronize();
-				}
-
-				///////////////////////////////////////////////////////////////////////////////////////////////
-				//Finish convolution, setting output in Hd
-				///////////////////////////////////////////////////////////////////////////////////////////////
-
-				for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
-
-					if (!mGPU.get_halfprecision_transfer()) {
-
-						if (Module_Heff.linear_size_cpu()) {
-
-							pDipoleDipoleMCUDA[mGPU]->InverseFFT_mGPU_finish(
-								pDipoleDipoleMCUDA[mGPU]->Real_xRegion_arr,
-								(using_macrocell ? M.get_deviceobject(mGPU) : paMeshCUDA->M1.get_deviceobject(mGPU)), pHdemag->get_deviceobject(mGPU),
-								energy(mGPU), paMeshCUDA->CurrentTimeStepSolved(), true,
-								Module_Heff.get_managed_object(mGPU), Module_energy.get_managed_object(mGPU));
-						}
-						else {
-
-							pDipoleDipoleMCUDA[mGPU]->InverseFFT_mGPU_finish(
-								pDipoleDipoleMCUDA[mGPU]->Real_xRegion_arr,
-								(using_macrocell ? M.get_deviceobject(mGPU) : paMeshCUDA->M1.get_deviceobject(mGPU)), pHdemag->get_deviceobject(mGPU),
-								energy(mGPU), paMeshCUDA->CurrentTimeStepSolved(), true);
-						}
-					}
-					else {
-
-						if (Module_Heff.linear_size_cpu()) {
-
-							pDipoleDipoleMCUDA[mGPU]->InverseFFT_mGPU_finish(
-								pDipoleDipoleMCUDA[mGPU]->Real_xRegion_half_arr, pDipoleDipoleMCUDA[mGPU]->normalization,
-								(using_macrocell ? M.get_deviceobject(mGPU) : paMeshCUDA->M1.get_deviceobject(mGPU)), pHdemag->get_deviceobject(mGPU),
-								energy(mGPU), paMeshCUDA->CurrentTimeStepSolved(), true,
-								Module_Heff.get_managed_object(mGPU), Module_energy.get_managed_object(mGPU));
-						}
-						else {
-
-							pDipoleDipoleMCUDA[mGPU]->InverseFFT_mGPU_finish(
-								pDipoleDipoleMCUDA[mGPU]->Real_xRegion_half_arr, pDipoleDipoleMCUDA[mGPU]->normalization,
-								(using_macrocell ? M.get_deviceobject(mGPU) : paMeshCUDA->M1.get_deviceobject(mGPU)), pHdemag->get_deviceobject(mGPU),
-								energy(mGPU), paMeshCUDA->CurrentTimeStepSolved(), true);
-						}
-					}
-				}
-			}
-			///////////////////////////////////////////////////////////////////////////////////////////////
-			//SINGLE DEVICE DEMAG
-			///////////////////////////////////////////////////////////////////////////////////////////////
-			else {
-
-				if (Module_Heff.linear_size_cpu())
-					pDipoleDipoleMCUDA[0]->Convolute(
-						(using_macrocell ? M.get_deviceobject(0) : paMeshCUDA->M1.get_deviceobject(0)), pHdemag->get_deviceobject(0),
-						energy(0), paMeshCUDA->CurrentTimeStepSolved(), true,
-						&Module_Heff.get_deviceobject(0), &Module_energy.get_deviceobject(0));
-				else
-					pDipoleDipoleMCUDA[0]->Convolute(
-						(using_macrocell ? M.get_deviceobject(0) : paMeshCUDA->M1.get_deviceobject(0)), pHdemag->get_deviceobject(0),
-						energy(0), paMeshCUDA->CurrentTimeStepSolved(), true);
-			}
-
-			if (using_macrocell) Transfer_DipoleDipole_Field(*pHdemag);
-
-			//subtract self demag from *pHDemag
-			Atom_DipoleDipole_EvalSpeedup_SubSelf(*pHdemag);
-		}
-		else {
-
-			//not required to update, and we have enough previous evaluations: use previous Hdemag saves to extrapolate for current evaluation
-
-			if (using_macrocell) Transfer_Moments_to_Macrocell();
-
-			cuBReal a1 = 1.0, a2 = 0.0, a3 = 0.0, a4 = 0.0, a5 = 0.0, a6 = 0.0;
-			cuBReal time = paMeshCUDA->Get_EvalStep_Time();
-
-			//QUINTIC
-			if (paMeshCUDA->GetEvaluationSpeedup() == 6) {
-
-				a1 = (time - time_demag2) * (time - time_demag3) * (time - time_demag4) * (time - time_demag5) * (time - time_demag6) / ((time_demag1 - time_demag2) * (time_demag1 - time_demag3) * (time_demag1 - time_demag4) * (time_demag1 - time_demag5) * (time_demag1 - time_demag6));
-				a2 = (time - time_demag1) * (time - time_demag3) * (time - time_demag4) * (time - time_demag5) * (time - time_demag6) / ((time_demag2 - time_demag1) * (time_demag2 - time_demag3) * (time_demag2 - time_demag4) * (time_demag2 - time_demag5) * (time_demag2 - time_demag6));
-				a3 = (time - time_demag1) * (time - time_demag2) * (time - time_demag4) * (time - time_demag5) * (time - time_demag6) / ((time_demag3 - time_demag1) * (time_demag3 - time_demag2) * (time_demag3 - time_demag4) * (time_demag3 - time_demag5) * (time_demag3 - time_demag6));
-				a4 = (time - time_demag1) * (time - time_demag2) * (time - time_demag3) * (time - time_demag5) * (time - time_demag6) / ((time_demag4 - time_demag1) * (time_demag4 - time_demag2) * (time_demag4 - time_demag3) * (time_demag4 - time_demag5) * (time_demag4 - time_demag6));
-				a5 = (time - time_demag1) * (time - time_demag2) * (time - time_demag3) * (time - time_demag4) * (time - time_demag6) / ((time_demag5 - time_demag1) * (time_demag5 - time_demag2) * (time_demag5 - time_demag3) * (time_demag5 - time_demag4) * (time_demag5 - time_demag6));
-				a6 = (time - time_demag1) * (time - time_demag2) * (time - time_demag3) * (time - time_demag4) * (time - time_demag5) / ((time_demag6 - time_demag1) * (time_demag6 - time_demag2) * (time_demag6 - time_demag3) * (time_demag6 - time_demag4) * (time_demag6 - time_demag5));
-
-				//construct effective field approximation
-				if (using_macrocell) {
-
-					Atom_DipoleDipole_EvalSpeedup_SetExtrapField_AddSelf(Hd, a1, a2, a3, a4, a5, a6);
-					Transfer_DipoleDipole_Field(Hd);
-				}
-				else Atom_DipoleDipole_EvalSpeedup_AddExtrapField_AddSelf(paMeshCUDA->Heff1, a1, a2, a3, a4, a5, a6);
-			}
-			//QUARTIC
-			else if (paMeshCUDA->GetEvaluationSpeedup() == 5) {
-
-				a1 = (time - time_demag2) * (time - time_demag3) * (time - time_demag4) * (time - time_demag5) / ((time_demag1 - time_demag2) * (time_demag1 - time_demag3) * (time_demag1 - time_demag4) * (time_demag1 - time_demag5));
-				a2 = (time - time_demag1) * (time - time_demag3) * (time - time_demag4) * (time - time_demag5) / ((time_demag2 - time_demag1) * (time_demag2 - time_demag3) * (time_demag2 - time_demag4) * (time_demag2 - time_demag5));
-				a3 = (time - time_demag1) * (time - time_demag2) * (time - time_demag4) * (time - time_demag5) / ((time_demag3 - time_demag1) * (time_demag3 - time_demag2) * (time_demag3 - time_demag4) * (time_demag3 - time_demag5));
-				a4 = (time - time_demag1) * (time - time_demag2) * (time - time_demag3) * (time - time_demag5) / ((time_demag4 - time_demag1) * (time_demag4 - time_demag2) * (time_demag4 - time_demag3) * (time_demag4 - time_demag5));
-				a5 = (time - time_demag1) * (time - time_demag2) * (time - time_demag3) * (time - time_demag4) / ((time_demag5 - time_demag1) * (time_demag5 - time_demag2) * (time_demag5 - time_demag3) * (time_demag5 - time_demag4));
-
-				//construct effective field approximation
-				if (using_macrocell) {
-
-					Atom_DipoleDipole_EvalSpeedup_SetExtrapField_AddSelf(Hd, a1, a2, a3, a4, a5);
-					Transfer_DipoleDipole_Field(Hd);
-				}
-				else Atom_DipoleDipole_EvalSpeedup_AddExtrapField_AddSelf(paMeshCUDA->Heff1, a1, a2, a3, a4, a5);
-			}
-			//CUBIC
-			else if (paMeshCUDA->GetEvaluationSpeedup() == 4) {
-
-				a1 = (time - time_demag2) * (time - time_demag3) * (time - time_demag4) / ((time_demag1 - time_demag2) * (time_demag1 - time_demag3) * (time_demag1 - time_demag4));
-				a2 = (time - time_demag1) * (time - time_demag3) * (time - time_demag4) / ((time_demag2 - time_demag1) * (time_demag2 - time_demag3) * (time_demag2 - time_demag4));
-				a3 = (time - time_demag1) * (time - time_demag2) * (time - time_demag4) / ((time_demag3 - time_demag1) * (time_demag3 - time_demag2) * (time_demag3 - time_demag4));
-				a4 = (time - time_demag1) * (time - time_demag2) * (time - time_demag3) / ((time_demag4 - time_demag1) * (time_demag4 - time_demag2) * (time_demag4 - time_demag3));
-
-				//construct effective field approximation
-				if (using_macrocell) {
-
-					Atom_DipoleDipole_EvalSpeedup_SetExtrapField_AddSelf(Hd, a1, a2, a3, a4);
-					Transfer_DipoleDipole_Field(Hd);
-				}
-				else Atom_DipoleDipole_EvalSpeedup_AddExtrapField_AddSelf(paMeshCUDA->Heff1, a1, a2, a3, a4);
-			}
-			//QUADRATIC
-			else if (paMeshCUDA->GetEvaluationSpeedup() == 3) {
-
-				if (time_demag2 != time_demag1 && time_demag2 != time_demag3 && time_demag1 != time_demag3) {
-
-					a1 = (time - time_demag2) * (time - time_demag3) / ((time_demag1 - time_demag2) * (time_demag1 - time_demag3));
-					a2 = (time - time_demag1) * (time - time_demag3) / ((time_demag2 - time_demag1) * (time_demag2 - time_demag3));
-					a3 = (time - time_demag1) * (time - time_demag2) / ((time_demag3 - time_demag1) * (time_demag3 - time_demag2));
-				}
-
-				//construct effective field approximation
-				if (using_macrocell) {
-
-					Atom_DipoleDipole_EvalSpeedup_SetExtrapField_AddSelf(Hd, a1, a2, a3);
-					Transfer_DipoleDipole_Field(Hd);
-				}
-				else Atom_DipoleDipole_EvalSpeedup_AddExtrapField_AddSelf(paMeshCUDA->Heff1, a1, a2, a3);
-			}
-			//LINEAR
-			else if (paMeshCUDA->GetEvaluationSpeedup() == 2) {
-
-				if (time_demag2 != time_demag1) {
-
-					a1 = (time - time_demag2) / (time_demag1 - time_demag2);
-					a2 = (time - time_demag1) / (time_demag2 - time_demag1);
-				}
-
-				//construct effective field approximation
-				if (using_macrocell) {
-
-					Atom_DipoleDipole_EvalSpeedup_SetExtrapField_AddSelf(Hd, a1, a2);
-					Transfer_DipoleDipole_Field(Hd);
-				}
-				else Atom_DipoleDipole_EvalSpeedup_AddExtrapField_AddSelf(paMeshCUDA->Heff1, a1, a2);
-			}
-			//STEP
-			else {
-
-				//construct effective field approximation
-				if (using_macrocell) {
-
-					Atom_DipoleDipole_EvalSpeedup_SetExtrapField_AddSelf(Hd);
-					Transfer_DipoleDipole_Field(Hd);
-				}
-				else Atom_DipoleDipole_EvalSpeedup_AddExtrapField_AddSelf(paMeshCUDA->Heff1);
-			}
-		}
+		///////////////////////////////////////////////////////////////////////////////////////////////
+		//////////////////////////////////////// EVAL SPEEDUP /////////////////////////////////////////
+		///////////////////////////////////////////////////////////////////////////////////////////////
+
+		EvalSpeedupCUDA::UpdateField_EvalSpeedup(
+			paMeshCUDA->GetEvaluationSpeedup(), paMeshCUDA->Check_Step_Update(),
+			paMeshCUDA->Get_EvalStep_Time(),
+			do_evaluation,
+			do_transfer_in, do_transfer_out);
 	}
 }
 

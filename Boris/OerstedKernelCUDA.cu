@@ -6,7 +6,11 @@
 
 //-------------------------- CONVOLUTION PRODUCT CUDA KERNELS
 
-__global__ void cu_Oersted_ConvProd_3D_transpose_xy(cuVEC<cuReal3>& KOe, cuBComplex* cuSx, cuBComplex* cuSy, cuBComplex* cuSz, cuSZ3& N)
+__global__ void cu_Oersted_ConvProd_3D_transpose_xy(
+	cuVEC<cuReal3>& KOe, 
+	cuBComplex* cuSx_in, cuBComplex* cuSy_in, cuBComplex* cuSz_in, 
+	cuBComplex* cuSx_out, cuBComplex* cuSy_out, cuBComplex* cuSz_out,
+	cuSZ3& N_xRegion)
 {
 	//above N.z/2 and N.y/2 use kernel symmetries to recover kernel values
 	//Kxy is odd about N.z/2 and even about N.y/2
@@ -15,64 +19,52 @@ __global__ void cu_Oersted_ConvProd_3D_transpose_xy(cuVEC<cuReal3>& KOe, cuBComp
 
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-	if (idx < (N.x / 2 + 1) * N.y * N.z) {
+	if (idx < N_xRegion.dim()) {
 
-		int i = idx % N.y;
-		int j = (idx / N.y) % (N.x / 2 + 1);
-		int k = idx / ((N.x / 2 + 1) * N.y);
+		cuReIm FMx = cuSx_in[idx];
+		cuReIm FMy = cuSy_in[idx];
+		cuReIm FMz = cuSz_in[idx];
 
-		if (k <= N.z / 2) {
+		int i = idx % N_xRegion.y;
+		int j = (idx / N_xRegion.y) % N_xRegion.x;
+		int k = idx / (N_xRegion.x * N_xRegion.y);
 
-			if (i <= N.y / 2) {
+		if (k <= N_xRegion.z / 2) {
 
-				cuReIm FMx = cuSx[idx];
-				cuReIm FMy = cuSy[idx];
-				cuReIm FMz = cuSz[idx];
+			if (i <= N_xRegion.y / 2) {
 
-				int ker_idx = i + j * (N.y / 2 + 1) + k * (N.x / 2 + 1) * (N.y / 2 + 1);
+				int ker_idx = i + j * (N_xRegion.y / 2 + 1) + k * N_xRegion.x * (N_xRegion.y / 2 + 1);
 
-				cuSx[idx] = !((KOe[ker_idx].x * FMy) + (KOe[ker_idx].y * FMz));
-				cuSy[idx] = !((-KOe[ker_idx].x * FMx) + (KOe[ker_idx].z * FMz));
-				cuSz[idx] = !((-KOe[ker_idx].y * FMx) + (-KOe[ker_idx].z * FMy));
+				cuSx_out[idx] = !((KOe[ker_idx].x * FMy) + (KOe[ker_idx].y * FMz));
+				cuSy_out[idx] = !((-KOe[ker_idx].x * FMx) + (KOe[ker_idx].z * FMz));
+				cuSz_out[idx] = !((-KOe[ker_idx].y * FMx) + (-KOe[ker_idx].z * FMy));
 			}
 			else {
 
-				cuReIm FMx = cuSx[idx];
-				cuReIm FMy = cuSy[idx];
-				cuReIm FMz = cuSz[idx];
+				int ker_idx = (N_xRegion.y - i) + j * (N_xRegion.y / 2 + 1) + k * N_xRegion.x * (N_xRegion.y / 2 + 1);
 
-				int ker_idx = (N.y - i) + j * (N.y / 2 + 1) + k * (N.x / 2 + 1) * (N.y / 2 + 1);
-
-				cuSx[idx] = !((KOe[ker_idx].x * FMy) + (-KOe[ker_idx].y * FMz));
-				cuSy[idx] = !((-KOe[ker_idx].x * FMx) + (KOe[ker_idx].z * FMz));
-				cuSz[idx] = !((KOe[ker_idx].y * FMx) + (-KOe[ker_idx].z * FMy));
+				cuSx_out[idx] = !((KOe[ker_idx].x * FMy) + (-KOe[ker_idx].y * FMz));
+				cuSy_out[idx] = !((-KOe[ker_idx].x * FMx) + (KOe[ker_idx].z * FMz));
+				cuSz_out[idx] = !((KOe[ker_idx].y * FMx) + (-KOe[ker_idx].z * FMy));
 			}
 		}
 		else {
 
-			if (i <= N.y / 2) {
+			if (i <= N_xRegion.y / 2) {
 
-				cuReIm FMx = cuSx[idx];
-				cuReIm FMy = cuSy[idx];
-				cuReIm FMz = cuSz[idx];
+				int ker_idx = i + j * (N_xRegion.y / 2 + 1) + (N_xRegion.z - k) * N_xRegion.x * (N_xRegion.y / 2 + 1);
 
-				int ker_idx = i + j * (N.y / 2 + 1) + (N.z - k) * (N.x / 2 + 1) * (N.y / 2 + 1);
-
-				cuSx[idx] = !((-KOe[ker_idx].x * FMy) + (KOe[ker_idx].y * FMz));
-				cuSy[idx] = !((KOe[ker_idx].x * FMx) + (KOe[ker_idx].z * FMz));
-				cuSz[idx] = !((-KOe[ker_idx].y * FMx) + (-KOe[ker_idx].z * FMy));
+				cuSx_out[idx] = !((-KOe[ker_idx].x * FMy) + (KOe[ker_idx].y * FMz));
+				cuSy_out[idx] = !((KOe[ker_idx].x * FMx) + (KOe[ker_idx].z * FMz));
+				cuSz_out[idx] = !((-KOe[ker_idx].y * FMx) + (-KOe[ker_idx].z * FMy));
 			}
 			else {
 
-				cuReIm FMx = cuSx[idx];
-				cuReIm FMy = cuSy[idx];
-				cuReIm FMz = cuSz[idx];
+				int ker_idx = (N_xRegion.y - i) + j * (N_xRegion.y / 2 + 1) + (N_xRegion.z - k) * N_xRegion.x * (N_xRegion.y / 2 + 1);
 
-				int ker_idx = (N.y - i) + j * (N.y / 2 + 1) + (N.z - k) * (N.x / 2 + 1) * (N.y / 2 + 1);
-
-				cuSx[idx] = !((-KOe[ker_idx].x * FMy) + (-KOe[ker_idx].y * FMz));
-				cuSy[idx] = !((KOe[ker_idx].x * FMx) + (KOe[ker_idx].z * FMz));
-				cuSz[idx] = !((KOe[ker_idx].y * FMx) + (-KOe[ker_idx].z * FMy));
+				cuSx_out[idx] = !((-KOe[ker_idx].x * FMy) + (-KOe[ker_idx].y * FMz));
+				cuSy_out[idx] = !((KOe[ker_idx].x * FMx) + (KOe[ker_idx].z * FMz));
+				cuSz_out[idx] = !((KOe[ker_idx].y * FMx) + (-KOe[ker_idx].z * FMy));
 			}
 		}
 	}
@@ -80,7 +72,11 @@ __global__ void cu_Oersted_ConvProd_3D_transpose_xy(cuVEC<cuReal3>& KOe, cuBComp
 
 //N = (N.x/2 + 1, N.y, 4)
 //xy is transposed
-__global__ void cu_Oersted_ConvProd_q2D_4_transpose_xy(cuVEC<cuReal3>& KOe, cuBComplex* cuSx, cuBComplex* cuSy, cuBComplex* cuSz, cuSZ3& N)
+__global__ void cu_Oersted_ConvProd_q2D_4_transpose_xy(
+	cuVEC<cuReal3>& KOe, 
+	cuBComplex* cuSx_in, cuBComplex* cuSy_in, cuBComplex* cuSz_in,
+	cuBComplex* cuSx_out, cuBComplex* cuSy_out, cuBComplex* cuSz_out,
+	cuSZ3& N_xRegion)
 {
 	//above N.z/2 and N.y/2 use kernel symmetries to recover kernel values
 	//Kxy is odd about N.z/2 and even about N.y/2
@@ -90,16 +86,16 @@ __global__ void cu_Oersted_ConvProd_q2D_4_transpose_xy(cuVEC<cuReal3>& KOe, cuBC
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
 	//N.z = 4, and this kernel was called with (N.x/2 + 1) * N.y points: handle all z points in one go
-	int planecount = (N.x / 2 + 1) * N.y;
+	int planecount = N_xRegion.x * N_xRegion.y;
 
 	//kernels packed into planes of (N.y / 2 + 1) * (N.x / 2 + 1) size
-	int kerplanecount = (N.x / 2 + 1) * (N.y / 2 + 1);
+	int kerplanecount = N_xRegion.x * (N_xRegion.y / 2 + 1);
 
 	if (idx < planecount) {
 
 		//the z-axis points (the others are zero)
-		cuReIm3 a = cuReIm3(cuSx[idx], cuSy[idx], cuSz[idx]);
-		cuReIm3 b = cuReIm3(cuSx[idx + planecount], cuSy[idx + planecount], cuSz[idx + planecount]);
+		cuReIm3 a = cuReIm3(cuSx_in[idx], cuSy_in[idx], cuSz_in[idx]);
+		cuReIm3 b = cuReIm3(cuSx_in[idx + planecount], cuSy_in[idx + planecount], cuSz_in[idx + planecount]);
 
 		//forward z-axis fft
 		//NOTE: cuda fft uses -i for the forward fft and +i for the inverse fft.
@@ -112,12 +108,12 @@ __global__ void cu_Oersted_ConvProd_q2D_4_transpose_xy(cuVEC<cuReal3>& KOe, cuBC
 		//kernel multiplication
 		cuReIm3 F0, F1, F2, F3;
 
-		int i = idx % N.y;
-		int j = (idx / N.y) % (N.x / 2 + 1);
+		int i = idx % N_xRegion.y;
+		int j = (idx / N_xRegion.y) % N_xRegion.x;
 
-		if (i <= N.y / 2) {
+		if (i <= N_xRegion.y / 2) {
 
-			int ker_baseidx = i + j * (N.y / 2 + 1);
+			int ker_baseidx = i + j * (N_xRegion.y / 2 + 1);
 
 			F0.x = !((KOe[ker_baseidx].x * X0.y) + (KOe[ker_baseidx].y * X0.z));
 			F0.y = !((-KOe[ker_baseidx].x * X0.x) + (KOe[ker_baseidx].z * X0.z));
@@ -137,7 +133,7 @@ __global__ void cu_Oersted_ConvProd_q2D_4_transpose_xy(cuVEC<cuReal3>& KOe, cuBC
 		}
 		else {
 
-			int ker_baseidx = (N.y - i) + j * (N.y / 2 + 1);
+			int ker_baseidx = (N_xRegion.y - i) + j * (N_xRegion.y / 2 + 1);
 
 			F0.x = !((KOe[ker_baseidx].x * X0.y) + (-KOe[ker_baseidx].y * X0.z));
 			F0.y = !((-KOe[ker_baseidx].x * X0.x) + (KOe[ker_baseidx].z * X0.z));
@@ -158,22 +154,26 @@ __global__ void cu_Oersted_ConvProd_q2D_4_transpose_xy(cuVEC<cuReal3>& KOe, cuBC
 
 		//inverse z-axis fft (but without division by 4). Also only keep first 2 points
 
-		cuSx[idx] = F0.x + F1.x + F2.x + F3.x;
-		cuSy[idx] = F0.y + F1.y + F2.y + F3.y;
-		cuSz[idx] = F0.z + F1.z + F2.z + F3.z;
+		cuSx_out[idx] = F0.x + F1.x + F2.x + F3.x;
+		cuSy_out[idx] = F0.y + F1.y + F2.y + F3.y;
+		cuSz_out[idx] = F0.z + F1.z + F2.z + F3.z;
 
 		cuReIm3 F1c = !F1;
 		cuReIm3 F3c = !F3;
 
-		cuSx[idx + planecount] = F0.x + F1c.x + F2.x - F3c.x;
-		cuSy[idx + planecount] = F0.y + F1c.y + F2.y - F3c.y;
-		cuSz[idx + planecount] = F0.z + F1c.z + F2.z - F3c.z;
+		cuSx_out[idx + planecount] = F0.x + F1c.x + F2.x - F3c.x;
+		cuSy_out[idx + planecount] = F0.y + F1c.y + F2.y - F3c.y;
+		cuSz_out[idx + planecount] = F0.z + F1c.z + F2.z - F3c.z;
 	}
 }
 
 //N = (N.x/2 + 1, N.y, 8)
 //xy is transposed
-__global__ void cu_Oersted_ConvProd_q2D_8_transpose_xy(cuVEC<cuReal3>& KOe, cuBComplex* cuSx, cuBComplex* cuSy, cuBComplex* cuSz, cuSZ3& N)
+__global__ void cu_Oersted_ConvProd_q2D_8_transpose_xy(
+	cuVEC<cuReal3>& KOe, 
+	cuBComplex* cuSx_in, cuBComplex* cuSy_in, cuBComplex* cuSz_in,
+	cuBComplex* cuSx_out, cuBComplex* cuSy_out, cuBComplex* cuSz_out,
+	cuSZ3& N_xRegion, cuSZ3& n)
 {
 	//above N.z/2 and N.y/2 use kernel symmetries to recover kernel values
 	//Kxy is odd about N.z/2 and even about N.y/2
@@ -183,20 +183,20 @@ __global__ void cu_Oersted_ConvProd_q2D_8_transpose_xy(cuVEC<cuReal3>& KOe, cuBC
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
 	//N.z = 8, and this kernel was called with (N.x/2 + 1) * N.y points: handle all z points in one go
-	int planecount = (N.x / 2 + 1) * N.y;
+	int planecount = N_xRegion.x * N_xRegion.y;
 
 	//kernels packed into planes of (N.y / 2 + 1) * (N.x / 2 + 1) size
-	int kerplanecount = (N.x / 2 + 1) * (N.y / 2 + 1);
+	int kerplanecount = N_xRegion.x * (N_xRegion.y / 2 + 1);
 
 	if (idx < planecount) {
 
 #define a (cuBReal)0.7071067811865
 
 		//the z-axis points (the others are zero)
-		cuReIm3 x0 = cuReIm3(cuSx[idx], cuSy[idx], cuSz[idx]);
-		cuReIm3 x1 = cuReIm3(cuSx[idx + planecount], cuSy[idx + planecount], cuSz[idx + planecount]);
-		cuReIm3 x2 = cuReIm3(cuSx[idx + 2 * planecount], cuSy[idx + 2 * planecount], cuSz[idx + 2 * planecount]);
-		cuReIm3 x3 = cuReIm3(cuSx[idx + 3 * planecount], cuSy[idx + 3 * planecount], cuSz[idx + 3 * planecount]);
+		cuReIm3 x0 = cuReIm3(cuSx_in[idx], cuSy_in[idx], cuSz_in[idx]);
+		cuReIm3 x1 = cuReIm3(cuSx_in[idx + planecount], cuSy_in[idx + planecount], cuSz_in[idx + planecount]);
+		cuReIm3 x2 = cuReIm3(cuSx_in[idx + 2 * planecount], cuSy_in[idx + 2 * planecount], cuSz_in[idx + 2 * planecount]);
+		cuReIm3 x3 = (n.z > 3 ? cuReIm3(cuSx_in[idx + 3 * planecount], cuSy_in[idx + 3 * planecount], cuSz_in[idx + 3 * planecount]) : cuReIm3());
 
 		//Radix-4 step
 		cuReIm3 X0 = x0 + x2;
@@ -231,12 +231,12 @@ __global__ void cu_Oersted_ConvProd_q2D_8_transpose_xy(cuVEC<cuReal3>& KOe, cuBC
 
 		cuReIm3 F0, F1, F2, F3, F4, F5, F6, F7;
 
-		int i = idx % N.y;
-		int j = (idx / N.y) % (N.x / 2 + 1);
+		int i = idx % N_xRegion.y;
+		int j = (idx / N_xRegion.y) % N_xRegion.x;
 
-		if (i <= N.y / 2) {
+		if (i <= N_xRegion.y / 2) {
 
-			int ker_baseidx = i + j * (N.y / 2 + 1);
+			int ker_baseidx = i + j * (N_xRegion.y / 2 + 1);
 
 			F0.x = !((KOe[ker_baseidx].x * X0.y) + (KOe[ker_baseidx].y * X0.z));
 			F0.y = !((-KOe[ker_baseidx].x * X0.x) + (KOe[ker_baseidx].z * X0.z));
@@ -272,7 +272,7 @@ __global__ void cu_Oersted_ConvProd_q2D_8_transpose_xy(cuVEC<cuReal3>& KOe, cuBC
 		}
 		else {
 
-			int ker_baseidx = (N.y - i) + j * (N.y / 2 + 1);
+			int ker_baseidx = (N_xRegion.y - i) + j * (N_xRegion.y / 2 + 1);
 
 			F0.x = !((KOe[ker_baseidx].x * X0.y) + (-KOe[ker_baseidx].y * X0.z));
 			F0.y = !((-KOe[ker_baseidx].x * X0.x) + (KOe[ker_baseidx].z * X0.z));
@@ -339,21 +339,23 @@ __global__ void cu_Oersted_ConvProd_q2D_8_transpose_xy(cuVEC<cuReal3>& KOe, cuBC
 		X1 = (t0 + t2);
 		X3 = (t1 - t3);
 
-		cuSx[idx] = X0.x;
-		cuSy[idx] = X0.y;
-		cuSz[idx] = X0.z;
+		cuSx_out[idx] = X0.x;
+		cuSy_out[idx] = X0.y;
+		cuSz_out[idx] = X0.z;
 
-		cuSx[idx + planecount] = X1.x;
-		cuSy[idx + planecount] = X1.y;
-		cuSz[idx + planecount] = X1.z;
+		cuSx_out[idx + planecount] = X1.x;
+		cuSy_out[idx + planecount] = X1.y;
+		cuSz_out[idx + planecount] = X1.z;
 
-		cuSx[idx + 2 * planecount] = X2.x;
-		cuSy[idx + 2 * planecount] = X2.y;
-		cuSz[idx + 2 * planecount] = X2.z;
+		cuSx_out[idx + 2 * planecount] = X2.x;
+		cuSy_out[idx + 2 * planecount] = X2.y;
+		cuSz_out[idx + 2 * planecount] = X2.z;
 
-		cuSx[idx + 3 * planecount] = X3.x;
-		cuSy[idx + 3 * planecount] = X3.y;
-		cuSz[idx + 3 * planecount] = X3.z;
+		if (n.z > 3) {
+			cuSx_out[idx + 3 * planecount] = X3.x;
+			cuSy_out[idx + 3 * planecount] = X3.y;
+			cuSz_out[idx + 3 * planecount] = X3.z;
+		}
 
 #undef a
 	}
@@ -361,27 +363,31 @@ __global__ void cu_Oersted_ConvProd_q2D_8_transpose_xy(cuVEC<cuReal3>& KOe, cuBC
 
 //N = (N.x/2 + 1, N.y, 16)
 //xy is transposed
-__global__ void cu_Oersted_ConvProd_q2D_16_transpose_xy(cuVEC<cuReal3>& KOe, cuBComplex* cuSx, cuBComplex* cuSy, cuBComplex* cuSz, cuSZ3& N)
+__global__ void cu_Oersted_ConvProd_q2D_16_transpose_xy(
+	cuVEC<cuReal3>& KOe, 
+	cuBComplex* cuSx_in, cuBComplex* cuSy_in, cuBComplex* cuSz_in,
+	cuBComplex* cuSx_out, cuBComplex* cuSy_out, cuBComplex* cuSz_out,
+	cuSZ3& N_xRegion, cuSZ3& n)
 {
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
 	//N.z = 16, and this kernel was called with (N.x/2 + 1) * N.y points: handle all z points in one go
-	int planecount = (N.x / 2 + 1) * N.y;
+	int planecount = N_xRegion.x * N_xRegion.y;
 
 	//kernels packed into planes of (N.y / 2 + 1) * (N.x / 2 + 1) size
-	int kerplanecount = (N.x / 2 + 1) * (N.y / 2 + 1);
+	int kerplanecount = N_xRegion.x * (N_xRegion.y / 2 + 1);
 
 	if (idx < planecount) {
 
 		//the z-axis points (the others are zero)
-		cuReIm3 x0 = cuReIm3(cuSx[idx], cuSy[idx], cuSz[idx]);
-		cuReIm3 x1 = cuReIm3(cuSx[idx + planecount], cuSy[idx + planecount], cuSz[idx + planecount]);
-		cuReIm3 x2 = cuReIm3(cuSx[idx + 2 * planecount], cuSy[idx + 2 * planecount], cuSz[idx + 2 * planecount]);
-		cuReIm3 x3 = cuReIm3(cuSx[idx + 3 * planecount], cuSy[idx + 3 * planecount], cuSz[idx + 3 * planecount]);
-		cuReIm3 x4 = cuReIm3(cuSx[idx + 4 * planecount], cuSy[idx + 4 * planecount], cuSz[idx + 4 * planecount]);
-		cuReIm3 x5 = cuReIm3(cuSx[idx + 5 * planecount], cuSy[idx + 5 * planecount], cuSz[idx + 5 * planecount]);
-		cuReIm3 x6 = cuReIm3(cuSx[idx + 6 * planecount], cuSy[idx + 6 * planecount], cuSz[idx + 6 * planecount]);
-		cuReIm3 x7 = cuReIm3(cuSx[idx + 7 * planecount], cuSy[idx + 7 * planecount], cuSz[idx + 7 * planecount]);
+		cuReIm3 x0 = cuReIm3(cuSx_in[idx], cuSy_in[idx], cuSz_in[idx]);
+		cuReIm3 x1 = cuReIm3(cuSx_in[idx + planecount], cuSy_in[idx + planecount], cuSz_in[idx + planecount]);
+		cuReIm3 x2 = cuReIm3(cuSx_in[idx + 2 * planecount], cuSy_in[idx + 2 * planecount], cuSz_in[idx + 2 * planecount]);
+		cuReIm3 x3 = cuReIm3(cuSx_in[idx + 3 * planecount], cuSy_in[idx + 3 * planecount], cuSz_in[idx + 3 * planecount]);
+		cuReIm3 x4 = cuReIm3(cuSx_in[idx + 4 * planecount], cuSy_in[idx + 4 * planecount], cuSz_in[idx + 4 * planecount]);
+		cuReIm3 x5 = (n.z > 5 ? cuReIm3(cuSx_in[idx + 5 * planecount], cuSy_in[idx + 5 * planecount], cuSz_in[idx + 5 * planecount]) : cuReIm3());
+		cuReIm3 x6 = (n.z > 6 ? cuReIm3(cuSx_in[idx + 6 * planecount], cuSy_in[idx + 6 * planecount], cuSz_in[idx + 6 * planecount]) : cuReIm3());
+		cuReIm3 x7 = (n.z > 7 ? cuReIm3(cuSx_in[idx + 7 * planecount], cuSy_in[idx + 7 * planecount], cuSz_in[idx + 7 * planecount]) : cuReIm3());
 
 #define a	(cuBReal)9.238795325113E-01
 #define b	(cuBReal)3.826834323651E-01
@@ -454,12 +460,12 @@ __global__ void cu_Oersted_ConvProd_q2D_16_transpose_xy(cuVEC<cuReal3>& KOe, cuB
 
 		cuReIm3 F0, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12, F13, F14, F15;
 
-		int i = idx % N.y;
-		int j = (idx / N.y) % (N.x / 2 + 1);
+		int i = idx % N_xRegion.y;
+		int j = (idx / N_xRegion.y) % N_xRegion.x;
 
-		if (i <= N.y / 2) {
+		if (i <= N_xRegion.y / 2) {
 
-			int ker_baseidx = i + j * (N.y / 2 + 1);
+			int ker_baseidx = i + j * (N_xRegion.y / 2 + 1);
 
 			F0.x = !((KOe[ker_baseidx].x * X0.y) + (KOe[ker_baseidx].y * X0.z));
 			F0.y = !((-KOe[ker_baseidx].x * X0.x) + (KOe[ker_baseidx].z * X0.z));
@@ -527,7 +533,7 @@ __global__ void cu_Oersted_ConvProd_q2D_16_transpose_xy(cuVEC<cuReal3>& KOe, cuB
 		}
 		else {
 
-			int ker_baseidx = (N.y - i) + j * (N.y / 2 + 1);
+			int ker_baseidx = (N_xRegion.y - i) + j * (N_xRegion.y / 2 + 1);
 
 			F0.x = !((KOe[ker_baseidx].x * X0.y) + (-KOe[ker_baseidx].y * X0.z));
 			F0.y = !((-KOe[ker_baseidx].x * X0.x) + (KOe[ker_baseidx].z * X0.z));
@@ -671,33 +677,39 @@ __global__ void cu_Oersted_ConvProd_q2D_16_transpose_xy(cuVEC<cuReal3>& KOe, cuB
 		X3 = t0 + t2;
 		X7 = t1 - t3;
 
-		cuSx[idx] = X0.x;
-		cuSy[idx] = X0.y;
-		cuSz[idx] = X0.z;
-		cuSx[idx + 4 * planecount] = X4.x;
-		cuSy[idx + 4 * planecount] = X4.y;
-		cuSz[idx + 4 * planecount] = X4.z;
+		cuSx_out[idx] = X0.x;
+		cuSy_out[idx] = X0.y;
+		cuSz_out[idx] = X0.z;
+		cuSx_out[idx + 4 * planecount] = X4.x;
+		cuSy_out[idx + 4 * planecount] = X4.y;
+		cuSz_out[idx + 4 * planecount] = X4.z;
 
-		cuSx[idx + 1 * planecount] = X1.x;
-		cuSy[idx + 1 * planecount] = X1.y;
-		cuSz[idx + 1 * planecount] = X1.z;
-		cuSx[idx + 5 * planecount] = X5.x;
-		cuSy[idx + 5 * planecount] = X5.y;
-		cuSz[idx + 5 * planecount] = X5.z;
+		cuSx_out[idx + 1 * planecount] = X1.x;
+		cuSy_out[idx + 1 * planecount] = X1.y;
+		cuSz_out[idx + 1 * planecount] = X1.z;
+		if (n.z > 5) {
+			cuSx_out[idx + 5 * planecount] = X5.x;
+			cuSy_out[idx + 5 * planecount] = X5.y;
+			cuSz_out[idx + 5 * planecount] = X5.z;
+		}
 
-		cuSx[idx + 2 * planecount] = X2.x;
-		cuSy[idx + 2 * planecount] = X2.y;
-		cuSz[idx + 2 * planecount] = X2.z;
-		cuSx[idx + 6 * planecount] = X6.x;
-		cuSy[idx + 6 * planecount] = X6.y;
-		cuSz[idx + 6 * planecount] = X6.z;
+		cuSx_out[idx + 2 * planecount] = X2.x;
+		cuSy_out[idx + 2 * planecount] = X2.y;
+		cuSz_out[idx + 2 * planecount] = X2.z;
+		if (n.z > 6) {
+			cuSx_out[idx + 6 * planecount] = X6.x;
+			cuSy_out[idx + 6 * planecount] = X6.y;
+			cuSz_out[idx + 6 * planecount] = X6.z;
+		}
 
-		cuSx[idx + 3 * planecount] = X3.x;
-		cuSy[idx + 3 * planecount] = X3.y;
-		cuSz[idx + 3 * planecount] = X3.z;
-		cuSx[idx + 7 * planecount] = X7.x;
-		cuSy[idx + 7 * planecount] = X7.y;
-		cuSz[idx + 7 * planecount] = X7.z;
+		cuSx_out[idx + 3 * planecount] = X3.x;
+		cuSy_out[idx + 3 * planecount] = X3.y;
+		cuSz_out[idx + 3 * planecount] = X3.z;
+		if (n.z > 7) {
+			cuSx_out[idx + 7 * planecount] = X7.x;
+			cuSy_out[idx + 7 * planecount] = X7.y;
+			cuSz_out[idx + 7 * planecount] = X7.z;
+		}
 
 #undef a
 #undef b
@@ -707,20 +719,40 @@ __global__ void cu_Oersted_ConvProd_q2D_16_transpose_xy(cuVEC<cuReal3>& KOe, cuB
 
 //N = (N.x/2 + 1, N.y, 32)
 //xy is transposed
-__global__ void cu_Oersted_ConvProd_q2D_32_transpose_xy(cuVEC<cuReal3>& KOe, cuBComplex* cuSx, cuBComplex* cuSy, cuBComplex* cuSz, cuSZ3& N)
+__global__ void cu_Oersted_ConvProd_q2D_32_transpose_xy(
+	cuVEC<cuReal3>& KOe, 
+	cuBComplex* cuSx_in, cuBComplex* cuSy_in, cuBComplex* cuSz_in,
+	cuBComplex* cuSx_out, cuBComplex* cuSy_out, cuBComplex* cuSz_out,
+	cuSZ3& N_xRegion, cuSZ3& n)
 {
 	int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
 	//N.z = 32, and this kernel was called with (N.x/2 + 1) * N.y points: handle all z points in one go
-	int planecount = (N.x / 2 + 1) * N.y;
+	int planecount = N_xRegion.x * N_xRegion.y;
 
 	//kernels packed into planes of (N.y / 2 + 1) * (N.x / 2 + 1) size
-	int kerplanecount = (N.x / 2 + 1) * (N.y / 2 + 1);
+	int kerplanecount = N_xRegion.x * (N_xRegion.y / 2 + 1);
 
 	if (idx < planecount) {
 
 		//input data
-#define x(n)	(cuReIm3(cuSx[idx + (n) * planecount], cuSy[idx + (n) * planecount], cuSz[idx + (n) * planecount]))
+		__shared__ cuReIm3 x[16];
+		x[0] = cuReIm3(cuSx_in[idx + 0 * planecount], cuSy_in[idx + 0 * planecount], cuSz_in[idx + 0 * planecount]);
+		x[1] = cuReIm3(cuSx_in[idx + 1 * planecount], cuSy_in[idx + 1 * planecount], cuSz_in[idx + 1 * planecount]);
+		x[2] = cuReIm3(cuSx_in[idx + 2 * planecount], cuSy_in[idx + 2 * planecount], cuSz_in[idx + 2 * planecount]);
+		x[3] = cuReIm3(cuSx_in[idx + 3 * planecount], cuSy_in[idx + 3 * planecount], cuSz_in[idx + 3 * planecount]);
+		x[4] = cuReIm3(cuSx_in[idx + 4 * planecount], cuSy_in[idx + 4 * planecount], cuSz_in[idx + 4 * planecount]);
+		x[5] = cuReIm3(cuSx_in[idx + 5 * planecount], cuSy_in[idx + 5 * planecount], cuSz_in[idx + 5 * planecount]);
+		x[6] = cuReIm3(cuSx_in[idx + 6 * planecount], cuSy_in[idx + 6 * planecount], cuSz_in[idx + 6 * planecount]);
+		x[7] = cuReIm3(cuSx_in[idx + 7 * planecount], cuSy_in[idx + 7 * planecount], cuSz_in[idx + 7 * planecount]);
+		x[8] = cuReIm3(cuSx_in[idx + 8 * planecount], cuSy_in[idx + 8 * planecount], cuSz_in[idx + 8 * planecount]);
+		x[9] = (n.z > 9 ? cuReIm3(cuSx_in[idx + 9 * planecount], cuSy_in[idx + 9 * planecount], cuSz_in[idx + 9 * planecount]) : cuReIm3());
+		x[10] = (n.z > 10 ? cuReIm3(cuSx_in[idx + 10 * planecount], cuSy_in[idx + 10 * planecount], cuSz_in[idx + 10 * planecount]) : cuReIm3());
+		x[11] = (n.z > 11 ? cuReIm3(cuSx_in[idx + 11 * planecount], cuSy_in[idx + 11 * planecount], cuSz_in[idx + 11 * planecount]) : cuReIm3());
+		x[12] = (n.z > 12 ? cuReIm3(cuSx_in[idx + 12 * planecount], cuSy_in[idx + 12 * planecount], cuSz_in[idx + 12 * planecount]) : cuReIm3());
+		x[13] = (n.z > 13 ? cuReIm3(cuSx_in[idx + 13 * planecount], cuSy_in[idx + 13 * planecount], cuSz_in[idx + 13 * planecount]) : cuReIm3());
+		x[14] = (n.z > 14 ? cuReIm3(cuSx_in[idx + 14 * planecount], cuSy_in[idx + 14 * planecount], cuSz_in[idx + 14 * planecount]) : cuReIm3());
+		x[15] = (n.z > 15 ? cuReIm3(cuSx_in[idx + 15 * planecount], cuSy_in[idx + 15 * planecount], cuSz_in[idx + 15 * planecount]) : cuReIm3());
 
 		//no performance gain to be had from setting these as X0, X1, ... etc.
 		//unrolling loops does make a slight difference though - probably last case for which you want to unroll loops
@@ -739,54 +771,52 @@ __global__ void cu_Oersted_ConvProd_q2D_32_transpose_xy(cuVEC<cuReal3>& KOe, cuB
 #define g	(cuBReal)0.707106781186548
 
 		//j = 0
-		X[0] = (x(0) + x(8));
-		X[8] = (x(0) - x(8));
-		X[16] = (x(0) - !x(8));
-		X[24] = (x(0) + !x(8));
+		X[0] = (x[0] + x[8]);
+		X[8] = (x[0] - x[8]);
+		X[16] = (x[0] - !x[8]);
+		X[24] = (x[0] + !x[8]);
 
 		//j = 1
-		X[1] = (x(1) + x(9));
-		X[9] = (x(1) - x(9)) * cuReIm(c, -d);
-		X[17] = (x(1) - !x(9)) * cuReIm(a, -b);
-		X[25] = (x(1) + !x(9)) * cuReIm(e, -f);
+		X[1] = (x[1] + x[9]);
+		X[9] = (x[1] - x[9]) * cuReIm(c, -d);
+		X[17] = (x[1] - !x[9]) * cuReIm(a, -b);
+		X[25] = (x[1] + !x[9]) * cuReIm(e, -f);
 
 		//j = 2
-		X[2] = (x(2) + x(10));
-		X[10] = (x(2) - x(10)) * cuReIm(g, -g);
-		X[18] = (x(2) - !x(10)) * cuReIm(c, -d);
-		X[26] = (x(2) + !x(10)) * cuReIm(d, -c);
+		X[2] = (x[2] + x[10]);
+		X[10] = (x[2] - x[10]) * cuReIm(g, -g);
+		X[18] = (x[2] - !x[10]) * cuReIm(c, -d);
+		X[26] = (x[2] + !x[10]) * cuReIm(d, -c);
 
 		//j = 3
-		X[3] = (x(3) + x(11));
-		X[11] = (x(3) - x(11)) * cuReIm(d, -c);
-		X[19] = (x(3) - !x(11)) * cuReIm(e, -f);
-		X[27] = (x(3) + !x(11)) * cuReIm(-b, -a);
+		X[3] = (x[3] + x[11]);
+		X[11] = (x[3] - x[11]) * cuReIm(d, -c);
+		X[19] = (x[3] - !x[11]) * cuReIm(e, -f);
+		X[27] = (x[3] + !x[11]) * cuReIm(-b, -a);
 
 		//j = 4
-		X[4] = (x(4) + x(12));
-		X[12] = !(x(12) - x(4));
-		X[20] = (x(4) - !x(12)) * cuReIm(g, -g);
-		X[28] = (x(4) + !x(12)) * cuReIm(-g, -g);
+		X[4] = (x[4] + x[12]);
+		X[12] = !(x[12] - x[4]);
+		X[20] = (x[4] - !x[12]) * cuReIm(g, -g);
+		X[28] = (x[4] + !x[12]) * cuReIm(-g, -g);
 
 		//j = 5
-		X[5] = (x(5) + x(13));
-		X[13] = (x(5) - x(13)) * cuReIm(-d, -c);
-		X[21] = (x(5) - !x(13)) * cuReIm(f, -e);
-		X[29] = (x(5) + !x(13)) * cuReIm(-a, -b);
+		X[5] = (x[5] + x[13]);
+		X[13] = (x[5] - x[13]) * cuReIm(-d, -c);
+		X[21] = (x[5] - !x[13]) * cuReIm(f, -e);
+		X[29] = (x[5] + !x[13]) * cuReIm(-a, -b);
 
 		//j = 6
-		X[6] = (x(6) + x(14));
-		X[14] = (x(6) - x(14)) * cuReIm(-g, -g);
-		X[22] = (x(6) - !x(14)) * cuReIm(d, -c);
-		X[30] = (x(6) + !x(14)) * cuReIm(-c, d);
+		X[6] = (x[6] + x[14]);
+		X[14] = (x[6] - x[14]) * cuReIm(-g, -g);
+		X[22] = (x[6] - !x[14]) * cuReIm(d, -c);
+		X[30] = (x[6] + !x[14]) * cuReIm(-c, d);
 
 		//j = 7
-		X[7] = (x(7) + x(15));
-		X[15] = (x(7) - x(15)) * cuReIm(-c, -d);
-		X[23] = (x(7) - !x(15)) * cuReIm(b, -a);
-		X[31] = (x(7) + !x(15)) * cuReIm(-f, e);
-
-#undef x
+		X[7] = (x[7] + x[15]);
+		X[15] = (x[7] - x[15]) * cuReIm(-c, -d);
+		X[23] = (x[7] - !x[15]) * cuReIm(b, -a);
+		X[31] = (x[7] + !x[15]) * cuReIm(-f, e);
 
 		//final radix4 stage
 
@@ -940,14 +970,14 @@ __global__ void cu_Oersted_ConvProd_q2D_32_transpose_xy(cuVEC<cuReal3>& KOe, cuB
 		//output is shuffled now, i.e. it is ordered as:
 		//0, 16, 8, 24, 4, 20, 12, 28, 2, 18, 10, 26, 6, 22, 14, 30, 1, 17, 9, 25, 5, 21, 13, 29, 3, 19, 11, 27, 7, 23, 15, 31
 
-		int i = idx % N.y;
-		int j = (idx / N.y) % (N.x / 2 + 1);
+		int i = idx % N_xRegion.y;
+		int j = (idx / N_xRegion.y) % N_xRegion.x;
 
 		cuReIm3 F[32];
 
-		if (i <= N.y / 2) {
+		if (i <= N_xRegion.y / 2) {
 
-			int ker_baseidx = i + j * (N.y / 2 + 1);
+			int ker_baseidx = i + j * (N_xRegion.y / 2 + 1);
 
 			F[0].x = !((KOe[ker_baseidx].x * X[0].y) + (KOe[ker_baseidx].y * X[0].z));
 			F[0].y = !((-KOe[ker_baseidx].x * X[0].x) + (KOe[ker_baseidx].z * X[0].z));
@@ -1079,7 +1109,7 @@ __global__ void cu_Oersted_ConvProd_q2D_32_transpose_xy(cuVEC<cuReal3>& KOe, cuB
 		}
 		else {
 
-			int ker_baseidx = (N.y - i) + j * (N.y / 2 + 1);
+			int ker_baseidx = (N_xRegion.y - i) + j * (N_xRegion.y / 2 + 1);
 
 			F[0].x = !((KOe[ker_baseidx].x * X[0].y) + (-KOe[ker_baseidx].y * X[0].z));
 			F[0].y = !((-KOe[ker_baseidx].x * X[0].x) + (KOe[ker_baseidx].z * X[0].z));
@@ -1355,12 +1385,12 @@ __global__ void cu_Oersted_ConvProd_q2D_32_transpose_xy(cuVEC<cuReal3>& KOe, cuB
 		cuReIm3 l = t0 + t2;
 		cuReIm3 h = t1 - t3;
 
-		cuSx[idx] = l.x;
-		cuSy[idx] = l.y;
-		cuSz[idx] = l.z;
-		cuSx[idx + 8 * planecount] = h.x;
-		cuSy[idx + 8 * planecount] = h.y;
-		cuSz[idx + 8 * planecount] = h.z;
+		cuSx_out[idx] = l.x;
+		cuSy_out[idx] = l.y;
+		cuSz_out[idx] = l.z;
+		cuSx_out[idx + 8 * planecount] = h.x;
+		cuSy_out[idx + 8 * planecount] = h.y;
+		cuSz_out[idx + 8 * planecount] = h.z;
 
 		//j = 1
 		t0 = (X[1] + X[9] * cuReIm(c, d));
@@ -1371,12 +1401,14 @@ __global__ void cu_Oersted_ConvProd_q2D_32_transpose_xy(cuVEC<cuReal3>& KOe, cuB
 		l = t0 + t2;
 		h = t1 - t3;
 
-		cuSx[idx + planecount] = l.x;
-		cuSy[idx + planecount] = l.y;
-		cuSz[idx + planecount] = l.z;
-		cuSx[idx + 9 * planecount] = h.x;
-		cuSy[idx + 9 * planecount] = h.y;
-		cuSz[idx + 9 * planecount] = h.z;
+		cuSx_out[idx + planecount] = l.x;
+		cuSy_out[idx + planecount] = l.y;
+		cuSz_out[idx + planecount] = l.z;
+		if (n.z > 9) {
+			cuSx_out[idx + 9 * planecount] = h.x;
+			cuSy_out[idx + 9 * planecount] = h.y;
+			cuSz_out[idx + 9 * planecount] = h.z;
+		}
 
 		//j = 2
 		t0 = (X[2] + X[10] * cuReIm(g, g));
@@ -1387,12 +1419,14 @@ __global__ void cu_Oersted_ConvProd_q2D_32_transpose_xy(cuVEC<cuReal3>& KOe, cuB
 		l = t0 + t2;
 		h = t1 - t3;
 
-		cuSx[idx + 2 * planecount] = l.x;
-		cuSy[idx + 2 * planecount] = l.y;
-		cuSz[idx + 2 * planecount] = l.z;
-		cuSx[idx + 10 * planecount] = h.x;
-		cuSy[idx + 10 * planecount] = h.y;
-		cuSz[idx + 10 * planecount] = h.z;
+		cuSx_out[idx + 2 * planecount] = l.x;
+		cuSy_out[idx + 2 * planecount] = l.y;
+		cuSz_out[idx + 2 * planecount] = l.z;
+		if (n.z > 10) {
+			cuSx_out[idx + 10 * planecount] = h.x;
+			cuSy_out[idx + 10 * planecount] = h.y;
+			cuSz_out[idx + 10 * planecount] = h.z;
+		}
 
 		//j = 3
 		t0 = (X[3] + X[11] * cuReIm(d, c));
@@ -1403,12 +1437,14 @@ __global__ void cu_Oersted_ConvProd_q2D_32_transpose_xy(cuVEC<cuReal3>& KOe, cuB
 		l = t0 + t2;
 		h = t1 - t3;
 
-		cuSx[idx + 3 * planecount] = l.x;
-		cuSy[idx + 3 * planecount] = l.y;
-		cuSz[idx + 3 * planecount] = l.z;
-		cuSx[idx + 11 * planecount] = h.x;
-		cuSy[idx + 11 * planecount] = h.y;
-		cuSz[idx + 11 * planecount] = h.z;
+		cuSx_out[idx + 3 * planecount] = l.x;
+		cuSy_out[idx + 3 * planecount] = l.y;
+		cuSz_out[idx + 3 * planecount] = l.z;
+		if (n.z > 11) {
+			cuSx_out[idx + 11 * planecount] = h.x;
+			cuSy_out[idx + 11 * planecount] = h.y;
+			cuSz_out[idx + 11 * planecount] = h.z;
+		}
 
 		//j = 4
 		t0 = (X[4] + !X[12]);
@@ -1419,12 +1455,14 @@ __global__ void cu_Oersted_ConvProd_q2D_32_transpose_xy(cuVEC<cuReal3>& KOe, cuB
 		l = t0 + t2;
 		h = t1 - t3;
 
-		cuSx[idx + 4 * planecount] = l.x;
-		cuSy[idx + 4 * planecount] = l.y;
-		cuSz[idx + 4 * planecount] = l.z;
-		cuSx[idx + 12 * planecount] = h.x;
-		cuSy[idx + 12 * planecount] = h.y;
-		cuSz[idx + 12 * planecount] = h.z;
+		cuSx_out[idx + 4 * planecount] = l.x;
+		cuSy_out[idx + 4 * planecount] = l.y;
+		cuSz_out[idx + 4 * planecount] = l.z;
+		if (n.z > 12) {
+			cuSx_out[idx + 12 * planecount] = h.x;
+			cuSy_out[idx + 12 * planecount] = h.y;
+			cuSz_out[idx + 12 * planecount] = h.z;
+		}
 
 		//j = 5
 		t0 = (X[5] + X[13] * cuReIm(-d, c));
@@ -1435,12 +1473,14 @@ __global__ void cu_Oersted_ConvProd_q2D_32_transpose_xy(cuVEC<cuReal3>& KOe, cuB
 		l = t0 + t2;
 		h = t1 - t3;
 
-		cuSx[idx + 5 * planecount] = l.x;
-		cuSy[idx + 5 * planecount] = l.y;
-		cuSz[idx + 5 * planecount] = l.z;
-		cuSx[idx + 13 * planecount] = h.x;
-		cuSy[idx + 13 * planecount] = h.y;
-		cuSz[idx + 13 * planecount] = h.z;
+		cuSx_out[idx + 5 * planecount] = l.x;
+		cuSy_out[idx + 5 * planecount] = l.y;
+		cuSz_out[idx + 5 * planecount] = l.z;
+		if (n.z > 13) {
+			cuSx_out[idx + 13 * planecount] = h.x;
+			cuSy_out[idx + 13 * planecount] = h.y;
+			cuSz_out[idx + 13 * planecount] = h.z;
+		}
 
 		//j = 6
 		t0 = (X[6] + X[14] * cuReIm(-g, g));
@@ -1451,12 +1491,14 @@ __global__ void cu_Oersted_ConvProd_q2D_32_transpose_xy(cuVEC<cuReal3>& KOe, cuB
 		l = t0 + t2;
 		h = t1 - t3;
 
-		cuSx[idx + 6 * planecount] = l.x;
-		cuSy[idx + 6 * planecount] = l.y;
-		cuSz[idx + 6 * planecount] = l.z;
-		cuSx[idx + 14 * planecount] = h.x;
-		cuSy[idx + 14 * planecount] = h.y;
-		cuSz[idx + 14 * planecount] = h.z;
+		cuSx_out[idx + 6 * planecount] = l.x;
+		cuSy_out[idx + 6 * planecount] = l.y;
+		cuSz_out[idx + 6 * planecount] = l.z;
+		if (n.z > 14) {
+			cuSx_out[idx + 14 * planecount] = h.x;
+			cuSy_out[idx + 14 * planecount] = h.y;
+			cuSz_out[idx + 14 * planecount] = h.z;
+		}
 
 		//j = 7
 		t0 = (X[7] + X[15] * cuReIm(-c, d));
@@ -1467,12 +1509,14 @@ __global__ void cu_Oersted_ConvProd_q2D_32_transpose_xy(cuVEC<cuReal3>& KOe, cuB
 		l = t0 + t2;
 		h = t1 - t3;
 
-		cuSx[idx + 7 * planecount] = l.x;
-		cuSy[idx + 7 * planecount] = l.y;
-		cuSz[idx + 7 * planecount] = l.z;
-		cuSx[idx + 15 * planecount] = h.x;
-		cuSy[idx + 15 * planecount] = h.y;
-		cuSz[idx + 15 * planecount] = h.z;
+		cuSx_out[idx + 7 * planecount] = l.x;
+		cuSy_out[idx + 7 * planecount] = l.y;
+		cuSz_out[idx + 7 * planecount] = l.z;
+		if (n.z > 15) {
+			cuSx_out[idx + 15 * planecount] = h.x;
+			cuSy_out[idx + 15 * planecount] = h.y;
+			cuSz_out[idx + 15 * planecount] = h.z;
+		}
 
 #undef a
 #undef b
@@ -1493,7 +1537,16 @@ void OerstedKernelCUDA::KernelMultiplication_2D(void)
 
 void OerstedKernelCUDA::KernelMultiplication_3D(void)
 {
-	cu_Oersted_ConvProd_3D_transpose_xy <<< ((N.x / 2 + 1)*N.y*N.z + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (KOe, cuS_x, cuS_y, cuS_z, cuN);
+	if (!additional_spaces) {
+
+		cu_Oersted_ConvProd_3D_transpose_xy <<< (nxRegion * N.y * N.z + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> 
+			(KOe, cuS_x, cuS_y, cuS_z, cuS_x, cuS_y, cuS_z, cuN_xRegion);
+	}
+	else {
+
+		cu_Oersted_ConvProd_3D_transpose_xy <<< (nxRegion * N.y * N.z + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
+			(KOe, cuS_x, cuS_y, cuS_z, cuS2_x, cuS2_y, cuS2_z, cuN_xRegion);
+	}
 }
 
 //Kernel multiplication in quasi-2D mode : z-axis fft / kernel multiplication / z-axis ifft rolled into one (but do not divide by N for the ifft)
@@ -1505,22 +1558,58 @@ void OerstedKernelCUDA::KernelMultiplication_q2D(int q2D_level)
 	{
 		//N.z = 4, n.z = 2
 	case 4:
-		cu_Oersted_ConvProd_q2D_4_transpose_xy << < ((N.x / 2 + 1)*N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >> > (KOe, cuS_x, cuS_y, cuS_z, cuN);
+		if (!additional_spaces) {
+
+			cu_Oersted_ConvProd_q2D_4_transpose_xy <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> 
+				(KOe, cuS_x, cuS_y, cuS_z, cuS_x, cuS_y, cuS_z, cuN_xRegion);
+		}
+		else {
+
+			cu_Oersted_ConvProd_q2D_4_transpose_xy <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
+				(KOe, cuS_x, cuS_y, cuS_z, cuS2_x, cuS2_y, cuS2_z, cuN_xRegion);
+		}
 		break;
 
 		//N.z = 8, n.z = 3, 4
 	case 8:
-		cu_Oersted_ConvProd_q2D_8_transpose_xy << < ((N.x / 2 + 1)*N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >> > (KOe, cuS_x, cuS_y, cuS_z, cuN);
+		if (!additional_spaces) {
+
+			cu_Oersted_ConvProd_q2D_8_transpose_xy <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> 
+				(KOe, cuS_x, cuS_y, cuS_z, cuS_x, cuS_y, cuS_z, cuN_xRegion, cun);
+		}
+		else {
+
+			cu_Oersted_ConvProd_q2D_8_transpose_xy <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
+				(KOe, cuS_x, cuS_y, cuS_z, cuS2_x, cuS2_y, cuS2_z, cuN_xRegion, cun);
+		}
 		break;
 
 		//N.z = 16, n.z = 5, 6, 7, 8
 	case 16:
-		cu_Oersted_ConvProd_q2D_16_transpose_xy << < ((N.x / 2 + 1)*N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >> > (KOe, cuS_x, cuS_y, cuS_z, cuN);
+		if (!additional_spaces) {
+
+			cu_Oersted_ConvProd_q2D_16_transpose_xy <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> 
+				(KOe, cuS_x, cuS_y, cuS_z, cuS_x, cuS_y, cuS_z, cuN_xRegion, cun);
+		}
+		else {
+
+			cu_Oersted_ConvProd_q2D_16_transpose_xy <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
+				(KOe, cuS_x, cuS_y, cuS_z, cuS2_x, cuS2_y, cuS2_z, cuN_xRegion, cun);
+		}
 		break;
 
 		//N.z = 32, n.z = 9, 10, ..., 16
 	case 32:
-		cu_Oersted_ConvProd_q2D_32_transpose_xy << < ((N.x / 2 + 1)*N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >> > (KOe, cuS_x, cuS_y, cuS_z, cuN);
+		if (!additional_spaces) {
+
+			cu_Oersted_ConvProd_q2D_32_transpose_xy <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> 
+				(KOe, cuS_x, cuS_y, cuS_z, cuS_x, cuS_y, cuS_z, cuN_xRegion, cun);
+		}
+		else {
+
+			cu_Oersted_ConvProd_q2D_32_transpose_xy <<< (nxRegion * N.y + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
+				(KOe, cuS_x, cuS_y, cuS_z, cuS2_x, cuS2_y, cuS2_z, cuN_xRegion, cun);
+		}
 		break;
 
 		//higher values not handled in q2D mode as they are slower than full 3D mode

@@ -10,8 +10,7 @@
 #include "DMExchange.h"
 #include "MeshDefs.h"
 
-DMExchangeCUDA::DMExchangeCUDA(MeshCUDA* pMeshCUDA_, DMExchange* pDMExchange)
-	: 
+DMExchangeCUDA::DMExchangeCUDA(MeshCUDA* pMeshCUDA_, DMExchange* pDMExchange) : 
 	ModulesCUDA(),
 	ExchangeBaseCUDA(pMeshCUDA_, pDMExchange)
 {

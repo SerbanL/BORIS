@@ -37,7 +37,7 @@ void VEC_VC<VType>::setrect(const Rect& rectangle, VType value)
 
 //delete rectangle, where the rectangle is relative to this VEC's rectangle, by setting empty cell values - all cells become empty cells
 template <typename VType>
-void VEC_VC<VType>::delrect(const Rect& rectangle)
+void VEC_VC<VType>::delrect(const Rect& rectangle, bool recalculate_flags)
 {
 	Box box = VEC<VType>::box_from_rect_max(rectangle + VEC<VType>::rect.s);
 
@@ -53,7 +53,7 @@ void VEC_VC<VType>::delrect(const Rect& rectangle)
 		}
 	}
 
-	set_ngbrFlags(*this);
+	if (recalculate_flags) set_ngbrFlags(*this);
 }
 
 template <typename VType>

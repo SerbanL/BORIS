@@ -15,11 +15,11 @@ BError OerstedKernelCUDA::AllocateKernelMemory(void)
 
 	if (!transpose_xy) {
 
-		if (!KOe()->resize(cuSZ3(N.x / 2 + 1, N.y / 2 + 1, N.z / 2 + 1))) return error(BERROR_OUTOFGPUMEMORY_CRIT);
+		if (!KOe()->resize(cuSZ3(nxRegion, N.y / 2 + 1, N.z / 2 + 1))) return error(BERROR_OUTOFGPUMEMORY_CRIT);
 	}
 	else {
 
-		if (!KOe()->resize(cuSZ3(N.y / 2 + 1, N.x / 2 + 1, N.z / 2 + 1))) return error(BERROR_OUTOFGPUMEMORY_CRIT);
+		if (!KOe()->resize(cuSZ3(N.y / 2 + 1, nxRegion, N.z / 2 + 1))) return error(BERROR_OUTOFGPUMEMORY_CRIT);
 	}
 
 	return error;
@@ -58,11 +58,11 @@ BError OerstedKernelCUDA::Calculate_Oersted_Kernels_3D(void)
 
 	if (!transpose_xy) {
 
-		if (!KOe_cpu.resize(SZ3(N.x / 2 + 1, N.y / 2 + 1, N.z / 2 + 1))) return error(BERROR_OUTOFMEMORY_CRIT);
+		if (!KOe_cpu.resize(SZ3(nxRegion, N.y / 2 + 1, N.z / 2 + 1))) return error(BERROR_OUTOFMEMORY_CRIT);
 	}
 	else {
 
-		if (!KOe_cpu.resize(SZ3(N.y / 2 + 1, N.x / 2 + 1, N.z / 2 + 1))) return error(BERROR_OUTOFMEMORY_CRIT);
+		if (!KOe_cpu.resize(SZ3(N.y / 2 + 1, nxRegion, N.z / 2 + 1))) return error(BERROR_OUTOFMEMORY_CRIT);
 	}
 
 	//-------------- SETUP FFT
@@ -115,23 +115,23 @@ BError OerstedKernelCUDA::Calculate_Oersted_Kernels_3D(void)
 				fftw_execute(plan_fwd_x);
 
 				//pack into lower half of tensor row for next step (keep same row and plane strides)
-				for (int i = 0; i < N.x / 2 + 1; i++) {
+				for (int i = 0; i < nxRegion; i++) {
 
-					ReIm3 value = *reinterpret_cast<ReIm3*>(pline + i * 3);
+					ReIm3 value = *reinterpret_cast<ReIm3*>(pline + (i + xRegion.i) * 3);
 
 					//Dxy : even x, Dxz : even x, Dyz : odd x
-					tensor[i + j * (N.x / 2 + 1) + k * (N.x / 2 + 1) * N.y] = DBL3(value.x.Re, value.y.Re, value.z.Im);
+					tensor[i + j * nxRegion + k * nxRegion * N.y] = DBL3(value.x.Re, value.y.Re, value.z.Im);
 				}
 			}
 		}
 
 		for (int k = 0; k < N.z; k++) {
-			for (int i = 0; i < N.x / 2 + 1; i++) {
+			for (int i = 0; i < nxRegion; i++) {
 
 				//fetch line from fft array (zero padding kept)
 				for (int j = 0; j < N.y; j++) {
 
-					int idx_in = i + j * (N.x / 2 + 1) + k * (N.x / 2 + 1) * N.y;
+					int idx_in = i + j * nxRegion + k * nxRegion * N.y;
 
 					*reinterpret_cast<DBL3*>(pline_real + j * 3) = tensor[idx_in];
 				}
@@ -145,18 +145,18 @@ BError OerstedKernelCUDA::Calculate_Oersted_Kernels_3D(void)
 					ReIm3 value = *reinterpret_cast<ReIm3*>(pline + j * 3);
 
 					//Dxy : even y, Dxz : odd y, Dyz : even y
-					tensor[i + j * (N.x / 2 + 1) + k * (N.x / 2 + 1) * (N.y / 2 + 1)] = DBL3(value.x.Re, value.y.Im, value.z.Re);
+					tensor[i + j * nxRegion + k * nxRegion * (N.y / 2 + 1)] = DBL3(value.x.Re, value.y.Im, value.z.Re);
 				}
 			}
 		}
 
 		for (int j = 0; j < N.y / 2 + 1; j++) {
-			for (int i = 0; i < N.x / 2 + 1; i++) {
+			for (int i = 0; i < nxRegion; i++) {
 
 				//fetch line from fft array (zero padding kept)
 				for (int k = 0; k < N.z; k++) {
 
-					int idx_in = i + j * (N.x / 2 + 1) + k * (N.x / 2 + 1) * (N.y / 2 + 1);
+					int idx_in = i + j * nxRegion + k * nxRegion * (N.y / 2 + 1);
 
 					*reinterpret_cast<DBL3*>(pline_real + k * 3) = tensor[idx_in];
 				}
@@ -175,11 +175,11 @@ BError OerstedKernelCUDA::Calculate_Oersted_Kernels_3D(void)
 
 					if (!transpose_xy) {
 
-						kernel[i + j * (N.x / 2 + 1) + k * (N.x / 2 + 1) * (N.y / 2 + 1)] = DBL3(value.x.Im, value.y.Re, value.z.Re);
+						kernel[i + j * nxRegion + k * nxRegion * (N.y / 2 + 1)] = DBL3(value.x.Im, value.y.Re, value.z.Re);
 					}
 					else {
 
-						kernel[j + i * (N.y / 2 + 1) + k * (N.y / 2 + 1) * (N.x / 2 + 1)] = DBL3(value.x.Im, value.y.Re, value.z.Re);
+						kernel[j + i * (N.y / 2 + 1) + k * (N.y / 2 + 1) * nxRegion] = DBL3(value.x.Im, value.y.Re, value.z.Re);
 					}
 				}
 			}

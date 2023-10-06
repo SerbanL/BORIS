@@ -31,9 +31,6 @@ class TransportCUDA_Spin_S_Funcs {
 
 public:
 
-	//spin transport solver type (see Transport_Defs.h) : copy of stsolve in TransportCUDA, but on the gpu so we can use it in device code
-	int stsolve;
-
 	//managed mesh for access to all required mesh VECs and material parameters
 	ManagedMeshCUDA* pcuMesh;
 
@@ -46,6 +43,9 @@ public:
 	//for Poisson equations for S some values are fixed during relaxation, so pre-calculate them and store here to re-use.
 	////points to cuVEC in TransportCUDA
 	cuVEC<cuReal3>* pdelsq_S_fixed;
+
+	//spin transport solver type (see Transport_Defs.h) : copy of stsolve in TransportCUDA, but on the gpu so we can use it in device code
+	int stsolve;
 
 public:
 

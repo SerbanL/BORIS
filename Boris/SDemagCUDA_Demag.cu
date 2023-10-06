@@ -26,13 +26,19 @@ void SDemagCUDA_Demag::set_SDemag_DemagCUDA_pointers(void)
 {
 	if (pMeshCUDA) {
 
-		set_SDemag_DemagCUDA_pointers_kernel <<< 1, CUDATHREADS >>>
-			(pMeshCUDA->cuMesh, Module_Heff);
+		for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
+
+			set_SDemag_DemagCUDA_pointers_kernel <<< 1, CUDATHREADS >>>
+				(pMeshCUDA->cuMesh.get_deviceobject(mGPU), Module_Heff.get_deviceobject(mGPU));
+		}
 	}
 	else if (paMeshCUDA) {
 
-		set_SDemag_DemagCUDA_pointers_atomistic_kernel <<< 1, CUDATHREADS >>>
-			(paMeshCUDA->cuaMesh, Module_Heff);
+		for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
+
+			set_SDemag_DemagCUDA_pointers_atomistic_kernel <<< 1, CUDATHREADS >>>
+				(paMeshCUDA->cuaMesh.get_deviceobject(mGPU), Module_Heff.get_deviceobject(mGPU));
+		}
 	}
 }
 
@@ -44,9 +50,13 @@ __global__ void Add_Energy_Kernel(cuBReal& energy, cuBReal& total_energy)
 }
 
 //add energy in this module to a running total
-void SDemagCUDA_Demag::Add_Energy(cu_obj<cuBReal>& total_energy)
+void SDemagCUDA_Demag::Add_Energy(mcu_val<cuBReal>& total_energy)
 {
-	Add_Energy_Kernel <<< (1 + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (energy, total_energy);
+	for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
+
+		Add_Energy_Kernel <<< (1 + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> 
+			(energy(mGPU), total_energy(mGPU));
+	}
 }
 
 #endif

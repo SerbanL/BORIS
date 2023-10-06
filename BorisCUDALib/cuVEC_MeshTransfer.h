@@ -107,25 +107,26 @@ public:
 
 	//SINGLE INPUT, SINGLE OUTPUT
 
-	//do the actual transfer of values to and from this mesh using these - pass in the size of quantity (= get_gpu_value(n).dim()), and transfer_info size to speed up call
+	//do the actual transfer of values to and from this mesh using these
+	//pass in transfer_info size to speed up call (required to set cuda kernel size, but must match transfer_in_info_size or transfer_out_info_size respectively)
+
+	//transfer from input meshes
 	void transfer_in(size_t size_transfer, VType*& sMesh_quantity);
 
-	//transfer to output meshes. setOutput = true means set mesh values, not add. Pass in size_transfer (transfer_info_size) and number of output meshes to speed up call
+	//transfer to output meshes. Pass in size_transfer (must match transfer_out_info_size) and number of output meshes to speed up call
 	void transfer_out(size_t size_transfer, VType*& sMesh_quantity, int mesh_out_num);
 
 	//AVERAGED INPUTS
 
-	//do the actual transfer of values to and from this mesh using these - pass in the size of quantity (= get_gpu_value(n).dim()), and transfer_info size to speed up call
 	void transfer_in_averaged(size_t size_transfer, VType*& sMesh_quantity);
 
 	//MULTIPLIED INPUTS
 
-	//do the actual transfer of values to and from this mesh using these - pass in the size of quantity (= get_gpu_value(n).dim()), and transfer_info size to speed up call
 	void transfer_in_multiplied(size_t size_transfer, VType*& sMesh_quantity);
 
 	//DUPLICATED OUTPUT
 
-	//transfer to output meshes. setOutput = true means set mesh values, not add. Pass in size_transfer (transfer_info_size) and number of output meshes to speed up call
+	//transfer to output meshes. Pass in size_transfer (must match transfer_out_info_size) and number of output meshes to speed up call
 	void transfer_out_duplicated(size_t size_transfer, VType*& sMesh_quantity, int mesh_out_num);
 };
 
@@ -226,7 +227,7 @@ __host__ bool cuTransfer<VType>::copy_transfer_info(cpuTransfer& vec_transfer)
 		transfer_in_info_cpu[idx].second = cpuVEC_transfer_in_info[idx].second;
 	}
 
-	//allocate gpu memory for transfer_out_info
+	//allocate gpu memory for transfer_in_info
 	if (!set_transfer_in_info_size(vec_transfer.size_transfer_in())) return false;
 
 	//copy to transfer_in_info

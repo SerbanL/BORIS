@@ -294,3 +294,33 @@ BError SuperMesh::SetTemperatureModel(std::string meshName, int tmtype)
 
 	return error;
 }
+
+//load temperature in supermesh (SHeat::globalTemp) or in named mesh
+BError SuperMesh::LoadOVF2Temp(std::string meshName, std::string fileName)
+{
+	BError error(__FUNCTION__);
+
+	if (!contains(meshName) && meshName != superMeshHandle) return error(BERROR_INCORRECTNAME);
+
+	VEC<double> data;
+	OVF2 ovf2;
+	error = ovf2.Read_OVF2_SCA(fileName, data);
+	if (error) return error;
+
+	if (meshName != superMeshHandle) {
+
+		//temperature in individual mesh
+		if (pMesh[meshName]->TComputation_Enabled()) {
+
+			pMesh[meshName]->SetTempFromData(data);
+		}
+		else return error(BERROR_INCORRECTMODCONFIG);
+	}
+	else {
+
+		//global temperature
+		error = CallModuleMethod<BError, SHeat, VEC<double>&>(&SHeat::LoadGlobalTemperature, data);
+	}
+
+	return error;
+}

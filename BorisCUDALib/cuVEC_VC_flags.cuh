@@ -260,26 +260,29 @@ __global__ void set_ngbrFlags_kernel(const cuSZ3& n, int*& ngbrFlags, VType*& qu
 	}
 }
 
-template void cuVEC_VC<float>::set_ngbrFlags(void);
-template void cuVEC_VC<double>::set_ngbrFlags(void);
+template void cuVEC_VC<float>::set_ngbrFlags(bool do_reset);
+template void cuVEC_VC<double>::set_ngbrFlags(bool do_reset);
 
-template void cuVEC_VC<cuFLT3>::set_ngbrFlags(void);
-template void cuVEC_VC<cuDBL3>::set_ngbrFlags(void);
+template void cuVEC_VC<cuFLT3>::set_ngbrFlags(bool do_reset);
+template void cuVEC_VC<cuDBL3>::set_ngbrFlags(bool do_reset);
 
 //initialization method for neighbor flags : set flags at size n, counting neighbors etc. Use current shape in ngbrFlags
 template <typename VType>
-__host__ void cuVEC_VC<VType>::set_ngbrFlags(void)
+__host__ void cuVEC_VC<VType>::set_ngbrFlags(bool do_reset)
 {
 	if (get_gpu_value(cuVEC<VType>::rect).IsNull() || get_gpu_value(cuVEC<VType>::h) == cuReal3()) return;
 
-	//clear any shift debt as mesh has been resized so not valid anymore
-	set_gpu_value(shift_debt, cuReal3());
+	if (do_reset) {
 
-	//dirichlet flags will be cleared from ngbrFlags2, so also clear the dirichlet vectors
-	clear_dirichlet_flags();
+		//clear any shift debt as mesh has been resized so not valid anymore
+		set_gpu_value(shift_debt, cuReal3());
 
-	//halo flags will be cleared from ngbrFlags2, so also clear the halo vectors
-	clear_halo_flags();
+		//dirichlet flags will be cleared from ngbrFlags2, so also clear the dirichlet vectors
+		clear_dirichlet_flags();
+
+		//halo flags will be cleared from ngbrFlags2, so also clear the halo vectors
+		clear_halo_flags();
+	}
 
 	//1a. Count all the neighbors
 	set_gpu_value(nonempty_cells, (int)0);
@@ -294,6 +297,8 @@ __host__ void cuVEC_VC<VType>::set_ngbrFlags(void)
 	//3. set pbc flags depending on set conditions and currently calculated flags
 	set_pbc_flags();
 }
+
+//------------------------------------------------------------------- SET FACES AND EDGES FLAGS
 
 template <typename VType>
 __global__ void set_faces_and_edges_flags_kernel(const cuSZ3& n, int*& ngbrFlags, bool& using_extended_flags, int*& ngbrFlags2)
@@ -468,15 +473,15 @@ __global__ void set_ngbrFlags_copylinkedshape_kernel(const cuSZ3& n, const cuRea
 	}
 }
 
-template void cuVEC_VC<float>::set_ngbrFlags(const cuSZ3& linked_n, const cuReal3& linked_h, const cuRect& linked_rect, int*& linked_ngbrFlags);
-template void cuVEC_VC<double>::set_ngbrFlags(const cuSZ3& linked_n, const cuReal3& linked_h, const cuRect& linked_rect, int*& linked_ngbrFlags);
+template void cuVEC_VC<float>::set_ngbrFlags(const cuSZ3& linked_n, const cuReal3& linked_h, const cuRect& linked_rect, int*& linked_ngbrFlags, bool do_reset);
+template void cuVEC_VC<double>::set_ngbrFlags(const cuSZ3& linked_n, const cuReal3& linked_h, const cuRect& linked_rect, int*& linked_ngbrFlags, bool do_reset);
 
-template void cuVEC_VC<cuFLT3>::set_ngbrFlags(const cuSZ3& linked_n, const cuReal3& linked_h, const cuRect& linked_rect, int*& linked_ngbrFlags);
-template void cuVEC_VC<cuDBL3>::set_ngbrFlags(const cuSZ3& linked_n, const cuReal3& linked_h, const cuRect& linked_rect, int*& linked_ngbrFlags);
+template void cuVEC_VC<cuFLT3>::set_ngbrFlags(const cuSZ3& linked_n, const cuReal3& linked_h, const cuRect& linked_rect, int*& linked_ngbrFlags, bool do_reset);
+template void cuVEC_VC<cuDBL3>::set_ngbrFlags(const cuSZ3& linked_n, const cuReal3& linked_h, const cuRect& linked_rect, int*& linked_ngbrFlags, bool do_reset);
 
 //initialization method for neighbor flags : set flags at size n, counting neighbors etc. Use current shape in ngbrFlags
 template <typename VType>
-__host__ void cuVEC_VC<VType>::set_ngbrFlags(const cuSZ3& linked_n, const cuReal3& linked_h, const cuRect& linked_rect, int*& linked_ngbrFlags)
+__host__ void cuVEC_VC<VType>::set_ngbrFlags(const cuSZ3& linked_n, const cuReal3& linked_h, const cuRect& linked_rect, int*& linked_ngbrFlags, bool do_reset)
 {
 	if (get_gpu_value(cuVEC<VType>::rect).IsNull() || get_gpu_value(cuVEC<VType>::h) == cuReal3()) return;
 
@@ -484,7 +489,7 @@ __host__ void cuVEC_VC<VType>::set_ngbrFlags(const cuSZ3& linked_n, const cuReal
 	set_ngbrFlags_copylinkedshape_kernel<VType> <<< (get_ngbrFlags_size() + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (cuVEC<VType>::n, cuVEC<VType>::h, cuVEC<VType>::rect, ngbrFlags, linked_n, linked_h, linked_rect, linked_ngbrFlags);
 
 	//now continue with set_ngbrFlags as normal
-	set_ngbrFlags();
+	set_ngbrFlags(do_reset);
 }
 
 //------------------------------------------------------------------- SET DIRICHLET CONDITIONS
@@ -673,7 +678,7 @@ __host__ bool cuVEC_VC<VType>::set_dirichlet_conditions(cuRect surface_rect, VTy
 //------------------------------------------------------------------- SET HALO FLAGS
 
 inline __global__ void set_halo_conditions_kernel(
-	const cuSZ3& n, int*& ngbrFlags, int*& ngbrFlags2,
+	const cuSZ3& n, int*& ngbrFlags2,
 	int* halo_ngbrFlags, size_t halo_size, int halo_flag, int halo_depth)
 {
 	//NOTE : code below assumes halo_depth is 1 (and currently unused below). In the future halo_depth > 1 may be used, in which case code below needs rethinking.
@@ -713,11 +718,10 @@ inline __global__ void set_halo_conditions_kernel(
 			break;
 		}
 
-		//mark with halo flag if both this cell and halo cell are not empty
-		if ((ngbrFlags[ngbr_idx] & NF_NOTEMPTY) && (halo_ngbrFlags[halo_idx] & NF_NOTEMPTY)) {
-
-			ngbrFlags2[ngbr_idx] |= halo_flag;
-		}
+		//mark with halo flag regardless if this is an empty cell or not
+		if (halo_ngbrFlags[halo_idx] & NF_NOTEMPTY) ngbrFlags2[ngbr_idx] |= halo_flag;
+		//make sure to reset in case flag was set previously
+		else ngbrFlags2[ngbr_idx] &= ~halo_flag;
 	}
 }
 
@@ -777,7 +781,7 @@ __host__ bool cuVEC_VC<VType>::set_halo_conditions(cu_arr<int>& halo_ngbrFlags, 
 
 		//setup halo ngbrFlags
 		set_halo_conditions_kernel <<< (halo_size_cpu + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>>
-			(cuVEC<VType>::n, ngbrFlags, ngbrFlags2, halo_ngbrFlags, halo_ngbrFlags.size(), halo_flag, halo_depth);
+			(cuVEC<VType>::n, ngbrFlags2, halo_ngbrFlags, halo_ngbrFlags.size(), halo_flag, halo_depth);
 			
 		//setting halo flags might need robin flag recalculation - only if void robin cells are required
 		if (cuIsNZ(get_gpu_value(robin_v).i)) set_robin_flags();

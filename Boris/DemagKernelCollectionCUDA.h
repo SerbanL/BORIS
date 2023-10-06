@@ -107,8 +107,8 @@ private:
 	//Auxiliary for kernel computations on the GPU
 
 	//copy Re or Im parts of cuOut to cuIn
-	void cuOut_to_cuIn_Re(size_t size, cu_arr<cufftDoubleReal>& cuIn, cu_arr<cufftDoubleComplex>& cuOut);
-	void cuOut_to_cuIn_Im(size_t size, cu_arr<cufftDoubleReal>& cuIn, cu_arr<cufftDoubleComplex>& cuOut);
+	void cuOut_to_cuIn_Re(size_t size, cu_arr<cufftDoubleReal>& cuIn, cu_arr<cufftDoubleComplex>& cuOut, int xStride, int yStride, int xStart, int xEnd);
+	void cuOut_to_cuIn_Im(size_t size, cu_arr<cufftDoubleReal>& cuIn, cu_arr<cufftDoubleComplex>& cuOut, int xStride, int yStride, int xStart, int xEnd);
 
 protected:
 
@@ -139,7 +139,7 @@ protected:
 	//this initializes all the convolution kernels for the given mesh dimensions.
 	//use information for other DemagKernelCollection objects in the set so we re-use kernels as much as possible
 	//device_index specifies which GPU kernels is computed on (ranges from 0 up to mGPU.get_num_devices() - 1)
-	BError Calculate_Demag_Kernels(std::vector<DemagKernelCollectionCUDA*>& kernelCollection, bool initialize_on_gpu = true, int device_index = 0);
+	BError Calculate_Demag_Kernels(std::vector<DemagKernelCollectionCUDA*>& kernelCollection, bool initialize_on_gpu, int device_index);
 
 	//-------------------------- RUN-TIME KERNEL MULTIPLICATION
 

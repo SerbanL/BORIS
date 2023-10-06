@@ -49,6 +49,8 @@ public:
 	{
 		nullgpuptr(pcuMesh);
 		nullgpuptr(pcuaMesh);
+		set_gpu_value(is_thermoelectric_mesh, false);
+		set_gpu_value(is_open_potential, false);
 	}
 
 	__host__ void destruct_cu_obj(void) {}

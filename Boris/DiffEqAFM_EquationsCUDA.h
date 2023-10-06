@@ -138,6 +138,8 @@ __device__ cuReal3 ManagedDiffEqAFMCUDA::LLB(int idx, cuReal3& value_B)
 	//m is M / Ms0 : magnitude of M in this cell divided by the saturation magnetization at 0K.
 	cuReal2 Mmag = cuReal2(M[idx].norm(), M2[idx].norm());
 	cuReal2 Ms0 = pcuMesh->pMs_AFM->get0();
+	cuReal3 mnormA = cu_normalize(M[idx]);
+	cuReal3 mnormB = cu_normalize(M2[idx]);
 	cuReal2 m = Mmag / Ms0;
 	cuReal2 msq = m & m;
 
@@ -201,12 +203,12 @@ __device__ cuReal3 ManagedDiffEqAFMCUDA::LLB(int idx, cuReal3& value_B)
 	}
 
 	//sub-lattice B value so we can read it after
-	value_B = (-(cuBReal)GAMMA * grel.j * msq.j / (msq.j + alpha.j * alpha.j)) * (M2[idx] ^ Heff2[idx]) + (-(cuBReal)GAMMA * grel.j * m.j * alpha.j / (msq.j + alpha.j * alpha.j)) * ((M2[idx] / Mmag.j) ^ (M2[idx] ^ Heff2[idx])) +
-		(cuBReal)GAMMA * grel.j * alpha_par.j * Ms0.j * ((M2[idx] / Mmag.j) * (Heff2[idx] + Hl_2)) * (M2[idx] / Mmag.j);
+	value_B = (-(cuBReal)GAMMA * grel.j * msq.j / (msq.j + alpha.j * alpha.j)) * (M2[idx] ^ Heff2[idx]) + (-(cuBReal)GAMMA * grel.j * m.j * alpha.j / (msq.j + alpha.j * alpha.j)) * (mnormB ^ (M2[idx] ^ Heff2[idx])) +
+		(cuBReal)GAMMA * grel.j * alpha_par.j * Ms0.j * (mnormB * (Heff2[idx] + Hl_2)) * mnormB;
 
 	//return the sub-lattice A value as normal
-	return (-(cuBReal)GAMMA * grel.i * msq.i / (msq.i + alpha.i * alpha.i)) * (M[idx] ^ Heff[idx]) + (-(cuBReal)GAMMA * grel.i * m.i * alpha.i / (msq.i + alpha.i * alpha.i)) * ((M[idx] / Mmag.i) ^ (M[idx] ^ Heff[idx])) +
-		(cuBReal)GAMMA * grel.i * alpha_par.i * Ms0.i * ((M[idx] / Mmag.i) * (Heff[idx] + Hl_1)) * (M[idx] / Mmag.i);
+	return (-(cuBReal)GAMMA * grel.i * msq.i / (msq.i + alpha.i * alpha.i)) * (M[idx] ^ Heff[idx]) + (-(cuBReal)GAMMA * grel.i * m.i * alpha.i / (msq.i + alpha.i * alpha.i)) * (mnormA ^ (M[idx] ^ Heff[idx])) +
+		(cuBReal)GAMMA * grel.i * alpha_par.i * Ms0.i * (mnormA * (Heff[idx] + Hl_1)) * mnormA;
 }
 
 //------------------------------------------------------------------------------------------------------
@@ -232,6 +234,8 @@ __device__ cuReal3 ManagedDiffEqAFMCUDA::LLBSTT(int idx, cuReal3& value_B)
 	//m is M / Ms0 : magnitude of M in this cell divided by the saturation magnetization at 0K.
 	cuReal2 Mmag = cuReal2(M[idx].norm(), M2[idx].norm());
 	cuReal2 Ms0 = pcuMesh->pMs_AFM->get0();
+	cuReal3 mnormA = cu_normalize(M[idx]);
+	cuReal3 mnormB = cu_normalize(M2[idx]);
 	cuReal2 m = Mmag / Ms0;
 	cuReal2 msq = m & m;
 
@@ -301,11 +305,11 @@ __device__ cuReal3 ManagedDiffEqAFMCUDA::LLBSTT(int idx, cuReal3& value_B)
 		Hl_2 = -1 * (M2[idx] / ((cuBReal)MU0 * Ms0.j)) * ((1.0 / susrel.j) + (3 * tau_ij.j * T_Curie * ((cuBReal)BOLTZMANN / (cuBReal)MUB) / mu.j) * ((susrel.i / susrel.j) + 1));
 	}
 
-	cuReal3 LLGSTT_Eval_A = (-(cuBReal)GAMMA * grel.i * msq.i / (msq.i + alpha.i * alpha.i)) * (M[idx] ^ Heff[idx]) + (-(cuBReal)GAMMA * grel.i * m.i * alpha.i / (msq.i + alpha.i * alpha.i)) * ((M[idx] / Mmag.i) ^ (M[idx] ^ Heff[idx])) +
-		(cuBReal)GAMMA * grel.i * alpha_par.i * Ms0.i * ((M[idx] / Mmag.i) * (Heff[idx] + Hl_1)) * (M[idx] / Mmag.i);
+	cuReal3 LLGSTT_Eval_A = (-(cuBReal)GAMMA * grel.i * msq.i / (msq.i + alpha.i * alpha.i)) * (M[idx] ^ Heff[idx]) + (-(cuBReal)GAMMA * grel.i * m.i * alpha.i / (msq.i + alpha.i * alpha.i)) * (mnormA ^ (M[idx] ^ Heff[idx])) +
+		(cuBReal)GAMMA * grel.i * alpha_par.i * Ms0.i * (mnormA * (Heff[idx] + Hl_1)) * mnormA;
 	
-	cuReal3 LLGSTT_Eval_B = (-(cuBReal)GAMMA * grel.j * msq.j / (msq.j + alpha.j * alpha.j)) * (M2[idx] ^ Heff2[idx]) + (-(cuBReal)GAMMA * grel.j * m.j * alpha.j / (msq.j + alpha.j * alpha.j)) * ((M2[idx] / Mmag.j) ^ (M2[idx] ^ Heff2[idx])) +
-		(cuBReal)GAMMA * grel.j * alpha_par.j * Ms0.j * ((M2[idx] / Mmag.j) * (Heff2[idx] + Hl_2)) * (M2[idx] / Mmag.j);
+	cuReal3 LLGSTT_Eval_B = (-(cuBReal)GAMMA * grel.j * msq.j / (msq.j + alpha.j * alpha.j)) * (M2[idx] ^ Heff2[idx]) + (-(cuBReal)GAMMA * grel.j * m.j * alpha.j / (msq.j + alpha.j * alpha.j)) * (mnormB ^ (M2[idx] ^ Heff2[idx])) +
+		(cuBReal)GAMMA * grel.j * alpha_par.j * Ms0.j * (mnormB * (Heff2[idx] + Hl_2)) * mnormB;
 
 	if (E.linear_size()) {
 
@@ -325,13 +329,13 @@ __device__ cuReal3 ManagedDiffEqAFMCUDA::LLBSTT(int idx, cuReal3& value_B)
 
 		LLGSTT_Eval_A +=
 			(((1 + alpha_perp_red.i * beta) * u_dot_del_M_A) -
-			((beta - alpha_perp_red.i) * ((M[idx] / Mmag.i) ^ u_dot_del_M_A)) -
-				(alpha_perp_red.i * (beta - alpha_perp_red.i) * (M[idx] / Mmag.i) * ((M[idx] / Mmag.i) * u_dot_del_M_A))) * msq.i / (msq.i + alpha.i * alpha.i);
+			((beta - alpha_perp_red.i) * (mnormA ^ u_dot_del_M_A)) -
+				(alpha_perp_red.i * (beta - alpha_perp_red.i) * mnormA * (mnormA * u_dot_del_M_A))) * msq.i / (msq.i + alpha.i * alpha.i);
 
 		LLGSTT_Eval_B +=
 			(((1 + alpha_perp_red.j * beta) * u_dot_del_M_B) -
-			((beta - alpha_perp_red.j) * ((M2[idx] / Mmag.j) ^ u_dot_del_M_B)) -
-				(alpha_perp_red.j * (beta - alpha_perp_red.j) * (M2[idx] / Mmag.j) * ((M2[idx] / Mmag.j) * u_dot_del_M_B))) * msq.j / (msq.j + alpha.j * alpha.j);
+			((beta - alpha_perp_red.j) * (mnormB ^ u_dot_del_M_B)) -
+				(alpha_perp_red.j * (beta - alpha_perp_red.j) * mnormB * (mnormB * u_dot_del_M_B))) * msq.j / (msq.j + alpha.j * alpha.j);
 	}
 
 	//sub-lattice B value so we can read it after

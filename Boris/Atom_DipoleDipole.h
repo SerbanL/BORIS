@@ -2,11 +2,13 @@
 
 #include "BorisLib.h"
 #include "Modules.h"
-#include "DemagBase.h"
+
+#if defined(MODULE_COMPILATION_ATOM_DIPOLEDIPOLE) && ATOMISTIC == 1
 
 class Atom_Mesh;
 
-#if defined(MODULE_COMPILATION_ATOM_DIPOLEDIPOLE) && ATOMISTIC == 1
+#include "DemagBase.h"
+#include "EvalSpeedup.h"
 
 #include "Convolution.h"
 #include "DipoleDipoleKernel.h"
@@ -19,7 +21,8 @@ class Atom_DipoleDipole :
 	public Modules,
 	public DemagBase,
 	public Convolution<Atom_DipoleDipole, DipoleDipoleKernel>,
-	public ProgramState<Atom_DipoleDipole, std::tuple<INT3>, std::tuple<>>
+	public ProgramState<Atom_DipoleDipole, std::tuple<INT3>, std::tuple<>>,
+	public EvalSpeedup
 {
 
 private:
@@ -79,8 +82,7 @@ public:
 #else
 
 class Atom_DipoleDipole :
-	public Modules,
-	public DemagBase
+	public Modules
 {
 
 private:

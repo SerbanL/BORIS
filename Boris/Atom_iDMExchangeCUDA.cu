@@ -103,6 +103,8 @@ void Atom_iDMExchangeCUDA::UpdateField(void)
 	//otherwise a kernel on a device could finish and continue on to diff eq update (which will update M on device), whilst neighboring devices are still accessing these data - data race!
 	//if using halo exchanges instead this is not a problem
 	mGPU.synchronize_if_uva();
+
+	if (paMeshCUDA->GetMeshExchangeCoupling()) CalculateExchangeCoupling(energy);
 }
 
 #endif

@@ -34,7 +34,7 @@ VType mcuVEC<VType, MType>::average(cuRect rectangle)
 	for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
 		//average on each device but keep reduction values in auxiliary values on each gpu
-		mng(mGPU)->average(pn_d[mGPU].dim(), (rectangle.IsNull() ? cuRect() : rectangle.get_intersection(prect_d[mGPU]) - prect_d[mGPU].s), false);
+		mng(mGPU)->average(pn_d[mGPU].dim(), (rectangle.IsNull() ? cuRect() : rectangle.get_intersection(prect_d[mGPU] - rect.s) + rect.s - prect_d[mGPU].s), false);
 
 		aux += get_gpu_value(mng(mGPU)->aux_value_ref());
 		points += get_gpu_value(mng(mGPU)->aux_integer_ref());
@@ -75,7 +75,7 @@ VType mcuVEC<VType, MType>::average_nonempty(cuRect rectangle)
 	for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
 		//average on each device but keep reduction values in auxiliary values on each gpu
-		mng(mGPU)->average_nonempty(pn_d[mGPU].dim(), (rectangle.IsNull() ? cuRect() : rectangle.get_intersection(prect_d[mGPU]) - prect_d[mGPU].s), false);
+		mng(mGPU)->average_nonempty(pn_d[mGPU].dim(), (rectangle.IsNull() ? cuRect() : rectangle.get_intersection(prect_d[mGPU] - rect.s) + rect.s - prect_d[mGPU].s), false);
 
 		aux += get_gpu_value(mng(mGPU)->aux_value_ref());
 		points += get_gpu_value(mng(mGPU)->aux_integer_ref());
@@ -113,7 +113,7 @@ VType mcuVEC<VType, MType>::sum_nonempty(cuRect rectangle)
 	for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 
 		//average on each device but keep reduction values in auxiliary values on each gpu
-		mng(mGPU)->sum_nonempty(pn_d[mGPU].dim(), (rectangle.IsNull() ? cuRect() : rectangle.get_intersection(prect_d[mGPU]) - prect_d[mGPU].s), false);
+		mng(mGPU)->sum_nonempty(pn_d[mGPU].dim(), (rectangle.IsNull() ? cuRect() : rectangle.get_intersection(prect_d[mGPU] - rect.s) + rect.s - prect_d[mGPU].s), false);
 
 		aux += get_gpu_value(mng(mGPU)->aux_value_ref());
 	}

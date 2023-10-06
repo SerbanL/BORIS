@@ -29,7 +29,19 @@ class cuVEC
 
 private:
 
-	//Line profile extraction data
+	//----------------- Histogram extraction data
+
+	//used for extracting histogram data from mesh
+	cuBReal* histogram;
+	size_t histogram_size;
+
+	//used if we need to pre-average mesh values with a macrocell before extracting histogram
+	VType* histogram_preaverage;
+	size_t histogram_preaverage_size;
+
+protected:
+
+	//----------------- Line profile extraction data
 
 	//all profile components internal storage
 	VType* line_profile;
@@ -45,17 +57,7 @@ private:
 	//line_profile_component memory size, stored in GPU memory : transfer to CPU before checking if correct size
 	size_t line_profile_component_size;
 
-	//Histogram extraction data
-
-	//used for extracting histogram data from mesh
-	cuBReal* histogram;
-	size_t histogram_size;
-
-	//used if we need to pre-average mesh values with a macrocell before extracting histogram
-	VType* histogram_preaverage;
-	size_t histogram_preaverage_size;
-
-	//UVA
+	//----------------- UVA
 
 	//this cuVEC can be part of a mcuVEC (mcuVEC spread across multiple devices)
 	//a mcuVEC_Managed object is held in mcuVEC (man_mcuVEC), one for each device, where each mcuVEC_Managed object has pointers to all cuVECs on all devices
@@ -67,16 +69,18 @@ private:
 	//pmcuVEC will be set externally through the mcuVEC Policy class, so only use it in this mode if the cuVEC is part of a mcuVEC
 	mcuVEC_Managed<cuVEC<VType>, VType>* pmcuVEC;
 
-protected:
-
-	//the actual mesh quantity: addresses gpu memory
+	//----------------- the actual mesh quantity: addresses gpu memory
 	VType* quantity;
+
+	//----------------- Mesh transfer
 
 	//separate object to manage transfer info
 	cuTransfer<VType> transfer;
 
 	//secondary mesh transfer object, can be configured differently
 	cuTransfer<VType> transfer2;
+
+	//----------------- Auxiliary
 
 	//pre-allocated memory used for calculations
 	VType aux_value, aux_value2, aux_value3;
@@ -88,7 +92,7 @@ protected:
 
 public:
 
-	//NOTE : n, h, rect must not be modifed in device code. Only modify them in host code using the set_ methods.
+	//----------------- Dimensions
 
 	//dimensions along x, y and z of the quantity : held in gpu memory
 	cuSZ3 n;
@@ -107,7 +111,7 @@ public:
 	cuReal3 origin;
 
 private:
-	
+
 	//--------------------------------------------MEMORY MANAGEMENT HELPER METHODS : in cuVEC_mng.h
 
 	//memory allocation for objects and initialize to default - only call at start of managed constructors
@@ -123,13 +127,13 @@ private:
 	//from current rectangle and h value set n. h may also need to be adjusted since n must be an integer. Resize quantity to new n value : return success or fail. If failed then nothing changed.
 	__host__ bool set_n_adjust_h(void);
 
+protected:
+
 	//memory management for line_profile_component array : attempt to resize to new size if not already exactly given size
 	__host__ bool allocate_profile_component_memory(size_t size);
 
 	//memory management for histogram array : attempt to resize to new size if not already exactly given size
 	__host__ bool allocate_histogram_memory(size_t histogram_size_cpu, size_t histogram_preaverage_size_cpu);
-
-protected:
 
 	//--------------------------------------------GET/SET FROM/TO GPU MEMORY : cuVEC_mng.h
 
@@ -156,7 +160,7 @@ public:
 
 	//construct to given number of cells : n_ is in cpu memory
 	__host__ void construct_cu_obj(const cuSZ3& n_);
-	
+
 	//construct to given dimensions : h_ and rect_ are in cpu memory
 	__host__ void construct_cu_obj(const cuReal3& h_, const cuRect& rect_);
 
@@ -172,11 +176,12 @@ public:
 	__host__ void destruct_cu_obj(void);
 
 	//called by mcuVEC when mcuVEC_Managed objects are constructed, so pointer can be stored here too (cuVEC_mcuVEC.h)
-	__host__ void set_pmcuVEC(mcuVEC_Managed<cuVEC<VType>, VType>*& pmcuVEC_);
+	__host__ void set_pmcuVEC(mcuVEC_Managed<cuVEC<VType>, VType>*& pmcuVEC_, mcuVEC_Managed<cuVEC<VType>, VType>*& pmcuVEC_Base);
 
 	//--------------------------------------------SPECIAL ACCESS
 
 	__device__ mcuVEC_Managed<cuVEC<VType>, VType>& mcuvec(void);
+	__device__ VType*& aux_block_values_ref(void) { return aux_block_values; }
 
 	//--------------------------------------------COPY TO / FROM VEC : cuVEC_mng.h
 
@@ -259,7 +264,7 @@ public:
 	__host__ bool extract_profile_component_x(cuReal3 start, cuReal3 end, cuBReal step, cuReal3 stencil, cu_arr<cuReal2>& profile_gpu, cuBReal profile_offset = 0);
 	//as above but only component x and pack in profile position too (for VAL3 floating types only). Return data as extracted component in profile_cpu. profile_cpu resized as needed.
 	__host__ bool extract_profile_component_x(cuReal3 start, cuReal3 end, cuBReal step, cuReal3 stencil, std::vector<DBL2>& profile_cpu);
-	
+
 	//as above but only component y and pack in profile position too (for VAL3 floating types only). Return data as extracted component in profile_gpu (which is resized as needed)
 	__host__ bool extract_profile_component_y(cuReal3 start, cuReal3 end, cuBReal step, cuReal3 stencil, cu_arr<cuReal2>& profile_gpu, cuBReal profile_offset = 0);
 	//as above but only component y and pack in profile position too (for VAL3 floating types only). Return data as extracted component in profile_cpu. profile_cpu resized as needed.
@@ -269,7 +274,7 @@ public:
 	__host__ bool extract_profile_component_z(cuReal3 start, cuReal3 end, cuBReal step, cuReal3 stencil, cu_arr<cuReal2>& profile_gpu, cuBReal profile_offset = 0);
 	//as above but only component z and pack in profile position too (for VAL3 floating types only). Return data as extracted component in profile_cpu. profile_cpu resized as needed.
 	__host__ bool extract_profile_component_z(cuReal3 start, cuReal3 end, cuBReal step, cuReal3 stencil, std::vector<DBL2>& profile_cpu);
-	
+
 	//as above but only component which has largest value for the first point and pack in profile position too (after stencil averaging) (for VAL3 floating types only). Return data in profile_gpu (which is resized as needed)
 	//return extracted component : 0 (x), 1 (y), 2 (z), -1 (failed)
 	__host__ int extract_profile_component_max(cuReal3 start, cuReal3 end, cuBReal step, cuReal3 stencil, cu_arr<cuReal2>& profile_gpu, cuBReal profile_offset = 0);
@@ -289,14 +294,14 @@ public:
 	//1 : initialize macrocell preaverage and find macrocell min max, but do not compute final histogram
 	//2 : skip any macrocell preaverage and just compute final histogram
 	__host__ bool get_mag_histogram(
-		std::vector<double>& histogram_x_cpu, std::vector<double>& histogram_p_cpu, 
+		std::vector<double>& histogram_x_cpu, std::vector<double>& histogram_p_cpu,
 		int num_bins, double& min, double& max, size_t num_nonempty_cells = 0, cuINT3 macrocell_dims = cuINT3(1), bool set_output = true, int stage_control = 0);
 
 	//get angular deviation histogram. deviation from ndir direction is calculated, or the average direction if ndir not specified (IsNull)
 	//output transferred to cpu in histogram_cpu if set_output is true, else keep in internal gpu memory
 	//stage_control as above
 	__host__ bool get_ang_histogram(
-		std::vector<double>& histogram_x_cpu, std::vector<double>& histogram_p_cpu, 
+		std::vector<double>& histogram_x_cpu, std::vector<double>& histogram_p_cpu,
 		int num_bins, double& min, double& max, size_t num_nonempty_cells = 0, cuINT3 macrocell_dims = cuINT3(1), VType ndir = VType(), bool set_output = true, int stage_control = 0);
 
 	__host__ size_t get_histogram_size_cpu(void) { return get_gpu_value(histogram_size); }
@@ -307,29 +312,29 @@ public:
 	__device__ VType& operator[](int idx) { return quantity[idx]; }
 
 	//index using a cuVAL3, integral type (e.g. use with nested loops)
-	__device__ VType& operator[](const cuINT3& idx) { return quantity[idx.i + idx.j*n.x + idx.k*n.x*n.y]; }
+	__device__ VType& operator[](const cuINT3& idx) { return quantity[idx.i + idx.j * n.x + idx.k * n.x * n.y]; }
 
 	//index by position relative to cuVEC rect
 	__device__ VType& operator[](const cuReal3& rel_pos) { return quantity[int(rel_pos.x / h.x) + int(rel_pos.y / h.y) * n.x + int(rel_pos.z / h.z) * n.x * n.y]; }
 
 	//--------------------------------------------PROPERTY CHECKING
 
-	__device__ bool is_not_empty(int index) { return (quantity[index] != VType()) ; }
-	__device__ bool is_not_empty(const cuINT3& ijk) { return (quantity[ijk.i + ijk.j*n.x + ijk.k*n.x*n.y] != VType()); }
+	__device__ bool is_not_empty(int index) { return (quantity[index] != VType()); }
+	__device__ bool is_not_empty(const cuINT3& ijk) { return (quantity[ijk.i + ijk.j * n.x + ijk.k * n.x * n.y] != VType()); }
 	__device__ bool is_not_empty(const cuReal3& rel_pos) { return (quantity[int(rel_pos.x / h.x) + int(rel_pos.y / h.y) * n.x + int(rel_pos.z / h.z) * n.x * n.y] != VType()); }
 
 	__device__ bool is_empty(int index) { return (quantity[index] == VType()); }
-	__device__ bool is_empty(const cuINT3& ijk) { return (quantity[ijk.i + ijk.j*n.x + ijk.k*n.x*n.y] == VType()); }
+	__device__ bool is_empty(const cuINT3& ijk) { return (quantity[ijk.i + ijk.j * n.x + ijk.k * n.x * n.y] == VType()); }
 	__device__ bool is_empty(const cuReal3& rel_pos) { return (quantity[int(rel_pos.x / h.x) + int(rel_pos.y / h.y) * n.x + int(rel_pos.z / h.z) * n.x * n.y] == VType()); }
 
 	//--------------------------------------------ITERATORS and SPECIAL ACCESS
-	
+
 	__host__ __device__ VType* begin(void) { return &quantity[0]; }
 	__host__ __device__ VType* end(void) { return &quantity[linear_size()]; }
 	__host__ __device__ VType* data(void) { return quantity; }
-	
+
 	__host__ VType*& quantity_ref(void) { return quantity; }
-	
+
 	__host__ VType& aux_value_ref(void) { return aux_value; }
 	__host__ size_t& aux_integer_ref(void) { return aux_integer; }
 
@@ -372,7 +377,13 @@ public:
 	template <typename PType = decltype(cu_GetMagnitude(std::declval<VType>()))>
 	//Launch it with arr_size = n.dim() : quicker to pass in this value rather than get it internally using get_gpu_value(n).dim()
 	__host__ void renormalize(size_t arr_size, PType new_norm);
-	
+
+	//copy values from copy_this but keep current dimensions - if necessary map values from copy_this to local dimensions
+	__host__ void copy_values(cuVEC<VType>& copy_this, cuBox cells_box_dst, cuBox cells_box_src, cuBReal multiplier = 1.0);
+	//special modification of copy_values method above, where we use copy_this.mcuvec() instead of copy_this directly
+	//this should only be used by mcuVEC
+	__host__ void copy_values_mcuVEC(cuVEC<VType>& copy_this, cuBox cells_box_dst_device, cuBox cells_box_dst, cuBox cells_box_src, cuBReal multiplier = 1.0);
+
 	//--------------------------------------------VEC GENERATORS : cuVEC_generate.cuh
 
 	//linear : use interpolation to set values in this VEC based on projected distance between position1 and position2 and given fixed end values.
@@ -395,18 +406,20 @@ public:
 	//from cell index return cell center coordinates (relative to start of rectangle)
 	__device__ cuReal3 cellidx_to_position(int idx)  const;
 	__host__ cuReal3 cellidx_to_position_cpu(int idx);
-	
+
 	//from cell index return cell center coordinates (relative to start of rectangle)
 	__device__ cuReal3 cellidx_to_position(const cuINT3& ijk)  const;
 	__host__ cuReal3 cellidx_to_position_cpu(cuINT3 ijk);
 
 	//return cell index from relative position : the inverse of cellidx_to_position
-	__device__ int position_to_cellidx(const cuReal3& position) const { return cu_floor_epsilon(position.x / h.x) + cu_floor_epsilon(position.y / h.y) * n.x + cu_floor_epsilon(position.z / h.z) * n.x*n.y; }
+	__device__ int position_to_cellidx(const cuReal3& position) const { return cu_floor_epsilon(position.x / h.x) + cu_floor_epsilon(position.y / h.y) * n.x + cu_floor_epsilon(position.z / h.z) * n.x * n.y; }
 	__host__ int position_to_cellidx_cpu(const cuReal3& position);
 
 	//get index of cell which contains position (absolute value, not relative to start of rectangle), capped to mesh size
 	__device__ cuINT3 cellidx_from_position(const cuReal3& absolute_position)  const;
 	__host__ cuINT3 cellidx_from_position_cpu(cuReal3 absolute_position);
+	//reverse of cellidx_from_position, i.e. return absolute position from given cell index (i.e. similar to cellidx_to_position but absolute not relative)
+	__device__ cuReal3 position_from_cellidx(const cuINT3& ijk) const;
 
 	//pos is a relpos : will return a mrelpos (see comments about origin)
 	__device__ cuReal3 get_crelpos_from_relpos(const cuReal3& pos) { return pos + rect.s - origin; }
@@ -520,7 +533,7 @@ public:
 	//copy pre-calculated transfer info from cpu memory. return false if not enough memory to copy
 	//mesh_in and mesh_in2 vectors must have same sizes
 	//All VECs in mesh_in should be non-empty
-	//Some VECs in mesh_in2 allowed to be non-empty (in this case single input is used), but otherwise should have exactly same dimensions as the corresponding VECs in mesh_in
+	//Some VECs in mesh_in2 allowed to be empty (in this case single input is used), but otherwise should have exactly same dimensions as the corresponding VECs in mesh_in
 	template <typename cpuTransfer>
 	__host__ bool copy_transfer_info_averagedinputs(cu_arr<cuVEC<VType>>& mesh_in_arr1, cu_arr<cuVEC<VType>>& mesh_in_arr2, cu_arr<cuVEC<VType>>& mesh_out_arr, cpuTransfer& vec_transfer)
 	{ 
@@ -550,9 +563,9 @@ public:
 	//MULTIPLE INPUTS, MULTIPLE OUTPUT
 
 	//copy pre-calculated transfer info from cpu memory. return false if not enough memory to copy
-	//mesh_in and mesh_in2 vectors must have same sizes; same as mesh_out, mesh_out2
+	//mesh_in and mesh_in2 vectors must have same sizes; same for mesh_out, mesh_out2
 	//All VECs in mesh_in and mesh_out should be non-empty
-	//Some VECs in mesh_in2 and mesh_out2 allowed to be non-empty (in this single input/output is used), but otherwise should have exactly same dimensions as the corresponding VECs in mesh_in, mesh_out
+	//Some VECs in mesh_in2 and mesh_out2 allowed to be empty (in this single input/output is used), but otherwise should have exactly same dimensions as the corresponding VECs in mesh_in, mesh_out
 	//Also if a VEC in mesh_in2 is non-empty the corresponding VEC in mesh_out2 should also be non-empty.
 	template <typename cpuTransfer>
 	__host__ bool copy_transfer_info_averagedinputs_duplicatedoutputs(cu_arr<cuVEC<VType>>& mesh_in_arr1, cu_arr<cuVEC<VType>>& mesh_in_arr2, cu_arr<cuVEC<VType>>& mesh_out_arr1, cu_arr<cuVEC<VType>>& mesh_out_arr2, cpuTransfer& vec_transfer)

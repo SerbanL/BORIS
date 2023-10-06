@@ -52,7 +52,7 @@ __global__ void viDMExchangeCUDA_FM_UpdateField(ManagedMeshCUDA& cuMesh, Managed
 
 					cuBReal delsq_Msq = 2 * M[idx] * (M.dxx_neu(idx) + M.dyy_neu(idx) + M.dzz_neu(idx)) + 2 * (dMdx * dMdx + dMdy * dMdy + dMdz * dMdz);
 					cuBReal Mnorm = M[idx].norm();
-					Hexch_A = Aconst * (M.delsq_neu(idx) - M[idx] * delsq_Msq / (2 * Mnorm*Mnorm));
+					if (cuIsNZ(Mnorm)) Hexch_A = Aconst * (M.delsq_neu(idx) - M[idx] * delsq_Msq / (2 * Mnorm*Mnorm));
 				}
 				else {
 
@@ -99,7 +99,7 @@ __global__ void viDMExchangeCUDA_FM_UpdateField(ManagedMeshCUDA& cuMesh, Managed
 
 					cuBReal delsq_Msq = 2 * M[idx] * (M.dxx_nneu(idx, bnd_nneu) + M.dyy_nneu(idx, bnd_nneu) + M.dzz_nneu(idx, bnd_nneu)) + 2 * (dMdx * dMdx + dMdy * dMdy + dMdz * dMdz);
 					cuBReal Mnorm = M[idx].norm();
-					Hexch_A = Aconst * (M.delsq_nneu(idx, bnd_nneu) - M[idx] * delsq_Msq / (2 * Mnorm*Mnorm));
+					if (cuIsNZ(Mnorm)) Hexch_A = Aconst * (M.delsq_nneu(idx, bnd_nneu) - M[idx] * delsq_Msq / (2 * Mnorm*Mnorm));
 				}
 				else {
 
@@ -185,8 +185,8 @@ __global__ void viDMExchangeCUDA_AFM_UpdateField(ManagedMeshCUDA& cuMesh, Manage
 
 				cuReal2 Mmag = cuReal2(M[idx].norm(), M2[idx].norm());
 
-				Hexch_A = 2 * A_AFM.i * delsq_M_A / ((cuBReal)MU0 * Ms_AFM.i * Ms_AFM.i) + (-4 * Ah.i * (M[idx] ^ (M[idx] ^ M2[idx])) / (Mmag.i*Mmag.i) + Anh.i * delsq_M_B) / ((cuBReal)MU0*Ms_AFM.i*Ms_AFM.j);
-				Hexch_A2 = 2 * A_AFM.j * delsq_M_B / ((cuBReal)MU0 * Ms_AFM.j * Ms_AFM.j) + (-4 * Ah.j * (M2[idx] ^ (M2[idx] ^ M[idx])) / (Mmag.j*Mmag.j) + Anh.j * delsq_M_A) / ((cuBReal)MU0*Ms_AFM.i*Ms_AFM.j);
+				if (cuIsNZ(Mmag.i)) Hexch_A = 2 * A_AFM.i * delsq_M_A / ((cuBReal)MU0 * Ms_AFM.i * Ms_AFM.i) + (-4 * Ah.i * (M[idx] ^ (M[idx] ^ M2[idx])) / (Mmag.i*Mmag.i) + Anh.i * delsq_M_B) / ((cuBReal)MU0*Ms_AFM.i*Ms_AFM.j);
+				if (cuIsNZ(Mmag.j)) Hexch_A2 = 2 * A_AFM.j * delsq_M_B / ((cuBReal)MU0 * Ms_AFM.j * Ms_AFM.j) + (-4 * Ah.j * (M2[idx] ^ (M2[idx] ^ M[idx])) / (Mmag.j*Mmag.j) + Anh.j * delsq_M_A) / ((cuBReal)MU0*Ms_AFM.i*Ms_AFM.j);
 
 				//2. Dzyaloshinskii-Moriya interfacial exchange contribution
 
@@ -286,8 +286,8 @@ __global__ void viDMExchangeCUDA_AFM_UpdateField(ManagedMeshCUDA& cuMesh, Manage
 				//1. direct exchange contribution + AFM contribution
 
 				//cells marked with cmbnd are calculated using exchange coupling to other ferromagnetic meshes - see below; the delsq_nneu evaluates to zero in the CMBND coupling direction.
-				Hexch_A = 2 * A_AFM.i * delsq_M_A / ((cuBReal)MU0 * Ms_AFM.i * Ms_AFM.i) + (-4 * Ah.i * (M[idx] ^ (M[idx] ^ M2[idx])) / (Mmag.i*Mmag.i) + Anh.i * delsq_M_B) / ((cuBReal)MU0*Ms_AFM.i*Ms_AFM.j);
-				Hexch_A2 = 2 * A_AFM.j * delsq_M_B / ((cuBReal)MU0 * Ms_AFM.j * Ms_AFM.j) + (-4 * Ah.j * (M2[idx] ^ (M2[idx] ^ M[idx])) / (Mmag.j*Mmag.j) + Anh.j * delsq_M_A) / ((cuBReal)MU0*Ms_AFM.i*Ms_AFM.j);
+				if (cuIsNZ(Mmag.i)) Hexch_A = 2 * A_AFM.i * delsq_M_A / ((cuBReal)MU0 * Ms_AFM.i * Ms_AFM.i) + (-4 * Ah.i * (M[idx] ^ (M[idx] ^ M2[idx])) / (Mmag.i*Mmag.i) + Anh.i * delsq_M_B) / ((cuBReal)MU0*Ms_AFM.i*Ms_AFM.j);
+				if (cuIsNZ(Mmag.j)) Hexch_A2 = 2 * A_AFM.j * delsq_M_B / ((cuBReal)MU0 * Ms_AFM.j * Ms_AFM.j) + (-4 * Ah.j * (M2[idx] ^ (M2[idx] ^ M[idx])) / (Mmag.j*Mmag.j) + Anh.j * delsq_M_A) / ((cuBReal)MU0*Ms_AFM.i*Ms_AFM.j);
 
 				//2. Dzyaloshinskii-Moriya interfacial exchange contribution
 

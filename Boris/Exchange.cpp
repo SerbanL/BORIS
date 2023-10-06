@@ -137,7 +137,7 @@ double Exch_6ngbr_Neu::UpdateField(void)
 
 					double delsq_Msq = 2 * pMesh->M[idx] * (pMesh->M.dxx_neu(idx) + pMesh->M.dyy_neu(idx) + pMesh->M.dzz_neu(idx)) + 2 * (dMdx * dMdx + dMdy * dMdy + dMdz * dMdz);
 					double Mnorm = pMesh->M[idx].norm();
-					Hexch = (2 * A / (MU0*Ms*Ms)) * (pMesh->M.delsq_neu(idx) - pMesh->M[idx] * delsq_Msq / (2 * Mnorm*Mnorm));
+					if (IsNZ(Mnorm)) Hexch = (2 * A / (MU0*Ms*Ms)) * (pMesh->M.delsq_neu(idx) - pMesh->M[idx] * delsq_Msq / (2 * Mnorm*Mnorm));
 				}
 				else {
 
@@ -177,10 +177,11 @@ double Exch_6ngbr_Neu::UpdateField(void)
 				DBL3 delsq_M_A = pMesh->M.delsq_neu(idx);
 				DBL3 delsq_M_B = pMesh->M2.delsq_neu(idx);
 
-				DBL2 M = DBL2(pMesh->M[idx].norm(), pMesh->M2[idx].norm());
+				DBL2 Mmag = DBL2(pMesh->M[idx].norm(), pMesh->M2[idx].norm());
 
-				DBL3 Hexch = (2 * A_AFM.i / (MU0*Ms_AFM.i*Ms_AFM.i)) * delsq_M_A + (-4 * Ah.i * (pMesh->M[idx] ^ (pMesh->M[idx] ^ pMesh->M2[idx])) / (M.i*M.i) + Anh.i * delsq_M_B) / (MU0*Ms_AFM.i*Ms_AFM.j);
-				DBL3 Hexch2 = (2 * A_AFM.j / (MU0*Ms_AFM.j*Ms_AFM.j)) * delsq_M_B + (-4 * Ah.j * (pMesh->M2[idx] ^ (pMesh->M2[idx] ^ pMesh->M[idx])) / (M.j*M.j) + Anh.j * delsq_M_A) / (MU0*Ms_AFM.i*Ms_AFM.j);
+				DBL3 Hexch, Hexch2;
+				if (IsNZ(Mmag.i)) Hexch = (2 * A_AFM.i / (MU0*Ms_AFM.i*Ms_AFM.i)) * delsq_M_A + (-4 * Ah.i * (pMesh->M[idx] ^ (pMesh->M[idx] ^ pMesh->M2[idx])) / (Mmag.i* Mmag.i) + Anh.i * delsq_M_B) / (MU0*Ms_AFM.i*Ms_AFM.j);
+				if (IsNZ(Mmag.j)) Hexch2 = (2 * A_AFM.j / (MU0*Ms_AFM.j*Ms_AFM.j)) * delsq_M_B + (-4 * Ah.j * (pMesh->M2[idx] ^ (pMesh->M2[idx] ^ pMesh->M[idx])) / (Mmag.j* Mmag.j) + Anh.j * delsq_M_A) / (MU0*Ms_AFM.i*Ms_AFM.j);
 
 				pMesh->Heff[idx] += Hexch;
 				pMesh->Heff2[idx] += Hexch2;
@@ -200,92 +201,139 @@ double Exch_6ngbr_Neu::UpdateField(void)
 	///////////////////////////////////////////////////////////////////////////////////////////////
 
 	//if exchange coupling across multiple meshes, this is calculation method to use
-	std::function<double(int, int, DBL3, DBL3, DBL3, Mesh&, Mesh&)> calculate_coupling = [&](int cell1_idx, int cell2_idx, DBL3 relpos_m1, DBL3 stencil, DBL3 hshift_primary, Mesh& Mesh_pri, Mesh& Mesh_sec) -> double {
+	std::function<double(int, int, DBL3, DBL3, DBL3, MeshBase&, MeshBase&)> calculate_coupling = [&]
+	(int cell1_idx, int cell2_idx, DBL3 relpos_m1, DBL3 stencil, DBL3 hshift_primary, MeshBase& Mesh_pri, MeshBase& Mesh_sec) -> double {
 
 		double energy_ = 0.0;
 
 		double hR = hshift_primary.norm();
 		double hRsq = hR * hR;
 
-		//AFM to AFM
-		if (Mesh_pri.GetMeshType() == MESH_ANTIFERROMAGNETIC && Mesh_sec.GetMeshType() == MESH_ANTIFERROMAGNETIC) {
+		//this applies for micromagnetic to micromagnetic mesh coupling (note, the primary mesh here will be micromagnetic since Exchange module is held in FM or AFM meshes only)
+		if (!Mesh_pri.is_atomistic() && !Mesh_sec.is_atomistic()) {
 
-			//Both meshes antiferromagnetic : both sub-lattices couple, but do not include anti AF coupling here as it has already been included in the main loop above
-			//here we only compute differential operators across a boundary.
+			Mesh& mMesh_pri = *reinterpret_cast<Mesh*>(&Mesh_pri);
+			Mesh& mMesh_sec = *reinterpret_cast<Mesh*>(&Mesh_sec);
 
-			DBL2 Ms_AFM = Mesh_pri.Ms_AFM;
-			DBL2 A_AFM = Mesh_pri.A_AFM;
-			DBL2 Anh = pMesh->Anh;
-			Mesh_pri.update_parameters_mcoarse(cell1_idx, Mesh_pri.A_AFM, A_AFM, Mesh_pri.Ms_AFM, Ms_AFM, pMesh->Anh, Anh);
+			//AFM to AFM
+			if (Mesh_pri.GetMeshType() == MESH_ANTIFERROMAGNETIC && Mesh_sec.GetMeshType() == MESH_ANTIFERROMAGNETIC) {
 
-			DBL3 Hexch, Hexch_B;
+				//Both meshes antiferromagnetic : both sub-lattices couple, but do not include anti AF coupling here as it has already been included in the main loop above
+				//here we only compute differential operators across a boundary.
 
-			//values at cells -1, 1
-			DBL3 M_1 = Mesh_pri.M[cell1_idx];
-			DBL3 M_m1 = Mesh_sec.M.weighted_average(relpos_m1, stencil);
+				DBL2 Ms_AFM = mMesh_pri.Ms_AFM;
+				DBL2 A_AFM = mMesh_pri.A_AFM;
+				DBL2 Anh = mMesh_pri.Anh;
+				mMesh_pri.update_parameters_mcoarse(cell1_idx, mMesh_pri.A_AFM, A_AFM, mMesh_pri.Ms_AFM, Ms_AFM, mMesh_pri.Anh, Anh);
 
-			DBL3 M_1_B = Mesh_pri.M2[cell1_idx];
-			DBL3 M_m1_B = Mesh_sec.M2.weighted_average(relpos_m1, stencil);
+				DBL3 Hexch, Hexch_B;
 
-			DBL3 delsq_M_A, delsq_M_B;
+				//values at cells -1, 1
+				DBL3 M_1 = mMesh_pri.M[cell1_idx];
+				DBL3 M_m1 = mMesh_sec.M.weighted_average(relpos_m1, stencil);
 
-			if (cell2_idx < Mesh_pri.n.dim() && Mesh_pri.M.is_not_empty(cell2_idx)) {
+				DBL3 M_1_B = mMesh_pri.M2[cell1_idx];
+				DBL3 M_m1_B = mMesh_sec.M2.weighted_average(relpos_m1, stencil);
 
-				//cell2_idx is valid and M is not empty there
-				DBL3 M_2 = Mesh_pri.M[cell2_idx];
-				DBL3 M_2_B = Mesh_pri.M2[cell2_idx];
+				DBL3 delsq_M_A, delsq_M_B;
 
-				delsq_M_A = (M_2 + M_m1 - 2 * M_1) / hRsq;
-				delsq_M_B = (M_2_B + M_m1_B - 2 * M_1_B) / hRsq;
+				if (cell2_idx < mMesh_pri.n.dim() && mMesh_pri.M.is_not_empty(cell2_idx)) {
+
+					//cell2_idx is valid and M is not empty there
+					DBL3 M_2 = mMesh_pri.M[cell2_idx];
+					DBL3 M_2_B = mMesh_pri.M2[cell2_idx];
+
+					delsq_M_A = (M_2 + M_m1 - 2 * M_1) / hRsq;
+					delsq_M_B = (M_2_B + M_m1_B - 2 * M_1_B) / hRsq;
+				}
+				else {
+
+					delsq_M_A = (M_m1 - M_1) / hRsq;
+					delsq_M_B = (M_m1_B - M_1_B) / hRsq;
+				}
+
+				//set effective field value contribution at cell 1 : direct exchange coupling
+				Hexch = (2 * A_AFM.i / (MU0 * Ms_AFM.i * Ms_AFM.i)) * delsq_M_A + (Anh.i / (MU0 * Ms_AFM.i * Ms_AFM.j)) * delsq_M_B;
+				Hexch_B = (2 * A_AFM.j / (MU0 * Ms_AFM.j * Ms_AFM.j)) * delsq_M_B + (Anh.j / (MU0 * Ms_AFM.i * Ms_AFM.j)) * delsq_M_A;
+
+				mMesh_pri.Heff[cell1_idx] += Hexch;
+				mMesh_pri.Heff2[cell1_idx] += Hexch_B;
+
+				energy_ = (M_1 * Hexch + M_1_B * Hexch_B) / 2;
 			}
-			else {
 
-				delsq_M_A = (M_m1 - M_1) / hRsq;
-				delsq_M_B = (M_m1_B - M_1_B) / hRsq;
+			//FM to FM
+			else if (Mesh_pri.GetMeshType() == MESH_FERROMAGNETIC && Mesh_sec.GetMeshType() == MESH_FERROMAGNETIC) {
+
+				//both meshes are ferromagnetic
+				//here we only compute differential operators across a boundary.
+
+				double Ms, A;
+				Ms = mMesh_pri.Ms;
+				A = mMesh_pri.A;
+				mMesh_pri.update_parameters_mcoarse(cell1_idx, mMesh_pri.A, A, mMesh_pri.Ms, Ms);
+
+				DBL3 Hexch;
+
+				//values at cells -1, 1
+				DBL3 M_1 = mMesh_pri.M[cell1_idx];
+				DBL3 M_m1 = mMesh_sec.M.weighted_average(relpos_m1, stencil);
+
+				if (cell2_idx < mMesh_pri.n.dim() && mMesh_pri.M.is_not_empty(cell2_idx)) {
+
+					//cell2_idx is valid and M is not empty there
+					DBL3 M_2 = mMesh_pri.M[cell2_idx];
+
+					//set effective field value contribution at cell 1 : direct exchange coupling 
+					Hexch = (2 * A / (MU0 * Ms * Ms)) * (M_2 + M_m1 - 2 * M_1) / hRsq;
+				}
+				else {
+
+					//set effective field value contribution at cell 1 : direct exchange coupling
+					Hexch = (2 * A / (MU0 * Ms * Ms)) * (M_m1 - M_1) / hRsq;
+				}
+
+				mMesh_pri.Heff[cell1_idx] += Hexch;
+
+				energy_ = M_1 * Hexch;
 			}
-
-			//set effective field value contribution at cell 1 : direct exchange coupling
-			Hexch = (2 * A_AFM.i / (MU0*Ms_AFM.i*Ms_AFM.i)) * delsq_M_A + (Anh.i / (MU0*Ms_AFM.i*Ms_AFM.j)) * delsq_M_B;
-			Hexch_B = (2 * A_AFM.j / (MU0*Ms_AFM.j*Ms_AFM.j)) * delsq_M_B + (Anh.j / (MU0*Ms_AFM.i*Ms_AFM.j)) * delsq_M_A;
-
-			Mesh_pri.Heff[cell1_idx] += Hexch;
-			Mesh_pri.Heff2[cell1_idx] += Hexch_B;
-
-			energy_ = (M_1 * Hexch + M_1_B * Hexch_B) / 2;
 		}
+		//micromagnetic to atomistic mesh coupling (here the secondary mesh will be atomistic, as the primary must be magnetic)
+		//atomistic to FM
+		else if (Mesh_pri.GetMeshType() == MESH_FERROMAGNETIC && Mesh_sec.is_atomistic()) {
 
-		//FM to FM
-		else if (Mesh_pri.GetMeshType() == MESH_FERROMAGNETIC && Mesh_sec.GetMeshType() == MESH_FERROMAGNETIC) {
+			Mesh& mMesh_pri = *reinterpret_cast<Mesh*>(&Mesh_pri);
+			Atom_Mesh& mMesh_sec = *reinterpret_cast<Atom_Mesh*>(&Mesh_sec);
 
-			//both meshes are ferromagnetic
 			//here we only compute differential operators across a boundary.
 
 			double Ms, A;
-			Ms = Mesh_pri.Ms;
-			A = Mesh_pri.A;
-			Mesh_pri.update_parameters_mcoarse(cell1_idx, Mesh_pri.A, A, Mesh_pri.Ms, Ms);
+			Ms = mMesh_pri.Ms;
+			A = mMesh_pri.A;
+			mMesh_pri.update_parameters_mcoarse(cell1_idx, mMesh_pri.A, A, mMesh_pri.Ms, Ms);
 
 			DBL3 Hexch;
 
 			//values at cells -1, 1
-			DBL3 M_1 = Mesh_pri.M[cell1_idx];
-			DBL3 M_m1 = Mesh_sec.M.weighted_average(relpos_m1, stencil);
+			DBL3 M_1 = mMesh_pri.M[cell1_idx];
+			DBL3 M_m1 = mMesh_sec.M1.average(Rect(relpos_m1 - stencil / 2, relpos_m1 + stencil / 2)) * MUB / mMesh_sec.h.dim();
 
-			if (cell2_idx < Mesh_pri.n.dim() && Mesh_pri.M.is_not_empty(cell2_idx)) {
+			if (cell2_idx < mMesh_pri.n.dim() && mMesh_pri.M.is_not_empty(cell2_idx)) {
 
 				//cell2_idx is valid and M is not empty there
-				DBL3 M_2 = Mesh_pri.M[cell2_idx];
+				DBL3 M_2 = mMesh_pri.M[cell2_idx];
 
 				//set effective field value contribution at cell 1 : direct exchange coupling 
-				Hexch = (2 * A / (MU0*Ms*Ms)) * (M_2 + M_m1 - 2 * M_1) / hRsq;
+				if (M_m1 != DBL3()) Hexch = (2 * A / (MU0 * Ms * Ms)) * (M_2 + M_m1 - 2 * M_1) / hRsq;
+				else Hexch = (2 * A / (MU0 * Ms * Ms)) * (M_2 - M_1) / hRsq;
 			}
 			else {
 
 				//set effective field value contribution at cell 1 : direct exchange coupling
-				Hexch = (2 * A / (MU0*Ms*Ms)) * (M_m1 - M_1) / hRsq;
+				if (M_m1 != DBL3()) Hexch = (2 * A / (MU0 * Ms * Ms)) * (M_m1 - M_1) / hRsq;
 			}
 
-			Mesh_pri.Heff[cell1_idx] += Hexch;
+			mMesh_pri.Heff[cell1_idx] += Hexch;
 
 			energy_ = M_1 * Hexch;
 		}

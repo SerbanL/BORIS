@@ -35,9 +35,9 @@ TMRCUDA::TMRCUDA(TMR* pTMR_) :
 
 		//Poisson objects
 		error_on_create = poisson_V.set_pointers(pMeshCUDA);
-		error_on_create = poisson_Spin_S.set_pointers(pMeshCUDA, this);
 		error_on_create = poisson_Spin_V.set_pointers(pMeshCUDA, this);
-
+		error_on_create = poisson_Spin_S.set_pointers(pMeshCUDA, this);
+		
 		//CMBND objects
 		error_on_create = charge_V_cmbnd_funcs_pri.set_pointers(pMeshCUDA);
 		error_on_create = charge_V_cmbnd_funcs_sec.set_pointers(pMeshCUDA);

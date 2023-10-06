@@ -429,6 +429,21 @@
     <Filter Include="06. DEMAG\ATOMISTIC\DEMAG - CUDA">
       <UniqueIdentifier>{fa4d58a8-f290-4b93-a543-5e9779b7f7e1}</UniqueIdentifier>
     </Filter>
+    <Filter Include="08. EXCHANGE\EXCHANGE BASE -CPU">
+      <UniqueIdentifier>{765339db-5cae-4486-b790-227a300f429b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="08. EXCHANGE\EXCHANGE BASE - CUDA">
+      <UniqueIdentifier>{ea72c360-7103-4cf2-88cf-5f10cbcabf15}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="07. SUPERMESH DEMAG\DEMAG - SUPERMESH - CUDA\SUPERMESH DEMAG">
+      <UniqueIdentifier>{06798a3c-e9c0-48ac-9eaa-ab9643ebdf41}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="07. SUPERMESH DEMAG\DEMAG - SUPERMESH - CUDA\MULTICONV DEMAG">
+      <UniqueIdentifier>{28f4a5b4-7826-4b90-bd80-4873f9fe6a6a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="06. DEMAG\EVALSPEEDUP">
+      <UniqueIdentifier>{a2c8490d-d2ff-4e7a-a8e4-1a5e5e4f29dd}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <Text Include="ReadMe.txt" />
@@ -608,9 +623,6 @@
     <ClInclude Include="SDemagCUDA.h">
       <Filter>07. SUPERMESH DEMAG\DEMAG - SUPERMESH - CUDA</Filter>
     </ClInclude>
-    <ClInclude Include="SDemagCUDA_Demag.h">
-      <Filter>07. SUPERMESH DEMAG\DEMAG - SUPERMESH - CUDA</Filter>
-    </ClInclude>
     <ClInclude Include="CompileFlags.h">
       <Filter>15. AUXILIARY</Filter>
     </ClInclude>
@@ -642,9 +654,6 @@
       <Filter>08. EXCHANGE\__MICROMAGNETIC\EXCHANGE - CUDA</Filter>
     </ClInclude>
     <ClInclude Include="iDMExchangeCUDA.h">
-      <Filter>08. EXCHANGE\__MICROMAGNETIC\EXCHANGE - CUDA</Filter>
-    </ClInclude>
-    <ClInclude Include="ExchangeBaseCUDA.h">
       <Filter>08. EXCHANGE\__MICROMAGNETIC\EXCHANGE - CUDA</Filter>
     </ClInclude>
     <ClInclude Include="resource.h">
@@ -873,9 +882,6 @@
       <Filter>08. EXCHANGE\__MICROMAGNETIC\EXCHANGE - CPU</Filter>
     </ClInclude>
     <ClInclude Include="Exchange.h">
-      <Filter>08. EXCHANGE\__MICROMAGNETIC\EXCHANGE - CPU</Filter>
-    </ClInclude>
-    <ClInclude Include="ExchangeBase.h">
       <Filter>08. EXCHANGE\__MICROMAGNETIC\EXCHANGE - CPU</Filter>
     </ClInclude>
     <ClInclude Include="iDMExchange.h">
@@ -1274,6 +1280,39 @@
     <ClInclude Include="Atom_DipoleDipoleMCUDA_single.h">
       <Filter>06. DEMAG\ATOMISTIC\DEMAG - CUDA</Filter>
     </ClInclude>
+    <ClInclude Include="Atom_Mesh_CubicCUDA_Thermalize.h">
+      <Filter>02. MESHES\__ATOMISTIC\CUDA\ATOM MESHES - CUDA</Filter>
+    </ClInclude>
+    <ClInclude Include="ExchangeBase.h">
+      <Filter>08. EXCHANGE\EXCHANGE BASE -CPU</Filter>
+    </ClInclude>
+    <ClInclude Include="ExchangeBaseCUDA.h">
+      <Filter>08. EXCHANGE\EXCHANGE BASE - CUDA</Filter>
+    </ClInclude>
+    <ClInclude Include="Atom_Mesh_CubicCUDA_ThermalizePolicy.h">
+      <Filter>02. MESHES\__ATOMISTIC\CUDA\ATOM MESHES - CUDA</Filter>
+    </ClInclude>
+    <ClInclude Include="OerstedMCUDA_single.h">
+      <Filter>05. SUPERMESH MODULES\MODULES - SUPERMESH - CUDA</Filter>
+    </ClInclude>
+    <ClInclude Include="SDemagMCUDA_single.h">
+      <Filter>07. SUPERMESH DEMAG\DEMAG - SUPERMESH - CUDA\SUPERMESH DEMAG</Filter>
+    </ClInclude>
+    <ClInclude Include="SDemagMCUDA_Demag_single.h">
+      <Filter>07. SUPERMESH DEMAG\DEMAG - SUPERMESH - CUDA\MULTICONV DEMAG</Filter>
+    </ClInclude>
+    <ClInclude Include="SDemagCUDA_Demag.h">
+      <Filter>07. SUPERMESH DEMAG\DEMAG - SUPERMESH - CUDA\MULTICONV DEMAG</Filter>
+    </ClInclude>
+    <ClInclude Include="EvalSpeedupCUDA.h">
+      <Filter>06. DEMAG\EVALSPEEDUP</Filter>
+    </ClInclude>
+    <ClInclude Include="EvalSpeedupDefs.h">
+      <Filter>06. DEMAG\EVALSPEEDUP</Filter>
+    </ClInclude>
+    <ClInclude Include="EvalSpeedup.h">
+      <Filter>06. DEMAG\EVALSPEEDUP</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="BorisGraphics.cpp">
@@ -1426,9 +1465,6 @@
     <ClCompile Include="SDemagCUDA.cpp">
       <Filter>07. SUPERMESH DEMAG\DEMAG - SUPERMESH - CUDA</Filter>
     </ClCompile>
-    <ClCompile Include="SDemagCUDA_Demag.cpp">
-      <Filter>07. SUPERMESH DEMAG\DEMAG - SUPERMESH - CUDA</Filter>
-    </ClCompile>
     <ClCompile Include="AnisotropyCubiCUDA.cpp">
       <Filter>03. MODULES\__MICROMAGNETIC\MM MODULES - CUDA</Filter>
     </ClCompile>
@@ -1457,9 +1493,6 @@
       <Filter>08. EXCHANGE\__MICROMAGNETIC\EXCHANGE - CUDA</Filter>
     </ClCompile>
     <ClCompile Include="iDMExchangeCUDA.cpp">
-      <Filter>08. EXCHANGE\__MICROMAGNETIC\EXCHANGE - CUDA</Filter>
-    </ClCompile>
-    <ClCompile Include="ExchangeBaseCUDA.cpp">
       <Filter>08. EXCHANGE\__MICROMAGNETIC\EXCHANGE - CUDA</Filter>
     </ClCompile>
     <ClCompile Include="Mesh_AntiFerromagnetic.cpp">
@@ -1898,9 +1931,6 @@
       <Filter>08. EXCHANGE\__MICROMAGNETIC\EXCHANGE - CPU</Filter>
     </ClCompile>
     <ClCompile Include="Exchange.cpp">
-      <Filter>08. EXCHANGE\__MICROMAGNETIC\EXCHANGE - CPU</Filter>
-    </ClCompile>
-    <ClCompile Include="ExchangeBase.cpp">
       <Filter>08. EXCHANGE\__MICROMAGNETIC\EXCHANGE - CPU</Filter>
     </ClCompile>
     <ClCompile Include="iDMExchange.cpp">
@@ -2398,6 +2428,54 @@
     <ClCompile Include="Atom_DipoleDipoleMCUDA_single.cpp">
       <Filter>06. DEMAG\ATOMISTIC\DEMAG - CUDA</Filter>
     </ClCompile>
+    <ClCompile Include="Mesh_AntiFerromagnetic_Algorithms.cpp">
+      <Filter>02. MESHES\__MICROMAGNETIC\CPU\MM MESHES - CPU</Filter>
+    </ClCompile>
+    <ClCompile Include="Mesh_Ferromagnetic_Algorithms.cpp">
+      <Filter>02. MESHES\__MICROMAGNETIC\CPU\MM MESHES - CPU</Filter>
+    </ClCompile>
+    <ClCompile Include="Atom_Mesh_Cubic_Algorithms.cpp">
+      <Filter>02. MESHES\__ATOMISTIC\CPU\ATOM MESHES - CPU</Filter>
+    </ClCompile>
+    <ClCompile Include="Atom_Mesh_CubicCUDA_Thermalize.cpp">
+      <Filter>02. MESHES\__ATOMISTIC\CUDA\ATOM MESHES - CUDA</Filter>
+    </ClCompile>
+    <ClCompile Include="ExchangeBase.cpp">
+      <Filter>08. EXCHANGE\EXCHANGE BASE -CPU</Filter>
+    </ClCompile>
+    <ClCompile Include="ExchangeBaseCUDA.cpp">
+      <Filter>08. EXCHANGE\EXCHANGE BASE - CUDA</Filter>
+    </ClCompile>
+    <ClCompile Include="OerstedMCUDA_single.cpp">
+      <Filter>05. SUPERMESH MODULES\MODULES - SUPERMESH - CUDA</Filter>
+    </ClCompile>
+    <ClCompile Include="SDemagCUDA_SMesh.cpp">
+      <Filter>07. SUPERMESH DEMAG\DEMAG - SUPERMESH - CUDA\SUPERMESH DEMAG</Filter>
+    </ClCompile>
+    <ClCompile Include="SDemagMCUDA_single.cpp">
+      <Filter>07. SUPERMESH DEMAG\DEMAG - SUPERMESH - CUDA\SUPERMESH DEMAG</Filter>
+    </ClCompile>
+    <ClCompile Include="SDemagMCUDA_Demag_single.cpp">
+      <Filter>07. SUPERMESH DEMAG\DEMAG - SUPERMESH - CUDA\MULTICONV DEMAG</Filter>
+    </ClCompile>
+    <ClCompile Include="SDemagCUDA_Demag.cpp">
+      <Filter>07. SUPERMESH DEMAG\DEMAG - SUPERMESH - CUDA\MULTICONV DEMAG</Filter>
+    </ClCompile>
+    <ClCompile Include="SDemagCUDA_MConv.cpp">
+      <Filter>07. SUPERMESH DEMAG\DEMAG - SUPERMESH - CUDA\MULTICONV DEMAG</Filter>
+    </ClCompile>
+    <ClCompile Include="EvalSpeedupCUDA.cpp">
+      <Filter>06. DEMAG\EVALSPEEDUP</Filter>
+    </ClCompile>
+    <ClCompile Include="EvalSpeedup.cpp">
+      <Filter>06. DEMAG\EVALSPEEDUP</Filter>
+    </ClCompile>
+    <ClCompile Include="SDemag_MConv.cpp">
+      <Filter>07. SUPERMESH DEMAG\DEMAG - SUPERMESH - CPU</Filter>
+    </ClCompile>
+    <ClCompile Include="SDemag_SMesh.cpp">
+      <Filter>07. SUPERMESH DEMAG\DEMAG - SUPERMESH - CPU</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="BorisWinapi.rc">
@@ -2462,9 +2540,6 @@
     </CudaCompile>
     <CudaCompile Include="RoughnessCUDA.cu">
       <Filter>03. MODULES\__MICROMAGNETIC\MM MODULES - CUDA</Filter>
-    </CudaCompile>
-    <CudaCompile Include="SDemagCUDA_Demag.cu">
-      <Filter>07. SUPERMESH DEMAG\DEMAG - SUPERMESH - CUDA</Filter>
     </CudaCompile>
     <CudaCompile Include="DMExchangeCUDA.cu">
       <Filter>08. EXCHANGE\__MICROMAGNETIC\EXCHANGE - CUDA</Filter>
@@ -2894,6 +2969,36 @@
     </CudaCompile>
     <CudaCompile Include="Atom_DipoleDipoleMCUDA_single.cu">
       <Filter>06. DEMAG\ATOMISTIC\DEMAG - CUDA</Filter>
+    </CudaCompile>
+    <CudaCompile Include="Atom_Mesh_CubicCUDA_Algorithms.cu">
+      <Filter>02. MESHES\__ATOMISTIC\CUDA\ATOM MESHES - CUDA</Filter>
+    </CudaCompile>
+    <CudaCompile Include="Atom_DMExchangeCoupling_CUDA.cu">
+      <Filter>08. EXCHANGE\__ATOMISTIC\ATOM EXCHANGE - CUDA</Filter>
+    </CudaCompile>
+    <CudaCompile Include="Atom_ExchangeCoupling_CUDA.cu">
+      <Filter>08. EXCHANGE\__ATOMISTIC\ATOM EXCHANGE - CUDA</Filter>
+    </CudaCompile>
+    <CudaCompile Include="Atom_iDMExchangeCoupling_CUDA.cu">
+      <Filter>08. EXCHANGE\__ATOMISTIC\ATOM EXCHANGE - CUDA</Filter>
+    </CudaCompile>
+    <CudaCompile Include="OerstedMCUDA_single.cu">
+      <Filter>05. SUPERMESH MODULES\MODULES - SUPERMESH - CUDA</Filter>
+    </CudaCompile>
+    <CudaCompile Include="SDemagCUDA_SMesh.cu">
+      <Filter>07. SUPERMESH DEMAG\DEMAG - SUPERMESH - CUDA\SUPERMESH DEMAG</Filter>
+    </CudaCompile>
+    <CudaCompile Include="SDemagMCUDA_single.cu">
+      <Filter>07. SUPERMESH DEMAG\DEMAG - SUPERMESH - CUDA\SUPERMESH DEMAG</Filter>
+    </CudaCompile>
+    <CudaCompile Include="SDemagMCUDA_Demag_single.cu">
+      <Filter>07. SUPERMESH DEMAG\DEMAG - SUPERMESH - CUDA\MULTICONV DEMAG</Filter>
+    </CudaCompile>
+    <CudaCompile Include="SDemagCUDA_Demag.cu">
+      <Filter>07. SUPERMESH DEMAG\DEMAG - SUPERMESH - CUDA\MULTICONV DEMAG</Filter>
+    </CudaCompile>
+    <CudaCompile Include="EvalSpeedupCUDA.cu">
+      <Filter>06. DEMAG\EVALSPEEDUP</Filter>
     </CudaCompile>
   </ItemGroup>
 </Project>

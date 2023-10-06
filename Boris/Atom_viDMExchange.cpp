@@ -12,6 +12,7 @@
 
 Atom_viDMExchange::Atom_viDMExchange(Atom_Mesh *paMesh_) :
 	Modules(),
+	ExchangeBase(paMesh_),
 	ProgramStateNames(this, {}, {})
 {
 	paMesh = paMesh_;
@@ -30,6 +31,8 @@ Atom_viDMExchange::Atom_viDMExchange(Atom_Mesh *paMesh_) :
 BError Atom_viDMExchange::Initialize(void)
 {
 	BError error(CLASS_STR(Atom_viDMExchange));
+
+	error = ExchangeBase::Initialize();
 
 	//Make sure display data has memory allocated (or freed) as required
 	error = Update_Module_Display_VECs(
@@ -133,6 +136,16 @@ double Atom_viDMExchange::UpdateField(void)
 		}
 	}
 
+	///////////////////////////////////////////////////////////////////////////////////////////////
+	/////////////////////////////// COUPLING ACROSS MULTIPLE MESHES ///////////////////////////////
+	///////////////////////////////////////////////////////////////////////////////////////////////
+
+	//Not implemented for this module
+
+	///////////////////////////////////////////////////////////////////////////////////////////////
+	///////////////////////////////////// FINAL ENERGY DENSITY VALUE //////////////////////////////
+	///////////////////////////////////////////////////////////////////////////////////////////////
+	
 	//convert to energy density and return. Divide by two since in the Hamiltonian the sum is performed only once for every pair of spins, but if you use the M.H expression each sum appears twice.
 	//Also note, this energy density is not the same as the micromagnetic one, due to different zero-energy points.
 	if (non_empty_volume) this->energy = -MUB_MU0 * energy / (2 * non_empty_volume);

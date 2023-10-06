@@ -9,7 +9,7 @@
 #endif
 
 class SuperMesh;
-class Mesh;
+class MeshBase;
 
 class ExchangeBase {
 
@@ -20,7 +20,7 @@ class ExchangeBase {
 private:
 
 	//pointer to mesh object holding this effective field module
-	Mesh *pMesh;
+	MeshBase *pMeshBase;
 
 	//CMBND contacts between this mesh and other (anti)ferromagnetic meshes (we do not require other ferromagnetic meshes to have an exchange module enabled, just this one).
 	std::vector<CMBNDInfo> CMBNDcontacts;
@@ -29,7 +29,7 @@ private:
 	std::vector<VEC_VC<DBL3>*> pM;
 
 	//vector of pointers to all ferromagnetic meshes - same ordering as pM
-	std::vector<Mesh*> pMeshes;
+	std::vector<MeshBase*> pMeshes;
 
 protected:
 
@@ -43,10 +43,10 @@ protected:
 	//this method takes the following inputs: cell1_idx, cell2_idx, relpos_m1, stencil, hshift_primary, Mesh_pri, Mesh_sec, and returns an energy density value to accumulate; hshift_primary is the normal direction cellsize (from primary to secondary)
 	void CalculateExchangeCoupling(
 		double& energy,
-		std::function<double(int, int, DBL3, DBL3, DBL3, Mesh&, Mesh&)> calculate_coupling);
+		std::function<double(int, int, DBL3, DBL3, DBL3, MeshBase&, MeshBase&)> calculate_coupling);
 
 	//protected constructor - this class should not be instantiated by itself, but only used as a base for an exchange-type module for purposes of code reuse
-	ExchangeBase(Mesh *pMesh_);
+	ExchangeBase(MeshBase *pMeshBase_);
 
 	virtual ~ExchangeBase() {}
 };

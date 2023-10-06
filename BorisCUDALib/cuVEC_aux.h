@@ -63,6 +63,14 @@ __device__ cuINT3 cuVEC<VType>::cellidx_from_position(const cuReal3& absolute_po
 	return ijk;
 }
 
+//reverse of cellidx_from_position, i.e. return absolute position from given cell index (i.e. similar to cellidx_to_position but absolute not relative)
+template <typename VType>
+__device__ cuReal3 cuVEC<VType>::position_from_cellidx(const cuINT3& ijk) const
+{
+	cuReal3 ijk_pos = cuReal3(ijk.i + 0.5, ijk.j + 0.5, ijk.k + 0.5);
+	return (h & ijk_pos) + rect.s;
+}
+
 template <typename VType>
 __host__ cuINT3 cuVEC<VType>::cellidx_from_position_cpu(cuReal3 absolute_position)
 {

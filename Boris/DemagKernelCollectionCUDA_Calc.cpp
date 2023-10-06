@@ -35,7 +35,7 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels(std::vector<DemagKerne
 				h_src = h;
 				h_dst = kernelCollection[index]->h;
 			}
-
+			
 			for (int idx = 0; idx < kernelCollection.size(); idx++) {
 
 				std::shared_ptr<cu_obj<cuKerType>> existing_kernel = kernelCollection[idx]->KernelAlreadyComputed(shift, h_src, h_dst, device_index);
@@ -69,7 +69,7 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels(std::vector<DemagKerne
 
 				//no -> allocate then compute it
 				kernels[index] = std::shared_ptr<cu_obj<cuKerType>>(new cu_obj<cuKerType>(device_index));
-				if (!(*kernels[index])()->AllocateKernels(Rect_collection[index], this_rect, N)) return error(BERROR_OUTOFGPUMEMORY_CRIT);
+				if (!(*kernels[index])()->AllocateKernels(Rect_collection[index], this_rect, nxRegion, N)) return error(BERROR_OUTOFGPUMEMORY_CRIT);
 
 				//is it z shifted? keep copy of flag in cpu memory
 				zshifted[index] = (*kernels[index])()->GetFlag_zShifted();
@@ -139,7 +139,7 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels(std::vector<DemagKerne
 						}
 					}
 				}
-
+				
 				//set flag to say it's been computed so it could be reused if needed
 				if (!error) (*kernels[index])()->SetFlag_Calculated(true);
 			}
@@ -201,17 +201,30 @@ std::shared_ptr<cu_obj<cuKerType>> DemagKernelCollectionCUDA::KernelAlreadyCompu
 BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_2D_Self(int index, bool initialize_on_gpu)
 {
 	BError error(__FUNCTION__);
-	
+
 	if (initialize_on_gpu) {
 
 		//first attempt to compute kernels on GPU
 		error = Calculate_Demag_Kernels_2D_Self_onGPU(index);
 
-		//if it fails (out of GPU memory) then next attempt to initialize on CPU
-		if (error) { error.reset(); error(BWARNING_NOGPUINITIALIZATION); }
+		if (error) {
+
+			//if it fails (out of GPU memory) then next attempt to run convolution with reduced memory usage...
+			error.reset();
+			error = Set_Preserve_Zero_Padding(false);
+			if (!error) {
+
+				//...and try again
+				error = Calculate_Demag_Kernels_2D_Self_onGPU(index);
+				//if this still fails then finally try to initialize on cpu below
+				if (error) { error.reset(); error(BWARNING_NOGPUINITIALIZATION); }
+				else return error;
+			}
+			else return error;
+		}
 		else return error;
 	}
-	
+
 	//-------------- CALCULATE DEMAG TENSOR
 
 	//Demag tensor components
@@ -258,14 +271,14 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_2D_Self(int index, boo
 
 	if (!transpose_xy) {
 
-		if (!Kdiag_cpu.resize(SZ3(N.x / 2 + 1, N.y / 2 + 1, 1))) return error(BERROR_OUTOFMEMORY_CRIT);
+		if (!Kdiag_cpu.resize(SZ3(nxRegion, N.y / 2 + 1, 1))) return error(BERROR_OUTOFMEMORY_CRIT);
 	}
 	else {
 
-		if (!Kdiag_cpu.resize(SZ3(N.y / 2 + 1, N.x / 2 + 1, 1))) return error(BERROR_OUTOFMEMORY_CRIT);
+		if (!Kdiag_cpu.resize(SZ3(N.y / 2 + 1, nxRegion, 1))) return error(BERROR_OUTOFMEMORY_CRIT);
 	}
 
-	if (!malloc_vector(K2D_odiag_cpu, (N.x / 2 + 1) * (N.y / 2 + 1))) return error(BERROR_OUTOFMEMORY_CRIT);
+	if (!malloc_vector(K2D_odiag_cpu, nxRegion * (N.y / 2 + 1))) return error(BERROR_OUTOFMEMORY_CRIT);
 
 	//-------------- SETUP FFT
 
@@ -317,24 +330,24 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_2D_Self(int index, boo
 		fftw_execute(plan_fwd_x_odiag);
 
 		//pack into tensor for next step
-		for (int i = 0; i < N.x / 2 + 1; i++) {
+		for (int i = 0; i < nxRegion; i++) {
 
-			ReIm3 value = *reinterpret_cast<ReIm3*>(pline + i * 3);
-			ReIm value_odiag = *reinterpret_cast<ReIm*>(pline_odiag + i);
+			ReIm3 value = *reinterpret_cast<ReIm3*>(pline + (i + xRegion.i) * 3);
+			ReIm value_odiag = *reinterpret_cast<ReIm*>(pline_odiag + i + xRegion.i);
 
-			Ddiag[i + j * (N.x / 2 + 1)] = DBL3(value.x.Re, value.y.Re, value.z.Re);
-			Dodiag[i + j * (N.x / 2 + 1)] = value_odiag.Im;
+			Ddiag[i + j * nxRegion] = DBL3(value.x.Re, value.y.Re, value.z.Re);
+			Dodiag[i + j * nxRegion] = value_odiag.Im;
 		}
 	}
 
 	//2. FFTs along y
-	for (int i = 0; i < (N.x / 2 + 1); i++) {
+	for (int i = 0; i < nxRegion; i++) {
 
 		//fetch line from array
 		for (int j = 0; j < N.y; j++) {
 
-			*reinterpret_cast<DBL3*>(pline_real + j * 3) = Ddiag[i + j * (N.x / 2 + 1)];
-			*reinterpret_cast<double*>(pline_real_odiag + j) = Dodiag[i + j * (N.x / 2 + 1)];
+			*reinterpret_cast<DBL3*>(pline_real + j * 3) = Ddiag[i + j * nxRegion];
+			*reinterpret_cast<double*>(pline_real_odiag + j) = Dodiag[i + j * nxRegion];
 		}
 
 		//fft on line
@@ -350,11 +363,11 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_2D_Self(int index, boo
 			if (!transpose_xy) {
 
 				//even w.r.t. y so output is purely real
-				Kdiag_cpu[i + j * (N.x / 2 + 1)] = DBL3(value.x.Re, value.y.Re, value.z.Re);
+				Kdiag_cpu[i + j * nxRegion] = DBL3(value.x.Re, value.y.Re, value.z.Re);
 
 				//odd w.r.t. y so the purely imaginary input becomes purely real
 				//however since we used CopyRealShuffle and RealfromComplexFFT, i.e. treating the input as purely real rather than purely imaginary we need to account for the i * i = -1 term, hence the - sign below
-				K2D_odiag_cpu[i + j * (N.x / 2 + 1)] = -value_odiag.Im;
+				K2D_odiag_cpu[i + j * nxRegion] = -value_odiag.Im;
 			}
 			else {
 
@@ -398,11 +411,24 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_2D_zShifted(int index,
 		//first attempt to compute kernels on GPU
 		error = Calculate_Demag_Kernels_2D_zShifted_onGPU(index);
 
-		//if it fails (out of GPU memory) then next attempt to initialize on CPU
-		if (error) { error.reset(); error(BWARNING_NOGPUINITIALIZATION); }
+		if (error) {
+
+			//if it fails (out of GPU memory) then next attempt to run convolution with reduced memory usage...
+			error.reset();
+			error = Set_Preserve_Zero_Padding(false);
+			if (!error) {
+
+				//...and try again
+				error = Calculate_Demag_Kernels_2D_zShifted_onGPU(index);
+				//if this still fails then finally try to initialize on cpu below
+				if (error) { error.reset(); error(BWARNING_NOGPUINITIALIZATION); }
+				else return error;
+			}
+			else return error;
+		}
 		else return error;
 	}
-	
+
 	//-------------- DEMAG TENSOR
 
 	//Demag tensor components
@@ -426,11 +452,11 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_2D_zShifted(int index,
 
 	if (!transpose_xy) {
 
-		if (!K_cpu.resize(SZ3(N.x / 2 + 1, N.y / 2 + 1, N.z))) return error(BERROR_OUTOFMEMORY_CRIT);
+		if (!K_cpu.resize(SZ3(nxRegion, N.y / 2 + 1, N.z))) return error(BERROR_OUTOFMEMORY_CRIT);
 	}
 	else {
 
-		if (!K_cpu.resize(SZ3(N.y / 2 + 1, N.x / 2 + 1, N.z))) return error(BERROR_OUTOFMEMORY_CRIT);
+		if (!K_cpu.resize(SZ3(N.y / 2 + 1, nxRegion, N.z))) return error(BERROR_OUTOFMEMORY_CRIT);
 	}
 
 	//-------------- SETUP FFT
@@ -472,30 +498,30 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_2D_zShifted(int index,
 			fftw_execute(plan_fwd_x);
 
 			//pack into tensor for next step
-			for (int i = 0; i < N.x / 2 + 1; i++) {
+			for (int i = 0; i < nxRegion; i++) {
 
-				ReIm3 value = *reinterpret_cast<ReIm3*>(pline + i * 3);
+				ReIm3 value = *reinterpret_cast<ReIm3*>(pline + (i + xRegion.i) * 3);
 
 				if (!off_diagonal) {
 
 					//even w.r.t. to x so output is purely real
-					tensor[i + j * (N.x / 2 + 1)] = DBL3(value.x.Re, value.y.Re, value.z.Re);
+					tensor[i + j * nxRegion] = DBL3(value.x.Re, value.y.Re, value.z.Re);
 				}
 				else {
 
 					//Dxy : odd x, Dxz : odd x, Dyz : even x
-					tensor[i + j * (N.x / 2 + 1)] = DBL3(value.x.Im, value.y.Im, value.z.Re);
+					tensor[i + j * nxRegion] = DBL3(value.x.Im, value.y.Im, value.z.Re);
 				}
 			}
 		}
 
 		//2. FFTs along y
-		for (int i = 0; i < (N.x / 2 + 1); i++) {
+		for (int i = 0; i < nxRegion; i++) {
 
 			//fetch line from fft array (zero padding kept)
 			for (int j = 0; j < N.y; j++) {
 
-				int idx_in = i + j * (N.x / 2 + 1);
+				int idx_in = i + j * nxRegion;
 
 				*reinterpret_cast<DBL3*>(pline_real + j * 3) = tensor[idx_in];
 			}
@@ -513,12 +539,12 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_2D_zShifted(int index,
 					if (!off_diagonal) {
 
 						//even w.r.t. to y so output is purely real
-						kernel[i + j * (N.x / 2 + 1)] = DBL3(value.x.Re, value.y.Re, value.z.Re);
+						kernel[i + j * nxRegion] = DBL3(value.x.Re, value.y.Re, value.z.Re);
 					}
 					else {
 
 						//adjust for i * i = -1 in Nxy element
-						kernel[i + j * (N.x / 2 + 1)] = DBL3(-value.x.Im, value.y.Re, value.z.Im);
+						kernel[i + j * nxRegion] = DBL3(-value.x.Im, value.y.Re, value.z.Im);
 					}
 				}
 				else {
@@ -596,11 +622,24 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_2D_xShifted(int index,
 		//first attempt to compute kernels on GPU
 		error = Calculate_Demag_Kernels_2D_xShifted_onGPU(index);
 
-		//if it fails (out of GPU memory) then next attempt to initialize on CPU
-		if (error) { error.reset(); error(BWARNING_NOGPUINITIALIZATION); }
+		if (error) {
+
+			//if it fails (out of GPU memory) then next attempt to run convolution with reduced memory usage...
+			error.reset();
+			error = Set_Preserve_Zero_Padding(false);
+			if (!error) {
+
+				//...and try again
+				error = Calculate_Demag_Kernels_2D_xShifted_onGPU(index);
+				//if this still fails then finally try to initialize on cpu below
+				if (error) { error.reset(); error(BWARNING_NOGPUINITIALIZATION); }
+				else return error;
+			}
+			else return error;
+		}
 		else return error;
 	}
-	
+
 	//-------------- DEMAG TENSOR
 
 	//Demag tensor components
@@ -621,17 +660,17 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_2D_xShifted(int index,
 	//-------------- DEMAG KERNEL ON CPU-ADDRESSABLE MEMORY
 
 	VEC<ReIm3> Scratch;
-	if (!Scratch.resize(SZ3(N.x / 2 + 1, N.y, N.z))) return error(BERROR_OUTOFMEMORY_CRIT);
+	if (!Scratch.resize(SZ3(nxRegion, N.y, N.z))) return error(BERROR_OUTOFMEMORY_CRIT);
 
 	VEC<ReIm3> K_cpu;
 
 	if (!transpose_xy) {
 
-		if (!K_cpu.resize(SZ3(N.x / 2 + 1, N.y / 2 + 1, N.z))) return error(BERROR_OUTOFMEMORY_CRIT);
+		if (!K_cpu.resize(SZ3(nxRegion, N.y / 2 + 1, N.z))) return error(BERROR_OUTOFMEMORY_CRIT);
 	}
 	else {
 
-		if (!K_cpu.resize(SZ3(N.y / 2 + 1, N.x / 2 + 1, N.z))) return error(BERROR_OUTOFMEMORY_CRIT);
+		if (!K_cpu.resize(SZ3(N.y / 2 + 1, nxRegion, N.z))) return error(BERROR_OUTOFMEMORY_CRIT);
 	}
 
 	//-------------- SETUP FFT
@@ -673,21 +712,21 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_2D_xShifted(int index,
 			fftw_execute(plan_fwd_x);
 
 			//pack into tensor for next step
-			for (int i = 0; i < N.x / 2 + 1; i++) {
+			for (int i = 0; i < nxRegion; i++) {
 
-				ReIm3 value = *reinterpret_cast<ReIm3*>(pline + i * 3);
+				ReIm3 value = *reinterpret_cast<ReIm3*>(pline + (i + xRegion.i) * 3);
 
-				Scratch[i + j * (N.x / 2 + 1)] = value;
+				Scratch[i + j * nxRegion] = value;
 			}
 		}
 
 		//2. FFTs along y
-		for (int i = 0; i < (N.x / 2 + 1); i++) {
+		for (int i = 0; i < nxRegion; i++) {
 
 			//fetch line from fft array (zero padding kept)
 			for (int j = 0; j < N.y; j++) {
 
-				int idx_in = i + j * (N.x / 2 + 1);
+				int idx_in = i + j * nxRegion;
 
 				*reinterpret_cast<ReIm3*>(pline + j * 3) = Scratch[idx_in];
 			}
@@ -702,7 +741,7 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_2D_xShifted(int index,
 
 				if (!transpose_xy) {
 
-					kernel[i + j * (N.x / 2 + 1)] = value;
+					kernel[i + j * nxRegion] = value;
 				}
 				else {
 
@@ -770,11 +809,24 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_2D_Complex_Full(int in
 		//first attempt to compute kernels on GPU
 		error = Calculate_Demag_Kernels_2D_Complex_Full_onGPU(index);
 
-		//if it fails (out of GPU memory) then next attempt to initialize on CPU
-		if (error) { error.reset(); error(BWARNING_NOGPUINITIALIZATION); }
+		if (error) {
+
+			//if it fails (out of GPU memory) then next attempt to run convolution with reduced memory usage...
+			error.reset();
+			error = Set_Preserve_Zero_Padding(false);
+			if (!error) {
+
+				//...and try again
+				error = Calculate_Demag_Kernels_2D_Complex_Full_onGPU(index);
+				//if this still fails then finally try to initialize on cpu below
+				if (error) { error.reset(); error(BWARNING_NOGPUINITIALIZATION); }
+				else return error;
+			}
+			else return error;
+		}
 		else return error;
 	}
-	
+
 	//-------------- DEMAG TENSOR
 
 	//Demag tensor components
@@ -798,11 +850,11 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_2D_Complex_Full(int in
 
 	if (!transpose_xy) {
 
-		if (!K_cpu.resize(SZ3(N.x / 2 + 1, N.y, N.z))) return error(BERROR_OUTOFMEMORY_CRIT);
+		if (!K_cpu.resize(SZ3(nxRegion, N.y, N.z))) return error(BERROR_OUTOFMEMORY_CRIT);
 	}
 	else {
 
-		if (!K_cpu.resize(SZ3(N.y, N.x / 2 + 1, N.z))) return error(BERROR_OUTOFMEMORY_CRIT);
+		if (!K_cpu.resize(SZ3(N.y, nxRegion, N.z))) return error(BERROR_OUTOFMEMORY_CRIT);
 	}
 
 	//-------------- SETUP FFT
@@ -844,21 +896,21 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_2D_Complex_Full(int in
 			fftw_execute(plan_fwd_x);
 
 			//pack into kernel for next step
-			for (int i = 0; i < N.x / 2 + 1; i++) {
+			for (int i = 0; i < nxRegion; i++) {
 
-				ReIm3 value = *reinterpret_cast<ReIm3*>(pline + i * 3);
+				ReIm3 value = *reinterpret_cast<ReIm3*>(pline + (i + xRegion.i) * 3);
 
-				kernel[i + j * (N.x / 2 + 1)] = value;
+				kernel[i + j * nxRegion] = value;
 			}
 		}
 
 		//2. FFTs along y
-		for (int i = 0; i < (N.x / 2 + 1); i++) {
+		for (int i = 0; i < nxRegion; i++) {
 
 			//fetch line from fft array (zero padding kept)
 			for (int j = 0; j < N.y; j++) {
 
-				int idx_in = i + j * (N.x / 2 + 1);
+				int idx_in = i + j * nxRegion;
 
 				*reinterpret_cast<ReIm3*>(pline + j * 3) = kernel[idx_in];
 			}
@@ -872,7 +924,7 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_2D_Complex_Full(int in
 
 				if (!transpose_xy) {
 
-					kernel[i + j * (N.x / 2 + 1)] = value;
+					kernel[i + j * nxRegion] = value;
 				}
 				else {
 
@@ -941,8 +993,21 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_3D_Self(int index, boo
 		//first attempt to compute kernels on GPU
 		error = Calculate_Demag_Kernels_3D_Self_onGPU(index);
 
-		//if it fails (out of GPU memory) then next attempt to initialize on CPU
-		if (error) { error.reset(); error(BWARNING_NOGPUINITIALIZATION); }
+		if (error) {
+
+			//if it fails (out of GPU memory) then next attempt to run convolution with reduced memory usage...
+			error.reset();
+			error = Set_Preserve_Zero_Padding(false);
+			if (!error) {
+
+				//...and try again
+				error = Calculate_Demag_Kernels_3D_Self_onGPU(index);
+				//if this still fails then finally try to initialize on cpu below
+				if (error) { error.reset(); error(BWARNING_NOGPUINITIALIZATION); }
+				else return error;
+			}
+			else return error;
+		}
 		else return error;
 	}
 
@@ -969,11 +1034,11 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_3D_Self(int index, boo
 
 	if (!transpose_xy) {
 
-		if (!K_cpu.resize(SZ3(N.x / 2 + 1, N.y / 2 + 1, N.z / 2 + 1))) return error(BERROR_OUTOFMEMORY_CRIT);
+		if (!K_cpu.resize(SZ3(nxRegion, N.y / 2 + 1, N.z / 2 + 1))) return error(BERROR_OUTOFMEMORY_CRIT);
 	}
 	else {
 
-		if (!K_cpu.resize(SZ3(N.y / 2 + 1, N.x / 2 + 1, N.z / 2 + 1))) return error(BERROR_OUTOFMEMORY_CRIT);
+		if (!K_cpu.resize(SZ3(N.y / 2 + 1, nxRegion, N.z / 2 + 1))) return error(BERROR_OUTOFMEMORY_CRIT);
 	}
 
 	//-------------- SETUP FFT
@@ -1022,19 +1087,19 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_3D_Self(int index, boo
 				fftw_execute(plan_fwd_x);
 
 				//pack into tensor for next step
-				for (int i = 0; i < N.x / 2 + 1; i++) {
+				for (int i = 0; i < nxRegion; i++) {
 
-					ReIm3 value = *reinterpret_cast<ReIm3*>(pline + i * 3);
+					ReIm3 value = *reinterpret_cast<ReIm3*>(pline + (i + xRegion.i) *3);
 
 					if (!off_diagonal) {
 
 						//even w.r.t. to x so output is purely real
-						tensor[i + j * (N.x / 2 + 1) + k * (N.x / 2 + 1) * N.y] = DBL3(value.x.Re, value.y.Re, value.z.Re);
+						tensor[i + j * nxRegion + k * nxRegion * N.y] = DBL3(value.x.Re, value.y.Re, value.z.Re);
 					}
 					else {
 
 						//Dxy : odd x, Dxz : odd x, Dyz : even x
-						tensor[i + j * (N.x / 2 + 1) + k * (N.x / 2 + 1) * N.y] = DBL3(value.x.Im, value.y.Im, value.z.Re);
+						tensor[i + j * nxRegion + k * nxRegion * N.y] = DBL3(value.x.Im, value.y.Im, value.z.Re);
 					}
 				}
 			}
@@ -1042,12 +1107,12 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_3D_Self(int index, boo
 
 		//2. FFTs along y
 		for (int k = 0; k < N.z; k++) {
-			for (int i = 0; i < (N.x / 2 + 1); i++) {
+			for (int i = 0; i < nxRegion; i++) {
 
 				//fetch line from fft array (zero padding kept)
 				for (int j = 0; j < N.y; j++) {
 
-					int idx_in = i + j * (N.x / 2 + 1) + k * (N.x / 2 + 1) * N.y;
+					int idx_in = i + j * nxRegion + k * nxRegion * N.y;
 
 					*reinterpret_cast<DBL3*>(pline_real + j * 3) = tensor[idx_in];
 				}
@@ -1063,12 +1128,12 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_3D_Self(int index, boo
 					if (!off_diagonal) {
 
 						//even w.r.t. to y so output is purely real
-						tensor[i + j * (N.x / 2 + 1) + k * (N.x / 2 + 1) * (N.y / 2 + 1)] = DBL3(value.x.Re, value.y.Re, value.z.Re);
+						tensor[i + j * nxRegion + k * nxRegion * (N.y / 2 + 1)] = DBL3(value.x.Re, value.y.Re, value.z.Re);
 					}
 					else {
 
 						//Dxy : odd y, Dxz : even y, Dyz : odd y
-						tensor[i + j * (N.x / 2 + 1) + k * (N.x / 2 + 1) * (N.y / 2 + 1)] = DBL3(value.x.Im, value.y.Re, value.z.Im);
+						tensor[i + j * nxRegion + k * nxRegion * (N.y / 2 + 1)] = DBL3(value.x.Im, value.y.Re, value.z.Im);
 					}
 				}
 			}
@@ -1076,12 +1141,12 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_3D_Self(int index, boo
 
 		//3. FFTs along z
 		for (int j = 0; j < N.y / 2 + 1; j++) {
-			for (int i = 0; i < N.x / 2 + 1; i++) {
+			for (int i = 0; i < nxRegion; i++) {
 
 				//fetch line from fft array (zero padding kept)
 				for (int k = 0; k < N.z; k++) {
 
-					int idx_in = i + j * (N.x / 2 + 1) + k * (N.x / 2 + 1) * (N.y / 2 + 1);
+					int idx_in = i + j * nxRegion + k * nxRegion * (N.y / 2 + 1);
 
 					*reinterpret_cast<DBL3*>(pline_real + k * 3) = tensor[idx_in];
 				}
@@ -1100,11 +1165,11 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_3D_Self(int index, boo
 
 						if (!transpose_xy) {
 							
-							kernel[i + j * (N.x / 2 + 1) + k * (N.x / 2 + 1) * (N.y / 2 + 1)] = DBL3(value.x.Re, value.y.Re, value.z.Re);
+							kernel[i + j * nxRegion + k * nxRegion * (N.y / 2 + 1)] = DBL3(value.x.Re, value.y.Re, value.z.Re);
 						}
 						else {
 
-							kernel[j + i * (N.y / 2 + 1) + k * (N.x / 2 + 1) * (N.y / 2 + 1)] = DBL3(value.x.Re, value.y.Re, value.z.Re);
+							kernel[j + i * (N.y / 2 + 1) + k * nxRegion * (N.y / 2 + 1)] = DBL3(value.x.Re, value.y.Re, value.z.Re);
 						}
 					}
 					else {
@@ -1116,11 +1181,11 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_3D_Self(int index, boo
 						
 						if (!transpose_xy) {
 
-							kernel[i + j * (N.x / 2 + 1) + k * (N.x / 2 + 1) * (N.y / 2 + 1)] = DBL3(-value.x.Re, -value.y.Im, -value.z.Im);
+							kernel[i + j * nxRegion + k * nxRegion * (N.y / 2 + 1)] = DBL3(-value.x.Re, -value.y.Im, -value.z.Im);
 						}
 						else {
 
-							kernel[j + i * (N.y / 2 + 1) + k * (N.x / 2 + 1) * (N.y / 2 + 1)] = DBL3(-value.x.Re, -value.y.Im, -value.z.Im);
+							kernel[j + i * (N.y / 2 + 1) + k * nxRegion * (N.y / 2 + 1)] = DBL3(-value.x.Re, -value.y.Im, -value.z.Im);
 						}
 					}
 				}
@@ -1192,8 +1257,21 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_3D_zShifted(int index,
 		//first attempt to compute kernels on GPU
 		error = Calculate_Demag_Kernels_3D_zShifted_onGPU(index);
 
-		//if it fails (out of GPU memory) then next attempt to initialize on CPU
-		if (error) { error.reset(); error(BWARNING_NOGPUINITIALIZATION); }
+		if (error) {
+
+			//if it fails (out of GPU memory) then next attempt to run convolution with reduced memory usage...
+			error.reset();
+			error = Set_Preserve_Zero_Padding(false);
+			if (!error) {
+
+				//...and try again
+				error = Calculate_Demag_Kernels_3D_zShifted_onGPU(index);
+				//if this still fails then finally try to initialize on cpu below
+				if (error) { error.reset(); error(BWARNING_NOGPUINITIALIZATION); }
+				else return error;
+			}
+			else return error;
+		}
 		else return error;
 	}
 
@@ -1218,15 +1296,15 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_3D_zShifted(int index,
 
 	VEC<ReIm3> K_cpu, Scratch;
 
-	if (!Scratch.resize(SZ3(N.x / 2 + 1, N.y, N.z))) return error(BERROR_OUTOFMEMORY_CRIT);
+	if (!Scratch.resize(SZ3(nxRegion, N.y, N.z))) return error(BERROR_OUTOFMEMORY_CRIT);
 
 	if (!transpose_xy) {
 
-		if (!K_cpu.resize(SZ3(N.x / 2 + 1, N.y / 2 + 1, N.z / 2 + 1))) return error(BERROR_OUTOFMEMORY_CRIT);
+		if (!K_cpu.resize(SZ3(nxRegion, N.y / 2 + 1, N.z / 2 + 1))) return error(BERROR_OUTOFMEMORY_CRIT);
 	}
 	else {
 
-		if (!K_cpu.resize(SZ3(N.y / 2 + 1, N.x / 2 + 1, N.z / 2 + 1))) return error(BERROR_OUTOFMEMORY_CRIT);
+		if (!K_cpu.resize(SZ3(N.y / 2 + 1, nxRegion, N.z / 2 + 1))) return error(BERROR_OUTOFMEMORY_CRIT);
 	}
 
 	//-------------- SETUP FFT
@@ -1275,23 +1353,23 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_3D_zShifted(int index,
 				fftw_execute(plan_fwd_x);
 
 				//pack into scratch space
-				for (int i = 0; i < N.x / 2 + 1; i++) {
+				for (int i = 0; i < nxRegion; i++) {
 
-					ReIm3 value = *reinterpret_cast<ReIm3*>(pline + i * 3);
+					ReIm3 value = *reinterpret_cast<ReIm3*>(pline + (i + xRegion.i) * 3);
 
-					Scratch[i + j * (N.x / 2 + 1) + k * (N.x / 2 + 1) * N.y] = value;
+					Scratch[i + j * nxRegion + k * nxRegion * N.y] = value;
 				}
 			}
 		}
 
 		//2. FFTs along y
 		for (int k = 0; k < N.z; k++) {
-			for (int i = 0; i < (N.x / 2 + 1); i++) {
+			for (int i = 0; i < nxRegion; i++) {
 
 				//fetch line from fft array (zero padding kept)
 				for (int j = 0; j < N.y; j++) {
 
-					int idx_in = i + j * (N.x / 2 + 1) + k * (N.x / 2 + 1) * N.y;
+					int idx_in = i + j * nxRegion + k * nxRegion * N.y;
 
 					*reinterpret_cast<ReIm3*>(pline + j * 3) = Scratch[idx_in];
 				}
@@ -1304,19 +1382,19 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_3D_zShifted(int index,
 
 					ReIm3 value = *reinterpret_cast<ReIm3*>(pline + j * 3);
 
-					Scratch[i + j * (N.x / 2 + 1) + k * (N.x / 2 + 1) * (N.y / 2 + 1)] = value;
+					Scratch[i + j * nxRegion + k * nxRegion * (N.y / 2 + 1)] = value;
 				}
 			}
 		}
 
 		//3. FFTs along z
 		for (int j = 0; j < N.y / 2 + 1; j++) {
-			for (int i = 0; i < N.x / 2 + 1; i++) {
+			for (int i = 0; i < nxRegion; i++) {
 
 				//fetch line from fft array (zero padding kept)
 				for (int k = 0; k < N.z; k++) {
 
-					int idx_in = i + j * (N.x / 2 + 1) + k * (N.x / 2 + 1) * (N.y / 2 + 1);
+					int idx_in = i + j * nxRegion + k * nxRegion * (N.y / 2 + 1);
 
 					*reinterpret_cast<ReIm3*>(pline + k * 3) = Scratch[idx_in];
 				}
@@ -1331,11 +1409,11 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_3D_zShifted(int index,
 
 					if (!transpose_xy) {
 
-						kernel[i + j * (N.x / 2 + 1) + k * (N.x / 2 + 1) * (N.y / 2 + 1)] = value;
+						kernel[i + j * nxRegion + k * nxRegion * (N.y / 2 + 1)] = value;
 					}
 					else {
 
-						kernel[j + i * (N.y / 2 + 1) + k * (N.x / 2 + 1) * (N.y / 2 + 1)] = value;
+						kernel[j + i * (N.y / 2 + 1) + k * nxRegion * (N.y / 2 + 1)] = value;
 					}
 				}
 			}
@@ -1406,8 +1484,21 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_3D_xShifted(int index,
 		//first attempt to compute kernels on GPU
 		error = Calculate_Demag_Kernels_3D_xShifted_onGPU(index);
 
-		//if it fails (out of GPU memory) then next attempt to initialize on CPU
-		if (error) { error.reset(); error(BWARNING_NOGPUINITIALIZATION); }
+		if (error) {
+
+			//if it fails (out of GPU memory) then next attempt to run convolution with reduced memory usage...
+			error.reset();
+			error = Set_Preserve_Zero_Padding(false);
+			if (!error) {
+
+				//...and try again
+				error = Calculate_Demag_Kernels_3D_xShifted_onGPU(index);
+				//if this still fails then finally try to initialize on cpu below
+				if (error) { error.reset(); error(BWARNING_NOGPUINITIALIZATION); }
+				else return error;
+			}
+			else return error;
+		}
 		else return error;
 	}
 
@@ -1432,15 +1523,15 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_3D_xShifted(int index,
 
 	VEC<ReIm3> K_cpu, Scratch;
 
-	if (!Scratch.resize(SZ3(N.x / 2 + 1, N.y, N.z))) return error(BERROR_OUTOFMEMORY_CRIT);
+	if (!Scratch.resize(SZ3(nxRegion, N.y, N.z))) return error(BERROR_OUTOFMEMORY_CRIT);
 
 	if (!transpose_xy) {
 
-		if (!K_cpu.resize(SZ3(N.x / 2 + 1, N.y / 2 + 1, N.z / 2 + 1))) return error(BERROR_OUTOFMEMORY_CRIT);
+		if (!K_cpu.resize(SZ3(nxRegion, N.y / 2 + 1, N.z / 2 + 1))) return error(BERROR_OUTOFMEMORY_CRIT);
 	}
 	else {
 
-		if (!K_cpu.resize(SZ3(N.y / 2 + 1, N.x / 2 + 1, N.z / 2 + 1))) return error(BERROR_OUTOFMEMORY_CRIT);
+		if (!K_cpu.resize(SZ3(N.y / 2 + 1, nxRegion, N.z / 2 + 1))) return error(BERROR_OUTOFMEMORY_CRIT);
 	}
 
 	//-------------- SETUP FFT
@@ -1489,23 +1580,23 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_3D_xShifted(int index,
 				fftw_execute(plan_fwd_x);
 
 				//pack into scratch space
-				for (int i = 0; i < N.x / 2 + 1; i++) {
+				for (int i = 0; i < nxRegion; i++) {
 
-					ReIm3 value = *reinterpret_cast<ReIm3*>(pline + i * 3);
+					ReIm3 value = *reinterpret_cast<ReIm3*>(pline + (i + xRegion.i) * 3);
 
-					Scratch[i + j * (N.x / 2 + 1) + k * (N.x / 2 + 1) * N.y] = value;
+					Scratch[i + j * nxRegion + k * nxRegion * N.y] = value;
 				}
 			}
 		}
 
 		//2. FFTs along y
 		for (int k = 0; k < N.z; k++) {
-			for (int i = 0; i < (N.x / 2 + 1); i++) {
+			for (int i = 0; i < nxRegion; i++) {
 
 				//fetch line from fft array (zero padding kept)
 				for (int j = 0; j < N.y; j++) {
 
-					int idx_in = i + j * (N.x / 2 + 1) + k * (N.x / 2 + 1) * N.y;
+					int idx_in = i + j * nxRegion + k * nxRegion * N.y;
 
 					*reinterpret_cast<ReIm3*>(pline + j * 3) = Scratch[idx_in];
 				}
@@ -1518,19 +1609,19 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_3D_xShifted(int index,
 
 					ReIm3 value = *reinterpret_cast<ReIm3*>(pline + j * 3);
 
-					Scratch[i + j * (N.x / 2 + 1) + k * (N.x / 2 + 1) * (N.y / 2 + 1)] = value;
+					Scratch[i + j * nxRegion + k * nxRegion * (N.y / 2 + 1)] = value;
 				}
 			}
 		}
 
 		//3. FFTs along z
 		for (int j = 0; j < N.y / 2 + 1; j++) {
-			for (int i = 0; i < N.x / 2 + 1; i++) {
+			for (int i = 0; i < nxRegion; i++) {
 
 				//fetch line from fft array (zero padding kept)
 				for (int k = 0; k < N.z; k++) {
 
-					int idx_in = i + j * (N.x / 2 + 1) + k * (N.x / 2 + 1) * (N.y / 2 + 1);
+					int idx_in = i + j * nxRegion + k * nxRegion * (N.y / 2 + 1);
 
 					*reinterpret_cast<ReIm3*>(pline + k * 3) = Scratch[idx_in];
 				}
@@ -1545,11 +1636,11 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_3D_xShifted(int index,
 
 					if (!transpose_xy) {
 
-						kernel[i + j * (N.x / 2 + 1) + k * (N.x / 2 + 1) * (N.y / 2 + 1)] = value;
+						kernel[i + j * nxRegion + k * nxRegion * (N.y / 2 + 1)] = value;
 					}
 					else {
 
-						kernel[j + i * (N.y / 2 + 1) + k * (N.x / 2 + 1) * (N.y / 2 + 1)] = value;
+						kernel[j + i * (N.y / 2 + 1) + k * nxRegion * (N.y / 2 + 1)] = value;
 					}
 				}
 			}
@@ -1620,8 +1711,21 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_3D_Complex_Full(int in
 		//first attempt to compute kernels on GPU
 		error = Calculate_Demag_Kernels_3D_Complex_Full_onGPU(index);
 
-		//if it fails (out of GPU memory) then next attempt to initialize on CPU
-		if (error) { error.reset(); error(BWARNING_NOGPUINITIALIZATION); }
+		if (error) {
+
+			//if it fails (out of GPU memory) then next attempt to run convolution with reduced memory usage...
+			error.reset();
+			error = Set_Preserve_Zero_Padding(false);
+			if (!error) {
+
+				//...and try again
+				error = Calculate_Demag_Kernels_3D_Complex_Full_onGPU(index);
+				//if this still fails then finally try to initialize on cpu below
+				if (error) { error.reset(); error(BWARNING_NOGPUINITIALIZATION); }
+				else return error;
+			}
+			else return error;
+		}
 		else return error;
 	}
 
@@ -1646,15 +1750,15 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_3D_Complex_Full(int in
 
 	VEC<ReIm3> K_cpu, Scratch;
 
-	if (!Scratch.resize(SZ3(N.x / 2 + 1, N.y, N.z))) return error(BERROR_OUTOFMEMORY_CRIT);
+	if (!Scratch.resize(SZ3(nxRegion, N.y, N.z))) return error(BERROR_OUTOFMEMORY_CRIT);
 
 	if (!transpose_xy) {
 
-		if (!K_cpu.resize(SZ3(N.x / 2 + 1, N.y, N.z))) return error(BERROR_OUTOFMEMORY_CRIT);
+		if (!K_cpu.resize(SZ3(nxRegion, N.y, N.z))) return error(BERROR_OUTOFMEMORY_CRIT);
 	}
 	else {
 
-		if (!K_cpu.resize(SZ3(N.y, N.x / 2 + 1, N.z))) return error(BERROR_OUTOFMEMORY_CRIT);
+		if (!K_cpu.resize(SZ3(N.y, nxRegion, N.z))) return error(BERROR_OUTOFMEMORY_CRIT);
 	}
 
 	//-------------- SETUP FFT
@@ -1703,23 +1807,23 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_3D_Complex_Full(int in
 				fftw_execute(plan_fwd_x);
 
 				//pack into scratch space
-				for (int i = 0; i < N.x / 2 + 1; i++) {
+				for (int i = 0; i < nxRegion; i++) {
 
-					ReIm3 value = *reinterpret_cast<ReIm3*>(pline + i * 3);
+					ReIm3 value = *reinterpret_cast<ReIm3*>(pline + (i + xRegion.i) * 3);
 
-					Scratch[i + j * (N.x / 2 + 1) + k * (N.x / 2 + 1) * N.y] = value;
+					Scratch[i + j * nxRegion + k * nxRegion * N.y] = value;
 				}
 			}
 		}
 
 		//2. FFTs along y
 		for (int k = 0; k < N.z; k++) {
-			for (int i = 0; i < (N.x / 2 + 1); i++) {
+			for (int i = 0; i < nxRegion; i++) {
 
 				//fetch line from fft array (zero padding kept)
 				for (int j = 0; j < N.y; j++) {
 
-					int idx_in = i + j * (N.x / 2 + 1) + k * (N.x / 2 + 1) * N.y;
+					int idx_in = i + j * nxRegion + k * nxRegion * N.y;
 
 					*reinterpret_cast<ReIm3*>(pline + j * 3) = Scratch[idx_in];
 				}
@@ -1732,19 +1836,19 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_3D_Complex_Full(int in
 
 					ReIm3 value = *reinterpret_cast<ReIm3*>(pline + j * 3);
 
-					Scratch[i + j * (N.x / 2 + 1) + k * (N.x / 2 + 1) * N.y] = value;
+					Scratch[i + j * nxRegion + k * nxRegion * N.y] = value;
 				}
 			}
 		}
 
 		//3. FFTs along z
 		for (int j = 0; j < N.y; j++) {
-			for (int i = 0; i < N.x / 2 + 1; i++) {
+			for (int i = 0; i < nxRegion; i++) {
 
 				//fetch line from fft array (zero padding kept)
 				for (int k = 0; k < N.z; k++) {
 
-					int idx_in = i + j * (N.x / 2 + 1) + k * (N.x / 2 + 1) * N.y;
+					int idx_in = i + j * nxRegion + k * nxRegion * N.y;
 
 					*reinterpret_cast<ReIm3*>(pline + k * 3) = Scratch[idx_in];
 				}
@@ -1759,11 +1863,11 @@ BError DemagKernelCollectionCUDA::Calculate_Demag_Kernels_3D_Complex_Full(int in
 
 					if (!transpose_xy) {
 
-						kernel[i + j * (N.x / 2 + 1) + k * (N.x / 2 + 1) * N.y] = value;
+						kernel[i + j * nxRegion + k * nxRegion * N.y] = value;
 					}
 					else {
 
-						kernel[j + i * N.y + k * (N.x / 2 + 1) * N.y] = value;
+						kernel[j + i * N.y + k * nxRegion * N.y] = value;
 					}
 				}
 			}

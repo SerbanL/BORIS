@@ -731,9 +731,9 @@ BError DemagKernelCUDA::Calculate_Demag_Kernels_3D_onGPU(bool include_self_demag
 		}
 
 		//extract real or imaginary parts from cuOut and place in cuIn, depending on the computed component
-		if (component == 1) cuOut_to_cuIn_Im((N.x / 2 + 1) * (N.y / 2 + 1) * N.z, cuIn, cuOut, nxRegion, N.y / 2 + 1, 0, nxRegion);
-		else if (component == 2) cuOut_to_cuIn_Re((N.x / 2 + 1) * (N.y / 2 + 1) * N.z, cuIn, cuOut, nxRegion, N.y / 2 + 1, 0, nxRegion);
-		else if (component == 3) cuOut_to_cuIn_Im((N.x / 2 + 1) * (N.y / 2 + 1) * N.z, cuIn, cuOut, nxRegion, N.y / 2 + 1, 0, nxRegion);
+		if (component == 1) cuOut_to_cuIn_Im(nxRegion * (N.y / 2 + 1) * N.z, cuIn, cuOut, nxRegion, N.y / 2 + 1, 0, nxRegion);
+		else if (component == 2) cuOut_to_cuIn_Re(nxRegion * (N.y / 2 + 1) * N.z, cuIn, cuOut, nxRegion, N.y / 2 + 1, 0, nxRegion);
+		else if (component == 3) cuOut_to_cuIn_Im(nxRegion * (N.y / 2 + 1) * N.z, cuIn, cuOut, nxRegion, N.y / 2 + 1, 0, nxRegion);
 
 		//Now FFT along z from input to output
 		cufftExecD2Z(planTens3D_z, cuIn, cuOut);

@@ -57,7 +57,7 @@ public:
 	//------------------------------ MEMORY MANAGEMENT
 
 	//allocate required gpu memory for kernels
-	__host__ bool AllocateKernels(cuRect from_rect, cuRect this_rect, cuSZ3 N_cpu);
+	__host__ bool AllocateKernels(cuRect from_rect, cuRect this_rect, int nxRegion, cuSZ3 N_cpu);
 
 	//------------------------------ SETTERS
 
@@ -72,33 +72,33 @@ public:
 	//Kernels
 	__host__ void Set_K2D_odiag(std::vector<double>& K2D_odiag_cpu);
 	//all-GPU version
-	void Set_K2D_odiag(size_t size, cu_arr<cufftDoubleComplex>& cuOut, int transpose_xy);
+	void Set_K2D_odiag(size_t size, cu_arr<cufftDoubleComplex>& cuOut, cu_obj<cuSZ3>& cuN, cu_obj<cuINT2>& cuxRegion, int transpose_xy);
 
 	template <typename cpuVEC>
 	__host__ void Set_Kdiag_cmpl(cpuVEC& Kdiag_cmpl_cpu);
 	//all-GPU version (full size : (N.x/2 + 1) * N.y * N.z
-	void Set_Kdiag_cmpl(size_t size, cu_arr<cufftDoubleComplex>& cuOut, int component, int transpose_xy);
+	void Set_Kdiag_cmpl(size_t size, cu_arr<cufftDoubleComplex>& cuOut, cu_obj<cuSZ3>& cuN, cu_obj<cuINT2>& cuxRegion, int component, int transpose_xy);
 	//all-GPU version (reduced size : (N.x/2 + 1) * (N.y/2 + 1) * (N.z/2 + 1)
-	void Set_Kdiag_cmpl_reduced(size_t size, cu_arr<cufftDoubleComplex>& cuOut, int component, int transpose_xy);
+	void Set_Kdiag_cmpl_reduced(size_t size, cu_arr<cufftDoubleComplex>& cuOut, cu_obj<cuSZ3>& cuN, cu_obj<cuINT2>& cuxRegion, int component, int transpose_xy);
 
 	template <typename cpuVEC>
 	__host__ void Set_Kodiag_cmpl(cpuVEC& Kodiag_cmpl_cpu);
 	//all-GPU version (full size : (N.x/2 + 1) * N.y * N.z
-	void Set_Kodiag_cmpl(size_t size, cu_arr<cufftDoubleComplex>& cuOut, int component, int transpose_xy);
+	void Set_Kodiag_cmpl(size_t size, cu_arr<cufftDoubleComplex>& cuOut, cu_obj<cuSZ3>& cuN, cu_obj<cuINT2>& cuxRegion, int component, int transpose_xy);
 	//all-GPU version (reduced size : (N.x/2 + 1) * (N.y/2 + 1) * (N.z/2 + 1)
-	void Set_Kodiag_cmpl_reduced(size_t size, cu_arr<cufftDoubleComplex>& cuOut, int component, int transpose_xy);
+	void Set_Kodiag_cmpl_reduced(size_t size, cu_arr<cufftDoubleComplex>& cuOut, cu_obj<cuSZ3>& cuN, cu_obj<cuINT2>& cuxRegion, int component, int transpose_xy);
 
 	template <typename cpuVEC>
 	__host__ void Set_Kdiag_real(cpuVEC& Kdiag_real_cpu);
 	//all-GPU version
-	void Set_Kdiag_real(size_t size, cu_arr<cufftDoubleComplex>& cuOut, int component, int transpose_xy);
+	void Set_Kdiag_real(size_t size, cu_arr<cufftDoubleComplex>& cuOut, cu_obj<cuSZ3>& cuN, cu_obj<cuINT2>& cuxRegion, int component, int transpose_xy);
 
 	template <typename cpuVEC>
 	__host__ void Set_Kodiag_real(cpuVEC& Kodiag_real_cpu);
 	//all-GPU version  (2D : -Im, Re, Im parts)
-	void Set_Kodiag_real_2D(size_t size, cu_arr<cufftDoubleComplex>& cuOut, int component, int transpose_xy);
+	void Set_Kodiag_real_2D(size_t size, cu_arr<cufftDoubleComplex>& cuOut, cu_obj<cuSZ3>& cuN, cu_obj<cuINT2>& cuxRegion, int component, int transpose_xy);
 	//all-GPU version  (3D : -Re, -Im, -Im parts)
-	void Set_Kodiag_real_3D(size_t size, cu_arr<cufftDoubleComplex>& cuOut, int component, int transpose_xy);
+	void Set_Kodiag_real_3D(size_t size, cu_arr<cufftDoubleComplex>& cuOut, cu_obj<cuSZ3>& cuN, cu_obj<cuINT2>& cuxRegion, int component, int transpose_xy);
 
 	//------------------------------ GETTERS
 
@@ -170,7 +170,7 @@ __host__ inline void cuKerType::destruct_cu_obj(void)
 //------------------------------ MEMORY MANAGEMENT
 
 //allocate required gpu memory for kernels
-__host__ inline bool cuKerType::AllocateKernels(cuRect from_rect, cuRect this_rect, cuSZ3 N_cpu)
+__host__ inline bool cuKerType::AllocateKernels(cuRect from_rect, cuRect this_rect, int nxRegion, cuSZ3 N_cpu)
 {
 	FreeKernels();
 
@@ -185,13 +185,13 @@ __host__ inline bool cuKerType::AllocateKernels(cuRect from_rect, cuRect this_re
 
 		if (N_cpu.z == 1) {
 
-			if (!Kdiag_real.resize(cuSZ3(N_cpu.x / 2 + 1, N_cpu.y / 2 + 1, 1))) return false;
-			if (!K2D_odiag.resize(cuSZ3(N_cpu.x / 2 + 1, N_cpu.y / 2 + 1, 1))) return false;
+			if (!Kdiag_real.resize(cuSZ3(nxRegion, N_cpu.y / 2 + 1, 1))) return false;
+			if (!K2D_odiag.resize(cuSZ3(nxRegion, N_cpu.y / 2 + 1, 1))) return false;
 		}
 		else {
 
-			if (!Kdiag_real.resize(cuSZ3(N_cpu.x / 2 + 1, N_cpu.y / 2 + 1, N_cpu.z / 2 + 1))) return false;
-			if (!Kodiag_real.resize(cuSZ3(N_cpu.x / 2 + 1, N_cpu.y / 2 + 1, N_cpu.z / 2 + 1))) return false;
+			if (!Kdiag_real.resize(cuSZ3(nxRegion, N_cpu.y / 2 + 1, N_cpu.z / 2 + 1))) return false;
+			if (!Kodiag_real.resize(cuSZ3(nxRegion, N_cpu.y / 2 + 1, N_cpu.z / 2 + 1))) return false;
 		}
 	}
 	//not internal demag
@@ -237,14 +237,14 @@ __host__ inline bool cuKerType::AllocateKernels(cuRect from_rect, cuRect this_re
 				if (cuIsZ(shift.x) && cuIsZ(shift.y)) {
 
 					//z-shifted
-					if (!Kdiag_real.resize(cuSZ3(N_cpu.x / 2 + 1, N_cpu.y / 2 + 1, N_cpu.z))) return false;
-					if (!Kodiag_real.resize(cuSZ3(N_cpu.x / 2 + 1, N_cpu.y / 2 + 1, N_cpu.z))) return false;
+					if (!Kdiag_real.resize(cuSZ3(nxRegion, N_cpu.y / 2 + 1, N_cpu.z))) return false;
+					if (!Kodiag_real.resize(cuSZ3(nxRegion, N_cpu.y / 2 + 1, N_cpu.z))) return false;
 				}
 				else if (cuIsZ(shift.y) && cuIsZ(shift.z)) {
 
 					//x-shifted
-					if (!Kdiag_cmpl.resize(cuSZ3(N_cpu.x / 2 + 1, N_cpu.y / 2 + 1, N_cpu.z))) return false;
-					if (!Kodiag_cmpl.resize(cuSZ3(N_cpu.x / 2 + 1, N_cpu.y / 2 + 1, N_cpu.z))) return false;
+					if (!Kdiag_cmpl.resize(cuSZ3(nxRegion, N_cpu.y / 2 + 1, N_cpu.z))) return false;
+					if (!Kodiag_cmpl.resize(cuSZ3(nxRegion, N_cpu.y / 2 + 1, N_cpu.z))) return false;
 				}
 			}
 			else {
@@ -252,8 +252,8 @@ __host__ inline bool cuKerType::AllocateKernels(cuRect from_rect, cuRect this_re
 				//In all cases input tensors are real, so after x fft we can pack into N.x/2 + 1 size, but complex.
 				//The other dimensions are also reduced because we use symmetries to recover remaining elements
 
-				if (!Kdiag_cmpl.resize(cuSZ3(N_cpu.x / 2 + 1, N_cpu.y / 2 + 1, N_cpu.z / 2 + 1))) return false;
-				if (!Kodiag_cmpl.resize(cuSZ3(N_cpu.x / 2 + 1, N_cpu.y / 2 + 1, N_cpu.z / 2 + 1))) return false;
+				if (!Kdiag_cmpl.resize(cuSZ3(nxRegion, N_cpu.y / 2 + 1, N_cpu.z / 2 + 1))) return false;
+				if (!Kodiag_cmpl.resize(cuSZ3(nxRegion, N_cpu.y / 2 + 1, N_cpu.z / 2 + 1))) return false;
 			}
 		}
 
@@ -261,8 +261,8 @@ __host__ inline bool cuKerType::AllocateKernels(cuRect from_rect, cuRect this_re
 
 			//full complex kernels
 
-			if (!Kdiag_cmpl.resize(cuSZ3(N_cpu.x / 2 + 1, N_cpu.y, N_cpu.z))) return false;
-			if (!Kodiag_cmpl.resize(cuSZ3(N_cpu.x / 2 + 1, N_cpu.y, N_cpu.z))) return false;
+			if (!Kdiag_cmpl.resize(cuSZ3(nxRegion, N_cpu.y, N_cpu.z))) return false;
+			if (!Kodiag_cmpl.resize(cuSZ3(nxRegion, N_cpu.y, N_cpu.z))) return false;
 		}
 	}
 

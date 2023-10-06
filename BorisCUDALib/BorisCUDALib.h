@@ -59,6 +59,7 @@
 #include "mcuVEC_avg.h"
 #include "mcuVEC_histo.h"
 #include "mcuVEC_oper.h"
+#include "mcuVEC_shape.h"
 #include "mcuVEC_nprops.h"
 #include "mcuVEC_generate.h"
 #include "mcuVEC_extract.h"
@@ -75,6 +76,7 @@
 #include "mcuVEC_Managed_mng.h"
 #include "mcuVEC_Managed_synch.h"
 #include "mcuVEC_Managed_aux.h"
+#include "mcuVEC_Managed_flags.h"
 
 #include "mcuValue.h"
 
