@@ -8,7 +8,7 @@ The codebase is fully upgraded for multi-GPU use. This is a pre-release version 
 
 All Python scripts from previous versions will work on the new code, however older bsm files no longer compatible. To select more than one GPU simply use the selectcudadevice command, but pass it a list of GPU ids, e.g. ns.selectcudadevice([0, 1, 2, 3]) etc.
 
-Pre-print on multi-GPU upgrade here: https://arxiv.org/abs/2308.08447
+Publication on multi-GPU upgrade here: https://doi.org/10.1063/5.0172657 (J. Appl. Phys. 134, 163903 (2023))
 
 # Download
 Will be available when released here : https://boris-spintronics.uk/download
@@ -124,6 +124,10 @@ There are a number of articles which cover various parts of the software.
 <b>General</b> (if using Boris for published works please use this as a reference)
 
 •	S. Lepadatu, “Boris computational spintronics — High performance multi-mesh magnetic and spin transport modeling software”, Journal of Applied Physics 128, 243902 (2020)
+
+<b>Multi-GPU Computation</b>
+
+•	S. Lepadatu, “Accelerating micromagnetic and atomistic simulations using multiple GPUs” Journal of Applied Physics 134, 163903 (2023)
 
 <b>Differential equation solvers</b>
 

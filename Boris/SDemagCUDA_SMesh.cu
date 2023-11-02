@@ -4,7 +4,6 @@
 
 #ifdef MODULE_COMPILATION_SDEMAG
 
-#include "BorisCUDALib.cuh"
 
 #endif
 

@@ -1,8 +1,8 @@
 #BORIS Computational Spintronics 2022
 
-Update_Date = '15/09/2023'
+Update_Date = '19/10/2023'
 Boris_version = 4.0
-Notes = 'u'
+Notes = 'g'
 
 print("Using NetSocks Module Updated on : %s (v%0.2f%s)" % (Update_Date, Boris_version, Notes))
 
@@ -963,6 +963,10 @@ class NSClient:
     def addafmesh(self, name = '', rectangle = '', bufferCommand = False):
     	if not bufferCommand: return self.SendCommand("addafmesh", [name, rectangle])
     	self.SendCommand("buffercommand", ["addafmesh", name, rectangle])
+    
+    def addameshbcc(self, name = '', rectangle = '', bufferCommand = False):
+    	if not bufferCommand: return self.SendCommand("addameshbcc", [name, rectangle])
+    	self.SendCommand("buffercommand", ["addameshbcc", name, rectangle])
     
     def addameshcubic(self, name = '', rectangle = '', bufferCommand = False):
     	if not bufferCommand: return self.SendCommand("addameshcubic", [name, rectangle])
@@ -2130,6 +2134,10 @@ class NSClient:
     def setafmesh(self, name = '', rectangle = '', bufferCommand = False):
     	if not bufferCommand: return self.SendCommand("setafmesh", [name, rectangle])
     	self.SendCommand("buffercommand", ["setafmesh", name, rectangle])
+    
+    def setameshbcc(self, name = '', rectangle = '', bufferCommand = False):
+    	if not bufferCommand: return self.SendCommand("setameshbcc", [name, rectangle])
+    	self.SendCommand("buffercommand", ["setameshbcc", name, rectangle])
     
     def setameshcubic(self, name = '', rectangle = '', bufferCommand = False):
     	if not bufferCommand: return self.SendCommand("setameshcubic", [name, rectangle])
@@ -4891,6 +4899,42 @@ class NSClient:
         flag = self.material_creation
         self.material_creation = False
         return _Atomistic(self, meshname, rect, cellsize, flag)
+    
+    def AtomisticBCC(self, rect, cellsize, meshname = ''):
+
+        #the mesh name is the name of the object, e.g. A = ns.Atomistic(...) - here A will be the mesh name set in Boris
+        if meshname == '':
+            (filename,line_number,function_name,text)=traceback.extract_stack()[-2]
+            meshname = text[:text.find('=')].strip()
+        
+        class _AtomisticBCC(self.Mesh):
+            
+            #################### DATA
+            
+            #################### CTOR
+            
+            #make atomistic body-centred cubic mesh
+            def __init__(self, ns, meshname, rect, cellsize, material_creation):
+                
+                if not material_creation:
+                    if not ns.number_meshes_set: ns.setameshbcc(meshname, rect)    
+                    else: ns.addameshbcc(meshname, rect)
+                    ns.number_meshes_set += 1
+                
+                ns.cellsize(meshname, cellsize)
+                self.meshname = meshname
+                self.ns = ns
+                
+                #make mesh parameters
+                self.param = ns.Parameters_Atomistic(self.ns, self.meshname)    
+                
+                #make mesh quantities
+                self.quant = ns.Quantities_Atomistic(self.ns, self.meshname)
+                
+        #make the mesh and return object
+        flag = self.material_creation
+        self.material_creation = False
+        return _AtomisticBCC(self, meshname, rect, cellsize, flag)
     
     ############################# MATERIAL (mesh type can vary)
     
