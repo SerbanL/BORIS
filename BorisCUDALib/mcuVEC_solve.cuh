@@ -2,6 +2,8 @@
 
 #include "mcuVEC.h"
 
+#include "cuVEC_VC_solve.cuh"
+
 //--------------------------------------------LAPLACE / POISSON EQUATION : mcuVEC_solve.h
 
 //NOTE : these are placed in mcuVEC_solve.cuh, since they can only be called from cu files, not from h or cpp.

@@ -20,7 +20,7 @@ VType VEC_VC<VType>::average_nonempty(const Box& box) const
 				if (ngbrFlags[idx] & NF_NOTEMPTY) {
 
 					count++;
-					av = (av * (count - 1) + VEC<VType>::quantity[idx]) / count;
+					av = (av * (count - 1) + VEC<VType>::cell_sum(idx)) / count;
 				}
 			}
 		}
@@ -39,7 +39,7 @@ VType VEC_VC<VType>::average_nonempty(const Rect& rectangle) const
 	//if rect start and end point are the same, then just read single value
 	if (rectangle.s == rectangle.e && VEC<VType>::rect.contains(rectangle.s)) {
 
-		return (*this)[rectangle.s];
+		return VEC<VType>::cell_sum(VEC<VType>::position_to_cellidx(rectangle.s - VEC<VType>::rect.s));
 	}
 
 	//... otherwise rectangle must intersect with this mesh
@@ -54,24 +54,52 @@ VType VEC_VC<VType>::average_nonempty_omp(const Box& box) const
 {
 	VEC<VType>::reduction.new_average_reduction();
 
+	//SINGLE LATTICE
+	if (VEC<VType>::get_num_sublattices() == 1) {
+
 #pragma omp parallel for
-	for (int idx_box = 0; idx_box < box.size().dim(); idx_box++) {
+		for (int idx_box = 0; idx_box < box.size().dim(); idx_box++) {
 
-		//i, j, k values inside the box only calculated from the box cell index
-		int i = (idx_box % box.size().x);
-		int j = ((idx_box / box.size().x) % box.size().y);
-		int k = (idx_box / (box.size().x * box.size().y));
+			//i, j, k values inside the box only calculated from the box cell index
+			int i = (idx_box % box.size().x);
+			int j = ((idx_box / box.size().x) % box.size().y);
+			int k = (idx_box / (box.size().x * box.size().y));
 
-		//index inside the mesh for this box cell index
-		int idx = (i + box.s.i) + (j + box.s.j) * VEC<VType>::n.x + (k + box.s.k) * VEC<VType>::n.x * VEC<VType>::n.y;
+			//index inside the mesh for this box cell index
+			int idx = (i + box.s.i) + (j + box.s.j) * VEC<VType>::n.x + (k + box.s.k) * VEC<VType>::n.x * VEC<VType>::n.y;
 
-		//you shouldn't call this with a box that is not contained in Box(VEC<VType>::n), but this stops any bad memory accesses
-		if (idx < 0 || idx >= VEC<VType>::n.dim()) continue;
+			//you shouldn't call this with a box that is not contained in Box(VEC<VType>::n), but this stops any bad memory accesses
+			if (idx < 0 || idx >= VEC<VType>::n.dim()) continue;
 
-		//only include non-empty cells
-		if (ngbrFlags[idx] & NF_NOTEMPTY) {
+			//only include non-empty cells
+			if (ngbrFlags[idx] & NF_NOTEMPTY) {
 
-			VEC<VType>::reduction.reduce_average(VEC<VType>::quantity[idx]);
+				VEC<VType>::reduction.reduce_average(VEC<VType>::quantity[idx]);
+			}
+		}
+	}
+	//MULTIPLE SUB-LATTICES
+	else {
+
+#pragma omp parallel for
+		for (int idx_box = 0; idx_box < box.size().dim(); idx_box++) {
+
+			//i, j, k values inside the box only calculated from the box cell index
+			int i = (idx_box % box.size().x);
+			int j = ((idx_box / box.size().x) % box.size().y);
+			int k = (idx_box / (box.size().x * box.size().y));
+
+			//index inside the mesh for this box cell index
+			int idx = (i + box.s.i) + (j + box.s.j) * VEC<VType>::n.x + (k + box.s.k) * VEC<VType>::n.x * VEC<VType>::n.y;
+
+			//you shouldn't call this with a box that is not contained in Box(VEC<VType>::n), but this stops any bad memory accesses
+			if (idx < 0 || idx >= VEC<VType>::n.dim()) continue;
+
+			//only include non-empty cells
+			if (ngbrFlags[idx] & NF_NOTEMPTY) {
+
+				VEC<VType>::reduction.reduce_average(VEC<VType>::cell_sum(idx));
+			}
 		}
 	}
 
@@ -99,24 +127,52 @@ VType VEC_VC<VType>::sum_nonempty_omp(const Box& box) const
 {
 	VEC<VType>::reduction.new_sum_reduction();
 
+	//SINGLE LATTICE
+	if (VEC<VType>::get_num_sublattices() == 1) {
+
 #pragma omp parallel for
-	for (int idx_box = 0; idx_box < box.size().dim(); idx_box++) {
+		for (int idx_box = 0; idx_box < box.size().dim(); idx_box++) {
 
-		//i, j, k values inside the box only calculated from the box cell index
-		int i = (idx_box % box.size().x);
-		int j = ((idx_box / box.size().x) % box.size().y);
-		int k = (idx_box / (box.size().x * box.size().y));
+			//i, j, k values inside the box only calculated from the box cell index
+			int i = (idx_box % box.size().x);
+			int j = ((idx_box / box.size().x) % box.size().y);
+			int k = (idx_box / (box.size().x * box.size().y));
 
-		//index inside the mesh for this box cell index
-		int idx = (i + box.s.i) + (j + box.s.j) * VEC<VType>::n.x + (k + box.s.k) * VEC<VType>::n.x * VEC<VType>::n.y;
+			//index inside the mesh for this box cell index
+			int idx = (i + box.s.i) + (j + box.s.j) * VEC<VType>::n.x + (k + box.s.k) * VEC<VType>::n.x * VEC<VType>::n.y;
 
-		//you shouldn't call this with a box that is not contained in Box(VEC<VType>::n), but this stops any bad memory accesses
-		if (idx < 0 || idx >= VEC<VType>::n.dim()) continue;
+			//you shouldn't call this with a box that is not contained in Box(VEC<VType>::n), but this stops any bad memory accesses
+			if (idx < 0 || idx >= VEC<VType>::n.dim()) continue;
 
-		//only include non-empty cells
-		if (ngbrFlags[idx] & NF_NOTEMPTY) {
+			//only include non-empty cells
+			if (ngbrFlags[idx] & NF_NOTEMPTY) {
 
-			VEC<VType>::reduction.reduce_sum(VEC<VType>::quantity[idx]);
+				VEC<VType>::reduction.reduce_sum(VEC<VType>::quantity[idx]);
+			}
+		}
+	}
+	//MULTIPLE SUB-LATTICES
+	else {
+
+#pragma omp parallel for
+		for (int idx_box = 0; idx_box < box.size().dim(); idx_box++) {
+
+			//i, j, k values inside the box only calculated from the box cell index
+			int i = (idx_box % box.size().x);
+			int j = ((idx_box / box.size().x) % box.size().y);
+			int k = (idx_box / (box.size().x * box.size().y));
+
+			//index inside the mesh for this box cell index
+			int idx = (i + box.s.i) + (j + box.s.j) * VEC<VType>::n.x + (k + box.s.k) * VEC<VType>::n.x * VEC<VType>::n.y;
+
+			//you shouldn't call this with a box that is not contained in Box(VEC<VType>::n), but this stops any bad memory accesses
+			if (idx < 0 || idx >= VEC<VType>::n.dim()) continue;
+
+			//only include non-empty cells
+			if (ngbrFlags[idx] & NF_NOTEMPTY) {
+
+				VEC<VType>::reduction.reduce_sum(VEC<VType>::cell_sum(idx));
+			}
 		}
 	}
 

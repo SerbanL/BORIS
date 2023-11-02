@@ -10,7 +10,7 @@ void VEC<VType>::set(VType value)
 #pragma omp parallel for
 	for (int idx = 0; idx < quantity.size(); idx++) {
 
-		quantity[idx] = value;
+		set_sublattices_value(idx, value);
 	}
 }
 
@@ -23,7 +23,9 @@ void VEC<VType>::setbox(const Box& box, VType value)
 		for (int k = (box.s.z >= 0 ? box.s.z : 0); k < (box.e.z <= n.z ? box.e.z : n.z); k++) {
 			for (int i = (box.s.x >= 0 ? box.s.x : 0); i < (box.e.x <= n.x ? box.e.x : n.x); i++) {
 
-				quantity[i + j * n.x + k * n.x*n.y] = value;
+				int idx = i + j * n.x + k * n.x * n.y;
+
+				set_sublattices_value(idx, value);
 			}
 		}
 	}
@@ -44,12 +46,20 @@ template <typename VType>
 template <typename PType>
 void VEC<VType>::renormalize(PType new_norm)
 {
+	int num_sublattices = get_num_sublattices();
+
 #pragma omp parallel for
 	for (int idx = 0; idx < n.dim(); idx++) {
 
 		PType curr_norm = GetMagnitude(quantity[idx]);
 
 		if (IsNZ(curr_norm)) quantity[idx] *= new_norm / curr_norm;
+
+		for (int sidx = 1; sidx < num_sublattices; sidx++) {
+
+			curr_norm = GetMagnitude(quantity_extra[sidx - 1][idx]);
+			if (IsNZ(curr_norm)) quantity_extra[sidx - 1][idx] *= new_norm / curr_norm;
+		}
 	}
 }
 
@@ -63,6 +73,8 @@ void VEC<VType>::copy_values(const VEC<VType>& copy_this, Rect dstRect, Rect src
 	Box cells_box_dst = box_from_rect_max(dstRect + rect.s);
 	SZ3 dst_n = cells_box_dst.size();
 	DBL3 lRatio = dstRect.size() / srcRect.size();
+
+	int num_sublattices = get_num_sublattices();
 
 #pragma omp parallel for
 	for (int j = 0; j < dst_n.j; j++) {
@@ -79,7 +91,14 @@ void VEC<VType>::copy_values(const VEC<VType>& copy_this, Rect dstRect, Rect src
 
 				if (idx_out < n.dim()) {
 
-					quantity[idx_out] = copy_this.average(src_cell_rect_rel) * multiplier;
+					VType value = copy_this.average(src_cell_rect_rel) * multiplier;
+					quantity[idx_out] = value;
+
+					for (int sidx = 1; sidx < num_sublattices; sidx++) {
+
+						if (copy_this.get_num_sublattices() != num_sublattices) quantity_extra[sidx - 1][idx_out] = value;
+						else quantity_extra[sidx - 1][idx_out] = copy_this.average(sidx, src_cell_rect_rel) * multiplier;
+					}
 				}
 			}
 		}
@@ -101,6 +120,8 @@ void VEC<VType>::copy_values_thermalize(const VEC<VType>& copy_this, std::functi
 	SZ3 src_n = cells_box_src.size();
 
 	DBL3 lRatio = dstRect.size() / srcRect.size();
+
+	int num_sublattices = get_num_sublattices();
 
 	//go over source cells (not destination cells  as in copy_values)
 #pragma omp parallel for
@@ -129,7 +150,14 @@ void VEC<VType>::copy_values_thermalize(const VEC<VType>& copy_this, std::functi
 						for (int ibox = dst_box.s.i; ibox < dst_box.e.i; ibox++) {
 
 							int idx_dst = ibox + jbox * n.x + kbox * n.x * n.y;
-							quantity[idx_dst] = thermalize_func(copy_this[idx_src], idx_src, idx_dst);
+							VType value = thermalize_func(copy_this[idx_src], idx_src, idx_dst);
+							quantity[idx_dst] = value;
+
+							for (int sidx = 1; sidx < num_sublattices; sidx++) {
+
+								if (copy_this.get_num_sublattices() != num_sublattices) quantity_extra[sidx - 1][idx_dst] = value;
+								else quantity_extra[sidx - 1][idx_dst] = thermalize_func(copy_this(sidx, idx_src), idx_src, idx_dst);
+							}
 						}
 					}
 				}

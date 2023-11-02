@@ -204,6 +204,22 @@ VAL3Type Polar_to_Cartesian(const VAL3Type& polar)
 		polar.x*cos(polar.y*PI/180)); 
 }
 
+//convert from polar (magnitude, polar, azimuthal) coordinates, where angles are in degrees, to Cartesian coordinates (x, y, z)
+template <typename VAL3Type, std::enable_if_t<std::is_convertible<INT3, VAL3Type>::value>* = nullptr>
+std::vector<VAL3Type> Polar_to_Cartesian(const std::vector<VAL3Type>& polar)
+{
+	std::vector<VAL3Type> converted;
+	if (!malloc_vector(converted, polar.size())) return {};
+
+	for (int idx = 0; idx < polar.size(); idx++)
+		converted[idx] = VAL3Type(
+			polar[idx].x * sin(polar[idx].y * PI / 180) * cos(polar[idx].z * PI / 180),
+			polar[idx].x * sin(polar[idx].y * PI / 180) * sin(polar[idx].z * PI / 180),
+			polar[idx].x * cos(polar[idx].y * PI / 180));
+
+	return converted;
+}
+
 //convert from polar (magnitude, azimuthal, i.e. r, theta) coordinates, where angles are in degrees, to Cartesian coordinates (x, y)
 template <typename VAL2Type, std::enable_if_t<std::is_convertible<INT2, VAL2Type>::value>* = nullptr>
 VAL2Type Polar_to_Cartesian(const VAL2Type& polar)

@@ -26,7 +26,6 @@ class VEC {
 private:
 
 	//Histogram extraction data
-
 	std::vector<std::vector<double>> histogram;
 
 protected:
@@ -49,6 +48,14 @@ protected:
 
 	//the actual mesh quantity
 	std::vector<VType> quantity;
+	//extra quantities for sub-lattices; outer vector is number of extra sub-lattices; inner vector has same size as quantity.
+	std::vector<std::vector<VType>> quantity_extra;
+	//pointers to quantity vectors so we can access quantity and quantity_extra in a similar way when using multiple sub-lattices
+	//vector has size number of sub-lattices (i.e. 1 + quantity_extra.size())
+	std::vector<std::vector<VType>*> pquantity;
+
+	//position vectors of sub-lattices (as ratios of cellsizes), vector has same sizes as pquantity.
+	std::vector<DBL3> r_xyz;
 
 	//mesh transfer object : handled using the MESH TRANSFER methods below. Not saved by ProgramState, so needs to be remade if reloading this VEC.
 	//Defined in VEC_MeshTransfer.h
@@ -79,6 +86,9 @@ private:
 
 	//from current rectangle and h value set n. h may also need to be adjusted since n must be an integer. Resize quantity to new n value : return success or fail. If failed then nothing changed.
 	bool set_n_adjust_h(void);
+
+	//set cellsize, adjusting sublattice position vectors
+	void set_h(DBL3 new_h);
 
 	//---------------------------------------------MULTIPLE ENTRIES SETTERS - VEC SHAPE MASKS : VEC_shapemask.h
 
@@ -118,8 +128,13 @@ private:
 
 protected:
 
+	//--------------------------------------------HELPER METHODS : VEC_mng.h
+
 	//from h_ and rect_ calculate what n value results - but do not make any changes
 	SZ3 get_n_from_h_and_rect(const DBL3& h_, const Rect& rect_) const;
+
+	//set pointers in pquantity (must call whenever quantity and quantity_extra are resized)
+	void set_quantity_pointers(void);
 
 public:
 
@@ -149,6 +164,52 @@ public:
 	//index by position relative to VEC rect
 	VType& operator[](const DBL3& rel_pos) { return quantity[int(rel_pos.x / h.x) + int(rel_pos.y / h.y) * n.x + int(rel_pos.z / h.z) * n.x * n.y]; }
 	const VType& operator[](const DBL3& rel_pos) const { return quantity[int(rel_pos.x / h.x) + int(rel_pos.y / h.y) * n.x + int(rel_pos.z / h.z) * n.x * n.y]; }
+
+	//---Extra sublattices indexing operators
+
+	//get sublattice vector with index sidx
+	std::vector<VType>& operator()(int sidx) { return *pquantity[sidx]; }
+	
+	//NOTE : all [] operators are replicated here using () operator, which takes the additional first sidx parameter (sublattice index)
+
+	//Index using a single combined index (use e.g. when more convenient to use a single for loop to iterate over the quantity's elements)
+	VType& operator()(int sidx, int idx) { return (*pquantity[sidx])[idx]; }
+	//const version to allow passing in a const VEC& to functions which need to read the VEC
+	const VType& operator()(int sidx, int idx) const { return (*pquantity[sidx])[idx]; }
+
+	//index using a VAL3, integral type (e.g. use with nested loops)
+	VType& operator()(int sidx, const INT3& idx) { return (*pquantity[sidx])[idx.i + idx.j * n.x + idx.k * n.x * n.y]; }
+	const VType& operator()(int sidx, const INT3& idx) const { return (*pquantity[sidx])[idx.i + idx.j * n.x + idx.k * n.x * n.y]; }
+
+	//index by position relative to VEC rect
+	VType& operator()(int sidx, const DBL3& rel_pos) { return (*pquantity[sidx])[int(rel_pos.x / h.x) + int(rel_pos.y / h.y) * n.x + int(rel_pos.z / h.z) * n.x * n.y]; }
+	const VType& operator()(int sidx, const DBL3& rel_pos) const { return (*pquantity[sidx])[int(rel_pos.x / h.x) + int(rel_pos.y / h.y) * n.x + int(rel_pos.z / h.z) * n.x * n.y]; }
+
+	//special indexing mode where the total unit cell value is obtained by summing over sub-lattices
+	VType cell_sum(int idx) const
+	{
+		VType cell_sum_value = VType();
+		for (int sidx = 0; sidx < pquantity.size(); sidx++) cell_sum_value += (*pquantity[sidx])[idx];
+		return cell_sum_value;
+	}
+
+	VType cell_sum(const INT3& ijk) const
+	{
+		int idx = ijk.i + ijk.j * n.x + ijk.k * n.x * n.y;
+		VType cell_sum_value = VType();
+		for (int sidx = 0; sidx < pquantity.size(); sidx++) cell_sum_value += (*pquantity[sidx])[idx];
+		return cell_sum_value;
+	}
+
+	VType cell_sum(const DBL3& rel_pos) const
+	{
+		int idx = int(rel_pos.x / h.x) + int(rel_pos.y / h.y) * n.x + int(rel_pos.z / h.z) * n.x * n.y;
+		VType cell_sum_value = VType();
+		for (int sidx = 0; sidx < pquantity.size(); sidx++) cell_sum_value += (*pquantity[sidx])[idx];
+		return cell_sum_value;
+	}
+
+	//---Special access
 
 	//get the managed std::vector by reference
 	std::vector<VType>& get_vector(void) { return quantity; }
@@ -189,8 +250,12 @@ public:
 
 	//works like resize but sets given value also
 	bool assign(const SZ3& new_n, VType value);
+	//multiple sub-lattice version
+	bool assign(const SZ3& new_n, std::vector<VType> values);
 	//works like resize but sets given value also
 	bool assign(const DBL3& new_h, const Rect& new_rect, VType value);
+	//multiple sub-lattice version
+	bool assign(const DBL3& new_h, const Rect& new_rect, std::vector<VType> values);
 
 	//set everything to zero but h - note, using shrink_to_fit to reduce capacity to zero (the std::vector clear method does not do this)
 	//if you want to set the size of this VEC to zero you should use VEC::clear, not resize the size to zero. The reason for this explained below:
@@ -202,7 +267,37 @@ public:
 	void set_rect_start(const DBL3& rect_start) { rect += (rect_start - rect.s); }
 	void shift_rect_start(const DBL3& shift) { rect += shift; }
 
-	void shrink_to_fit(void) { quantity.shrink_to_fit(); }
+	void shrink_to_fit(void) 
+	{ 
+		quantity.shrink_to_fit(); 
+		for (int sidx = 1; sidx < quantity_extra.size() + 1; sidx++) quantity_extra[sidx - 1].shrink_to_fit();
+	}
+
+	//--------------------------------------------EXTRA SUBLATTICES : VEC_extra.h
+
+	//set number of sublattices, where r_xyz_.size() >= 1
+	//initial values on new sublattices will be copied from base sublattice
+	bool set_number_of_sublattices(std::vector<DBL3> r_xyz_);
+
+	//add an extra sublattice with position vector re_xyz_ (normalized to cellsizes)
+	//initial values on new sublattice will be copied from base sublattice
+	bool add_sublattice(DBL3 r_xyz_);
+
+	//set sublattice sidx vector position (sidx must be a correct index, 0 is for the base lattice)
+	void set_sublattice_position(int sidx, DBL3 r_xyz_);
+
+	//delete all extra sublattices, leaving only the base lattice
+	void clear_extra_sublattices(void);
+
+	//set value in cell idx for all sub-lattices
+	void set_sublattices_value(int idx, VType value);
+	//set value in cell idx for all sub-lattices, different values for each sub-lattice
+	void set_sublattices_value(int idx, const std::vector<VType>& value);
+
+	//number of allocated sub-lattices (>= 1, since there's always the base lattice)
+	int get_num_sublattices(void) const { return r_xyz.size(); }
+
+	const std::vector<DBL3>& get_sublattice_vectors(void) const { return r_xyz; }
 
 	//--------------------------------------------SUB-VECS : VEC_subvec.h
 
@@ -211,16 +306,16 @@ public:
 
 	//--------------------------------------------MULTIPLE ENTRIES SETTERS : VEC_oper.h
 
-	//set value in box
+	//set value in box for all sublattices
 	void setbox(const Box& box, VType value = VType());
 
-	//set value in rectangle (i.e. in cells intersecting the rectangle), where the rectangle is relative to this VEC's rectangle.
+	//set value in rectangle for all sublattices (i.e. in cells intersecting the rectangle), where the rectangle is relative to this VEC's rectangle.
 	void setrect(const Rect& rectangle, VType value = VType());
 
-	//set value in all cells
+	//set value in all cells for all subllatices
 	void set(VType value = VType());
 
-	//re-normalize all non-zero values to have the new magnitude (multiply by new_norm and divide by current magnitude)
+	//re-normalize all non-zero values to have the new magnitude for all sublattices (multiply by new_norm and divide by current magnitude)
 	template <typename PType = decltype(GetMagnitude(std::declval<VType>()))>
 	void renormalize(PType new_norm);
 
@@ -507,32 +602,39 @@ public:
 
 	//--------------------------------------------AVERAGING OPERATIONS : VEC_avg.h
 
-	//average in a box (which should be contained in the VEC dimensions)
+	//average in a box (which should be contained in the VEC dimensions). Base sublattice only.
 	VType average(const Box& box) const;
-	//average over given rectangle (relative to this VEC's rect)
+	//average over given rectangle (relative to this VEC's rect). Base sublattice only.
 	VType average(const Rect& rectangle = Rect()) const;
 
-	//parallel processing versions - do not call from parallel code!!!
+	//as above, but for sublattice with given index (this is needed by some routines, e.g. copy_values)
+	VType average(int sidx, const Box& box) const;
+	VType average(int sidx, const Rect& rectangle = Rect()) const;
+
+	//parallel processing versions - do not call from parallel code!!! Base sublattice only.
 	VType average_omp(const Box& box) const;
 	VType average_omp(const Rect& rectangle = Rect()) const;
 
-	//even though VEC doesn't hold a shape we might want to obtain averages by excluding zero-value cells
+	//even though VEC doesn't hold a shape we might want to obtain averages by excluding zero-value cells. Base sublattice only.
 	VType average_nonempty(const Box& box) const;
 	VType average_nonempty(const Rect& rectangle = Rect()) const;
 
-	//parallel processing versions - do not call from parallel code!!!
+	//parallel processing versions - do not call from parallel code!!! Base sublattice only.
 	VType average_nonempty_omp(const Box& box) const;
 	VType average_nonempty_omp(const Rect& rectangle = Rect()) const;
 
 	//smoother : obtain a weighted average value at coord, over a stencil of given size. All dimension units are same as h and rect. Include values from all cells which intersect the stencil.
 	///the coord is taken as the centre value and is relative to the mesh rectangle start coordinate which might not be 0,0,0 : i.e. not an absolute value.
 	//the weights vary linearly with distance from coord
+	//Base sublattice only
 	VType weighted_average(const DBL3& coord, const DBL3& stencil) const;
 	
 	//ijk is the cell index in a mesh with cellsize cs and same rect as this VEC; if cs is same as h then just read the value at ijk - much faster! If not then get the usual weighted average.
+	//Base sublattice only
 	VType weighted_average(const INT3& ijk, const DBL3& cs) const;
 
 	//get average value in composite shape (defined in VEC_shapemask.h)
+	//Base sublattice only
 	VType shape_getaverage(std::vector<MeshShape> shapes);
 
 	//--------------------------------------------NUMERICAL PROPERTIES : VEC_nprops.h

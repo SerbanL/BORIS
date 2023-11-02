@@ -9,15 +9,22 @@ template <typename VType>
 VEC_VC<VType>::VEC_VC(void) :
 	VEC<VType>(),
 	ProgramState<VEC_VC<VType>, 
-	std::tuple<SZ3, DBL3, Rect, std::vector<VType>, std::vector<int>, std::vector<int>, int,
+	std::tuple<
+	SZ3, DBL3, Rect, 
+	std::vector<VType>, std::vector<std::vector<VType>>,
+	std::vector<DBL3>,
+	std::vector<int>, std::vector<int>, int,
 	std::vector<VType>, std::vector<VType>, std::vector<VType>, std::vector<VType>, std::vector<VType>, std::vector<VType>,
 	DBL2, DBL2, DBL2, DBL2, DBL2, DBL2, DBL2, DBL3, int, int, int, bool, bool>,
 	std::tuple<>>
-	(this, 
-	{ VINFO(VEC<VType>::n), VINFO(VEC<VType>::h), VINFO(VEC<VType>::rect), VINFO(VEC<VType>::quantity), VINFO(ngbrFlags), VINFO(ngbrFlags2), VINFO(nonempty_cells),
-	  VINFO(dirichlet_nx), VINFO(dirichlet_px), VINFO(dirichlet_ny), VINFO(dirichlet_py), VINFO(dirichlet_nz), VINFO(dirichlet_pz),
-	  VINFO(robin_px), VINFO(robin_nx), VINFO(robin_py), VINFO(robin_ny), VINFO(robin_pz), VINFO(robin_nz), VINFO(robin_v), VINFO(shift_debt),
-	  VINFO(pbc_x), VINFO(pbc_y), VINFO(pbc_z), VINFO(cmbnd_conditions_set), VINFO(calculate_faces_and_edges) }, {})
+	(this,
+		{ VINFO(VEC<VType>::n), VINFO(VEC<VType>::h), VINFO(VEC<VType>::rect),
+		  VINFO(VEC<VType>::quantity), VINFO(VEC<VType>::quantity_extra),
+		  VINFO(VEC<VType>::r_xyz),
+		  VINFO(ngbrFlags), VINFO(ngbrFlags2), VINFO(nonempty_cells),
+		  VINFO(dirichlet_nx), VINFO(dirichlet_px), VINFO(dirichlet_ny), VINFO(dirichlet_py), VINFO(dirichlet_nz), VINFO(dirichlet_pz),
+		  VINFO(robin_px), VINFO(robin_nx), VINFO(robin_py), VINFO(robin_ny), VINFO(robin_pz), VINFO(robin_nz), VINFO(robin_v), VINFO(shift_debt),
+		  VINFO(pbc_x), VINFO(pbc_y), VINFO(pbc_z), VINFO(cmbnd_conditions_set), VINFO(calculate_faces_and_edges) }, {})
 {
 }
 
@@ -25,12 +32,19 @@ template <typename VType>
 VEC_VC<VType>::VEC_VC(const SZ3& n_) :
 	VEC<VType>(n_),
 	ProgramState<VEC_VC<VType>,
-	std::tuple<SZ3, DBL3, Rect, std::vector<VType>, std::vector<int>, std::vector<int>, int,
+	std::tuple<
+	SZ3, DBL3, Rect,
+	std::vector<VType>, std::vector<std::vector<VType>>,
+	std::vector<DBL3>,
+	std::vector<int>, std::vector<int>, int,
 	std::vector<VType>, std::vector<VType>, std::vector<VType>, std::vector<VType>, std::vector<VType>, std::vector<VType>,
 	DBL2, DBL2, DBL2, DBL2, DBL2, DBL2, DBL2, DBL3, int, int, int, bool, bool>,
 	std::tuple<>>
 	(this,
-		{ VINFO(VEC<VType>::n), VINFO(VEC<VType>::h), VINFO(VEC<VType>::rect), VINFO(VEC<VType>::quantity), VINFO(ngbrFlags), VINFO(ngbrFlags2), VINFO(nonempty_cells),
+		{ VINFO(VEC<VType>::n), VINFO(VEC<VType>::h), VINFO(VEC<VType>::rect),
+		  VINFO(VEC<VType>::quantity), VINFO(VEC<VType>::quantity_extra),
+		  VINFO(VEC<VType>::r_xyz),
+		  VINFO(ngbrFlags), VINFO(ngbrFlags2), VINFO(nonempty_cells),
 		  VINFO(dirichlet_nx), VINFO(dirichlet_px), VINFO(dirichlet_ny), VINFO(dirichlet_py), VINFO(dirichlet_nz), VINFO(dirichlet_pz),
 		  VINFO(robin_px), VINFO(robin_nx), VINFO(robin_py), VINFO(robin_ny), VINFO(robin_pz), VINFO(robin_nz), VINFO(robin_v), VINFO(shift_debt),
 		  VINFO(pbc_x), VINFO(pbc_y), VINFO(pbc_z), VINFO(cmbnd_conditions_set), VINFO(calculate_faces_and_edges) }, {})
@@ -49,12 +63,19 @@ template <typename VType>
 VEC_VC<VType>::VEC_VC(const DBL3& h_, const Rect& rect_) :
 	VEC<VType>(h_, rect_),
 	ProgramState<VEC_VC<VType>,
-	std::tuple<SZ3, DBL3, Rect, std::vector<VType>, std::vector<int>, std::vector<int>, int,
+	std::tuple<
+	SZ3, DBL3, Rect,
+	std::vector<VType>, std::vector<std::vector<VType>>,
+	std::vector<DBL3>,
+	std::vector<int>, std::vector<int>, int,
 	std::vector<VType>, std::vector<VType>, std::vector<VType>, std::vector<VType>, std::vector<VType>, std::vector<VType>,
 	DBL2, DBL2, DBL2, DBL2, DBL2, DBL2, DBL2, DBL3, int, int, int, bool, bool>,
 	std::tuple<>>
 	(this,
-		{ VINFO(VEC<VType>::n), VINFO(VEC<VType>::h), VINFO(VEC<VType>::rect), VINFO(VEC<VType>::quantity), VINFO(ngbrFlags), VINFO(ngbrFlags2), VINFO(nonempty_cells),
+		{ VINFO(VEC<VType>::n), VINFO(VEC<VType>::h), VINFO(VEC<VType>::rect),
+		  VINFO(VEC<VType>::quantity), VINFO(VEC<VType>::quantity_extra),
+		  VINFO(VEC<VType>::r_xyz),
+		  VINFO(ngbrFlags), VINFO(ngbrFlags2), VINFO(nonempty_cells),
 		  VINFO(dirichlet_nx), VINFO(dirichlet_px), VINFO(dirichlet_ny), VINFO(dirichlet_py), VINFO(dirichlet_nz), VINFO(dirichlet_pz),
 		  VINFO(robin_px), VINFO(robin_nx), VINFO(robin_py), VINFO(robin_ny), VINFO(robin_pz), VINFO(robin_nz), VINFO(robin_v), VINFO(shift_debt),
 		  VINFO(pbc_x), VINFO(pbc_y), VINFO(pbc_z), VINFO(cmbnd_conditions_set), VINFO(calculate_faces_and_edges) }, {})
@@ -77,12 +98,19 @@ template <typename VType>
 VEC_VC<VType>::VEC_VC(const DBL3& h_, const Rect& rect_, VType value) :
 	VEC<VType>(h_, rect_, value),
 	ProgramState<VEC_VC<VType>,
-	std::tuple<SZ3, DBL3, Rect, std::vector<VType>, std::vector<int>, std::vector<int>, int,
+	std::tuple<
+	SZ3, DBL3, Rect,
+	std::vector<VType>, std::vector<std::vector<VType>>,
+	std::vector<DBL3>,
+	std::vector<int>, std::vector<int>, int,
 	std::vector<VType>, std::vector<VType>, std::vector<VType>, std::vector<VType>, std::vector<VType>, std::vector<VType>,
 	DBL2, DBL2, DBL2, DBL2, DBL2, DBL2, DBL2, DBL3, int, int, int, bool, bool>,
 	std::tuple<>>
 	(this,
-		{ VINFO(VEC<VType>::n), VINFO(VEC<VType>::h), VINFO(VEC<VType>::rect), VINFO(VEC<VType>::quantity), VINFO(ngbrFlags), VINFO(ngbrFlags2), VINFO(nonempty_cells),
+		{ VINFO(VEC<VType>::n), VINFO(VEC<VType>::h), VINFO(VEC<VType>::rect),
+		  VINFO(VEC<VType>::quantity), VINFO(VEC<VType>::quantity_extra),
+		  VINFO(VEC<VType>::r_xyz),
+		  VINFO(ngbrFlags), VINFO(ngbrFlags2), VINFO(nonempty_cells),
 		  VINFO(dirichlet_nx), VINFO(dirichlet_px), VINFO(dirichlet_ny), VINFO(dirichlet_py), VINFO(dirichlet_nz), VINFO(dirichlet_pz),
 		  VINFO(robin_px), VINFO(robin_nx), VINFO(robin_py), VINFO(robin_ny), VINFO(robin_pz), VINFO(robin_nz), VINFO(robin_v), VINFO(shift_debt),
 		  VINFO(pbc_x), VINFO(pbc_y), VINFO(pbc_z), VINFO(cmbnd_conditions_set), VINFO(calculate_faces_and_edges) }, {})
@@ -272,6 +300,33 @@ bool VEC_VC<VType>::assign(const SZ3& new_n, VType value)
 	return true;
 }
 
+//multiple sub-lattice version
+template <typename VType>
+bool VEC_VC<VType>::assign(const SZ3& new_n, std::vector<VType> values)
+{
+	if (new_n != VEC<VType>::n) {
+
+		//reserve memory for ngbrFlags at the new size
+		if (!mreserve_vector(ngbrFlags, new_n.dim())) return false;
+
+		//reserve memory for extended ngbrFlags if needed
+		if (use_extended_flags()) {
+
+			if (!mreserve_vector(ngbrFlags2, new_n.dim())) return false;
+		}
+
+		//memory reserved so map flags to new size before changing the VEC<VType>::n value
+		resize_ngbrFlags(new_n);
+	}
+
+	if (!VEC<VType>::assign(new_n, values)) return false;
+
+	//all good, finish off by setting flags (noting that empty cells are set back to zero)
+	set_ngbrFlags();
+
+	return true;
+}
+
 //set value and shape from linked vec
 template <typename VType>
 template <typename LVType>
@@ -324,6 +379,35 @@ bool VEC_VC<VType>::assign(const DBL3& new_h, const Rect& new_rect, VType value)
 	}
 
 	if (!VEC<VType>::assign(new_h, new_rect, value)) return false;
+
+	//all good, finish off by setting flags.
+	set_ngbrFlags();
+
+	return true;
+}
+
+//multiple sub-lattice version
+template <typename VType>
+bool VEC_VC<VType>::assign(const DBL3& new_h, const Rect& new_rect, std::vector<VType> values)
+{
+	if (new_h != VEC<VType>::h || new_rect != VEC<VType>::rect) {
+
+		SZ3 new_n = VEC<VType>::get_n_from_h_and_rect(new_h, new_rect);
+
+		//reserve memory for ngbrFlags at the new size
+		if (!mreserve_vector(ngbrFlags, new_n.dim())) return false;
+
+		//reserve memory for extended ngbrFlags if needed
+		if (use_extended_flags()) {
+
+			if (!mreserve_vector(ngbrFlags2, new_n.dim())) return false;
+		}
+
+		//memory reserved so map flags to new size before changing the VEC<VType>::n value
+		resize_ngbrFlags(new_n);
+	}
+
+	if (!VEC<VType>::assign(new_h, new_rect, values)) return false;
 
 	//all good, finish off by setting flags.
 	set_ngbrFlags();

@@ -7,4 +7,4 @@
 #define SINGLEPRECISION 1
 
 //NVML is needed to read GPU temperatures, but this functionality can be disabled
-#define COMPILE_NVML_CODE	1
+#define COMPILE_NVML_CODE	0

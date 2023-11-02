@@ -2,6 +2,8 @@
 
 #include "mcuVEC.h"
 
+#include "cuVEC_VC_oper.cuh"
+
 //------------------------------------------------------------------- COPY VALUES
 
 //copy values from copy_this but keep current dimensions - if necessary map values from copy_this to local dimensions

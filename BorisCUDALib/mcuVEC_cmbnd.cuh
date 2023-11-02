@@ -2,6 +2,7 @@
 
 #include "mcuVEC.h"
 #include "mcuVEC_cmbnd.h"
+#include "cuVEC_VC_cmbnd.cuh"
 
 template <typename VType, typename MType>
 template <typename Class_CMBNDs, typename Class_PolicyCMBNDs, typename Class_CMBNDp, typename Class_PolicyCMBNDp, typename VType_, typename MType_, std::enable_if_t<std::is_same<MType_, cuVEC_VC<VType_>>::value>*>

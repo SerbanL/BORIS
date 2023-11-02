@@ -269,7 +269,7 @@ public:
 	//
 	// POLICY CLASS METHODS (specific)
 
-	//--------------------------------------------Halos : mcuVEC_halo.h
+	//--------------------------------------------Halos : mcuVEC_halo.cuh
 
 	//exchange values in all halos
 	

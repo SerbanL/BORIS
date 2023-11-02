@@ -11,6 +11,9 @@
 
 #include "cuFuncs_fp16.cuh"
 
+#include "cuArray_sizing.cuh"
+#include "mcuArray_sizing.cuh"
+
 #include "cuVEC_aux.cuh"
 #include "cuVEC_mng.cuh"
 #include "cuVEC_extract.cuh"

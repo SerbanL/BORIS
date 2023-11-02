@@ -137,7 +137,7 @@ private:
 	//array of pointers to gpu memory locations of managed cu objects. each pointer in the array is in cpu memory, but points to gpu memory (like a cu_obj)
 	//array size is set to number of available gpus
 	//each managed object is for the corresponding gpu, e.g. at index 0 we have device 0, etc.
-	MType ** managed_cuda_objects = nullptr;
+	MType** managed_cuda_objects = nullptr;
 
 private:
 
@@ -148,7 +148,7 @@ private:
 		if (managed_cuda_objects) {
 
 			for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
-			
+
 				//call "managed" destructor - managed object has to implement this, where it will free gpu memory for its stored types
 				call_destructor(mGPU, std::integral_constant<bool, std::is_fundamental<MType>::value >());
 
@@ -173,7 +173,7 @@ public:
 		Policy(*this, mGPU_)
 	{
 		//array of pointers set to number of required gpus
-		managed_cuda_objects = new MType*[mGPU.get_num_devices()];
+		managed_cuda_objects = new MType * [mGPU.get_num_devices()];
 
 		//construct each object on the respective device
 		for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
@@ -200,7 +200,7 @@ public:
 		Policy(*this, mGPU_)
 	{
 		//array of pointers set to number of required gpus
-		managed_cuda_objects = new MType*[mGPU.get_num_devices()];
+		managed_cuda_objects = new MType * [mGPU.get_num_devices()];
 
 		//construct each object on the respective device
 		for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
@@ -233,7 +233,7 @@ public:
 		Policy(*this, copyThis.mGPU)
 	{
 		//array of pointers set to number of required gpus
-		managed_cuda_objects = new MType*[mGPU.get_num_devices()];
+		managed_cuda_objects = new MType * [mGPU.get_num_devices()];
 
 		//construct each object on the respective device
 		for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
@@ -249,7 +249,7 @@ public:
 		//invoke assignment operator on Policy
 		*static_cast<Policy*>(this) = *static_cast<const Policy*>(&copyThis);
 	}
-	
+
 	//this makes an identical but independent managed cuda object : (implement void MType::assign_cu_obj(const MType& copyThis); in managed object)
 	//copyThis must have same number of gpu devices set
 	mcu_obj& operator=(const mcu_obj& copyThis)
@@ -258,7 +258,7 @@ public:
 		clear_mcuobject();
 
 		//copy from copyThis
-		managed_cuda_objects = new MType*[mGPU.get_num_devices()];
+		managed_cuda_objects = new MType * [mGPU.get_num_devices()];
 
 		for (mGPU.device_begin(); mGPU != mGPU.device_end(); mGPU++) {
 

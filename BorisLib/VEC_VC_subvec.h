@@ -10,8 +10,16 @@ template <typename VType>
 VEC_VC<VType> VEC_VC<VType>::subvec(Box box)
 {
 	Rect newvec_rect = Rect(box.s&VEC<VType>::h, box.e&VEC<VType>::h);
+	
 	//make appropriately sized new VEC_VC
 	VEC_VC<VType> newvec(VEC<VType>::h, newvec_rect);
+	newvec.set_sublattice_position(0, VEC<VType>::r_xyz[0]);
+	
+	//add extra sublattices if needed
+	for (int sidx = 1; sidx < VEC<VType>::get_num_sublattices(); sidx++) {
+
+		newvec.add_sublattice(VEC<VType>::r_xyz[sidx]);
+	}
 
 	//dirichlet vectors not copied - these should be set externally if needed
 
@@ -48,18 +56,24 @@ VEC_VC<VType> VEC_VC<VType>::subvec(Box box)
 
 				int idx = i + j * VEC<VType>::n.x + k * VEC<VType>::n.x*VEC<VType>::n.y;
 
-				int sidx = (i - box.s.i) + (j - box.s.j)*newvec.n.x + (k - box.s.k)*newvec.n.x*newvec.n.y;
+				int subvec_idx = (i - box.s.i) + (j - box.s.j)*newvec.n.x + (k - box.s.k)*newvec.n.x*newvec.n.y;
 
 				//copy values
-				newvec[sidx] = VEC<VType>::quantity[idx];
+
+				//base sublattice
+				newvec[subvec_idx] = VEC<VType>::quantity[idx];
 				
+				//extra sublattices
+				for (int sidx = 1; sidx < VEC<VType>::get_num_sublattices(); sidx++)
+					newvec(sidx)[subvec_idx] = VEC<VType>::quantity_extra[sidx - 1][idx];
+
 				//copy flags in full (will not be consistent for subvec, but set_ngbrFLags called below)
-				newvec.ngbrFlags_ref()[sidx] = ngbrFlags[idx];
+				newvec.ngbrFlags_ref()[subvec_idx] = ngbrFlags[idx];
 
 				//copy extended flags value if possible, but excluding dirichlet values. these require dirichlet vectors to be set, and if needed will be done externally.
 				if (newvec.ngbrFlags2_ref().size() && ngbrFlags2.size()) {
 					
-					newvec.ngbrFlags2_ref()[sidx] = ngbrFlags2[idx] & ~NF2_DIRICHLET;
+					newvec.ngbrFlags2_ref()[subvec_idx] = ngbrFlags2[idx] & ~NF2_DIRICHLET;
 				}
 			}
 		}

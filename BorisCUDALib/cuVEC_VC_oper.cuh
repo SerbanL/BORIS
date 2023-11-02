@@ -4,7 +4,8 @@
 #include "cuFuncs_Math.h"
 #include "launchers.h"
 #include "Reduction.cuh"
-#include "mcuVEC_Managed.h"
+#include "mcuVEC_Managed_avg.cuh"
+#include "cuVEC_VC_mcuVEC.cuh"
 
 //--------------------------------------------MULTIPLE ENTRIES SETTERS - OTHERS
 

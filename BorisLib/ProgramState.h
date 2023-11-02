@@ -12,7 +12,7 @@
 //  -> pointer to a complex type (save "!nullptr". Load by making instance with appropriate constructor - see int_tag_select_ctor below. Call Save/LoadObjectState method on that instance)
 //  -> pointer to a non-complex type (save blank line. Load by making instance with appropriate constructor.) 
 //  -> pointer to the non-complex base of a derived type, where one of the implementations is specified in the implementations std::tuple. (Save implementation name. Load by making instance of implementation with appropriate constructor. If implementation is a complex type then call Save/LoadObjectState method on that instance.)
-// 4. vectors containing any of the types above. (Save name, size. Load by checking name then resize using size. Depending on entry type do one of the following things above).
+// 4. vectors containing any of the types above (including vectors of vectors). (Save name, size. Load by checking name then resize using size. Depending on entry type do one of the following things above).
 //
 
 #include <string>

@@ -30,6 +30,7 @@ __global__ void mapmesh_newdims_kernel(cuSZ3 new_n, cuSZ3& old_n, VType*& new_qu
 template bool cuVEC<float>::mapmesh_newdims(const cuSZ3& new_n);
 template bool cuVEC<double>::mapmesh_newdims(const cuSZ3& new_n);
 
+template bool cuVEC<cuINT3>::mapmesh_newdims(const cuSZ3& new_n);
 template bool cuVEC<cuFLT3>::mapmesh_newdims(const cuSZ3& new_n);
 template bool cuVEC<cuDBL3>::mapmesh_newdims(const cuSZ3& new_n);
 

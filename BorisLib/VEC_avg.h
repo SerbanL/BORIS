@@ -16,7 +16,7 @@ VType VEC<VType>::average(const Box& box) const
 
 				//get running average
 				count++;
-				av = (av * (count - 1) + quantity[i + j * n.x + k * n.x*n.y]) / count;
+				av = (av * (count - 1) + cell_sum(i + j * n.x + k * n.x*n.y)) / count;
 			}
 		}
 	}
@@ -34,7 +34,7 @@ VType VEC<VType>::average(const Rect& rectangle) const
 	//if rect start and end point are the same, then just read single value
 	if (rectangle.s == rectangle.e && rect.contains(rectangle.s)) {
 
-		return (*this)[rectangle.s];
+		return cell_sum(position_to_cellidx(rectangle.s - rect.s));
 	}
 
 	//... otherwise rectangle must intersect with this mesh
@@ -44,25 +44,88 @@ VType VEC<VType>::average(const Rect& rectangle) const
 	return average(box_from_rect_max(rectangle + rect.s));
 }
 
+//as above, but for sublattice with given index
+template <typename VType>
+VType VEC<VType>::average(int sidx, const Box& box) const
+{
+	VType av = VType();
+	int count = 0;
+
+	for (int i = (box.s.x >= 0 ? box.s.x : 0); i < (box.e.x <= n.x ? box.e.x : n.x); i++) {
+		for (int j = (box.s.y >= 0 ? box.s.y : 0); j < (box.e.y <= n.y ? box.e.y : n.y); j++) {
+			for (int k = (box.s.z >= 0 ? box.s.z : 0); k < (box.e.z <= n.z ? box.e.z : n.z); k++) {
+
+				//get running average
+				count++;
+				av = (av * (count - 1) + (*pquantity[sidx])[i + j * n.x + k * n.x * n.y]) / count;
+			}
+		}
+	}
+
+	return av;
+}
+
+template <typename VType>
+VType VEC<VType>::average(int sidx, const Rect& rectangle) const
+{
+	//if empty rectangle then average ove the entire mesh
+	if (rectangle.IsNull()) return average(sidx, Box(n));
+
+	//if rect start and end point are the same, then just read single value
+	if (rectangle.s == rectangle.e && rect.contains(rectangle.s)) {
+
+		return (*this)(sidx, rectangle.s);
+	}
+
+	//... otherwise rectangle must intersect with this mesh
+	if (!rect.intersects(rectangle + rect.s)) return VType();
+
+	//convert rectangle to box (include all cells intersecting with the rectangle)
+	return average(sidx, box_from_rect_max(rectangle + rect.s));
+}
+
 template <typename VType>
 VType VEC<VType>::average_omp(const Box& box) const
 {
 	reduction.new_average_reduction();
 
+	//SINGLE LATTICE
+	if (get_num_sublattices() == 1) {
+
 #pragma omp parallel for
-	for (int idx_box = 0; idx_box < box.size().dim(); idx_box++) {
+		for (int idx_box = 0; idx_box < box.size().dim(); idx_box++) {
 
-		//i, j, k values inside the box only calculated from the box cell index
-		int i = (idx_box % box.size().x);
-		int j = ((idx_box / box.size().x) % box.size().y);
-		int k = (idx_box / (box.size().x * box.size().y));
+			//i, j, k values inside the box only calculated from the box cell index
+			int i = (idx_box % box.size().x);
+			int j = ((idx_box / box.size().x) % box.size().y);
+			int k = (idx_box / (box.size().x * box.size().y));
 
-		//index inside the mesh for this box cell index
-		int idx = (i + box.s.i) + (j + box.s.j) * n.x + (k + box.s.k) * n.x * n.y;
+			//index inside the mesh for this box cell index
+			int idx = (i + box.s.i) + (j + box.s.j) * n.x + (k + box.s.k) * n.x * n.y;
 
-		if (idx < 0 || idx >= n.dim()) continue;
+			if (idx < 0 || idx >= n.dim()) continue;
 
-		reduction.reduce_average(quantity[idx]);
+			reduction.reduce_average(quantity[idx]);
+		}
+	}
+	//MULTIPLE SUB-LATTICES
+	else {
+
+#pragma omp parallel for
+		for (int idx_box = 0; idx_box < box.size().dim(); idx_box++) {
+
+			//i, j, k values inside the box only calculated from the box cell index
+			int i = (idx_box % box.size().x);
+			int j = ((idx_box / box.size().x) % box.size().y);
+			int k = (idx_box / (box.size().x * box.size().y));
+
+			//index inside the mesh for this box cell index
+			int idx = (i + box.s.i) + (j + box.s.j) * n.x + (k + box.s.k) * n.x * n.y;
+
+			if (idx < 0 || idx >= n.dim()) continue;
+
+			reduction.reduce_average(cell_sum(idx));
+		}
 	}
 
 	return reduction.average();
@@ -92,7 +155,7 @@ VType VEC<VType>::average_nonempty(const Box& box) const
 			for (int k = (box.s.z >= 0 ? box.s.z : 0); k < (box.e.z <= n.z ? box.e.z : n.z); k++) {
 
 				//get running average
-				VType value = quantity[i + j * n.x + k * n.x*n.y];
+				VType value = cell_sum(i + j * n.x + k * n.x*n.y);
 
 				if (IsNZ(GetMagnitude(value))) {
 
@@ -124,25 +187,54 @@ VType VEC<VType>::average_nonempty_omp(const Box& box) const
 {
 	reduction.new_average_reduction();
 
+	//SINGLE LATTICE
+	if (get_num_sublattices() == 1) {
+
 #pragma omp parallel for
-	for (int idx_box = 0; idx_box < box.size().dim(); idx_box++) {
+		for (int idx_box = 0; idx_box < box.size().dim(); idx_box++) {
 
-		//i, j, k values inside the box only calculated from the box cell index
-		int i = (idx_box % box.size().x);
-		int j = ((idx_box / box.size().x) % box.size().y);
-		int k = (idx_box / (box.size().x * box.size().y));
+			//i, j, k values inside the box only calculated from the box cell index
+			int i = (idx_box % box.size().x);
+			int j = ((idx_box / box.size().x) % box.size().y);
+			int k = (idx_box / (box.size().x * box.size().y));
 
-		//index inside the mesh for this box cell index
-		int idx = (i + box.s.i) + (j + box.s.j) * n.x + (k + box.s.k) * n.x * n.y;
+			//index inside the mesh for this box cell index
+			int idx = (i + box.s.i) + (j + box.s.j) * n.x + (k + box.s.k) * n.x * n.y;
 
-		if (idx < 0 || idx >= n.dim()) continue;
+			if (idx < 0 || idx >= n.dim()) continue;
 
-		VType value = quantity[idx];
+			VType value = quantity[idx];
 
-		//only include non-empty cells
-		if (IsNZ(GetMagnitude(value))) {
+			//only include non-empty cells
+			if (IsNZ(GetMagnitude(value))) {
 
-			reduction.reduce_average(value);
+				reduction.reduce_average(value);
+			}
+		}
+	}
+	//MULTIPLE SUB-LATTICES
+	else {
+
+#pragma omp parallel for
+		for (int idx_box = 0; idx_box < box.size().dim(); idx_box++) {
+
+			//i, j, k values inside the box only calculated from the box cell index
+			int i = (idx_box % box.size().x);
+			int j = ((idx_box / box.size().x) % box.size().y);
+			int k = (idx_box / (box.size().x * box.size().y));
+
+			//index inside the mesh for this box cell index
+			int idx = (i + box.s.i) + (j + box.s.j) * n.x + (k + box.s.k) * n.x * n.y;
+
+			if (idx < 0 || idx >= n.dim()) continue;
+
+			VType value = cell_sum(idx);
+
+			//only include non-empty cells
+			if (IsNZ(GetMagnitude(value))) {
+
+				reduction.reduce_average(value);
+			}
 		}
 	}
 
@@ -182,15 +274,35 @@ VType VEC<VType>::weighted_average(const DBL3& coord, const DBL3& stencil) const
 	double d_max = GetMagnitude(stencil / 2 + h / 2);						//this is the maximum possible distance (a cell at this distance will get a weight of zero)	
 	double d_total = 0;														//total reciprocal distance
 
-	for (int ii = (idx_ll.i >= 0 ? idx_ll.i : 0); ii < (idx_ur.i < n.x ? idx_ur.i : n.x); ii++) {
-		for (int jj = (idx_ll.j >= 0 ? idx_ll.j : 0); jj < (idx_ur.j < n.y ? idx_ur.j : n.y); jj++) {
-			for (int kk = (idx_ll.k >= 0 ? idx_ll.k : 0); kk < (idx_ur.k < n.z ? idx_ur.k : n.z); kk++) {
+	//SINGLE LATTICE
+	if (get_num_sublattices() == 1) {
 
-				//find reciprocal distance for each cell : this is its weight * total reciprocal distance (to divide by d_total at the end)
-				double d_recip = d_max - get_distance(coord, DBL3((ii + 0.5)*h.x, (jj + 0.5)*h.y, (kk + 0.5)*h.z));
-				d_total += d_recip;
+		for (int ii = (idx_ll.i >= 0 ? idx_ll.i : 0); ii < (idx_ur.i < n.x ? idx_ur.i : n.x); ii++) {
+			for (int jj = (idx_ll.j >= 0 ? idx_ll.j : 0); jj < (idx_ur.j < n.y ? idx_ur.j : n.y); jj++) {
+				for (int kk = (idx_ll.k >= 0 ? idx_ll.k : 0); kk < (idx_ur.k < n.z ? idx_ur.k : n.z); kk++) {
 
-				smoothedValue += d_recip * quantity[ii + jj * n.x + kk * n.x*n.y];
+					//find reciprocal distance for each cell : this is its weight * total reciprocal distance (to divide by d_total at the end)
+					double d_recip = d_max - get_distance(coord, DBL3((ii + 0.5) * h.x, (jj + 0.5) * h.y, (kk + 0.5) * h.z));
+					d_total += d_recip;
+
+					smoothedValue += d_recip * quantity[ii + jj * n.x + kk * n.x * n.y];
+				}
+			}
+		}
+	}
+	//MULTIPLE SUB-LATTICES
+	else {
+
+		for (int ii = (idx_ll.i >= 0 ? idx_ll.i : 0); ii < (idx_ur.i < n.x ? idx_ur.i : n.x); ii++) {
+			for (int jj = (idx_ll.j >= 0 ? idx_ll.j : 0); jj < (idx_ur.j < n.y ? idx_ur.j : n.y); jj++) {
+				for (int kk = (idx_ll.k >= 0 ? idx_ll.k : 0); kk < (idx_ur.k < n.z ? idx_ur.k : n.z); kk++) {
+
+					//find reciprocal distance for each cell : this is its weight * total reciprocal distance (to divide by d_total at the end)
+					double d_recip = d_max - get_distance(coord, DBL3((ii + 0.5) * h.x, (jj + 0.5) * h.y, (kk + 0.5) * h.z));
+					d_total += d_recip;
+
+					smoothedValue += d_recip * cell_sum(ii + jj * n.x + kk * n.x * n.y);
+				}
 			}
 		}
 	}
@@ -225,15 +337,35 @@ VType VEC<VType>::weighted_average(const INT3& ijk, const DBL3& cs) const
 	double d_max = GetMagnitude(cs / 2 + h / 2);						//this is the maximum possible distance (a cell at this distance will get a weight of zero)	
 	double d_total = 0;														//total reciprocal distance
 
-	for (int ii = (idx_ll.i >= 0 ? idx_ll.i : 0); ii < (idx_ur.i < n.x ? idx_ur.i : n.x); ii++) {
-		for (int jj = (idx_ll.j >= 0 ? idx_ll.j : 0); jj < (idx_ur.j < n.y ? idx_ur.j : n.y); jj++) {
-			for (int kk = (idx_ll.k >= 0 ? idx_ll.k : 0); kk < (idx_ur.k < n.z ? idx_ur.k : n.z); kk++) {
+	//SINGLE LATTICE
+	if (get_num_sublattices() == 1) {
 
-				//find reciprocal distance for each cell : this is its weight * total reciprocal distance (to divide by d_total at the end)
-				double d_recip = d_max - get_distance(coord, DBL3((ii + 0.5)*h.x, (jj + 0.5)*h.y, (kk + 0.5)*h.z));
-				d_total += d_recip;
+		for (int ii = (idx_ll.i >= 0 ? idx_ll.i : 0); ii < (idx_ur.i < n.x ? idx_ur.i : n.x); ii++) {
+			for (int jj = (idx_ll.j >= 0 ? idx_ll.j : 0); jj < (idx_ur.j < n.y ? idx_ur.j : n.y); jj++) {
+				for (int kk = (idx_ll.k >= 0 ? idx_ll.k : 0); kk < (idx_ur.k < n.z ? idx_ur.k : n.z); kk++) {
 
-				smoothedValue += d_recip * quantity[ii + jj * n.x + kk * n.x*n.y];
+					//find reciprocal distance for each cell : this is its weight * total reciprocal distance (to divide by d_total at the end)
+					double d_recip = d_max - get_distance(coord, DBL3((ii + 0.5) * h.x, (jj + 0.5) * h.y, (kk + 0.5) * h.z));
+					d_total += d_recip;
+
+					smoothedValue += d_recip * quantity[ii + jj * n.x + kk * n.x * n.y];
+				}
+			}
+		}
+	}
+	//MULTIPLE SUB-LATTICES
+	else {
+
+		for (int ii = (idx_ll.i >= 0 ? idx_ll.i : 0); ii < (idx_ur.i < n.x ? idx_ur.i : n.x); ii++) {
+			for (int jj = (idx_ll.j >= 0 ? idx_ll.j : 0); jj < (idx_ur.j < n.y ? idx_ur.j : n.y); jj++) {
+				for (int kk = (idx_ll.k >= 0 ? idx_ll.k : 0); kk < (idx_ur.k < n.z ? idx_ur.k : n.z); kk++) {
+
+					//find reciprocal distance for each cell : this is its weight * total reciprocal distance (to divide by d_total at the end)
+					double d_recip = d_max - get_distance(coord, DBL3((ii + 0.5) * h.x, (jj + 0.5) * h.y, (kk + 0.5) * h.z));
+					d_total += d_recip;
+
+					smoothedValue += d_recip * cell_sum(ii + jj * n.x + kk * n.x * n.y);
+				}
 			}
 		}
 	}

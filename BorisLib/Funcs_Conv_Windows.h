@@ -6,26 +6,24 @@
 #include <d2d1_1.h>
 #include <string>
 
+#include <locale>
+#include <codecvt>
+
 ///////////////////////////////////////////////////////////////////////////////
 // GENERAL CONVERSIONS
 
 inline std::wstring StringtoWideString(const std::string& text) 
 {
-	//std::string to std::wstring conversion. To get LPCWSTR then attach .c_str() to returned std::wstring
-	int len;
-    int slength = (int)text.length() + 1;
-    len = MultiByteToWideChar(CP_ACP, 0, text.c_str(), slength, 0, 0); 
-    wchar_t* buf = new wchar_t[len];
-    MultiByteToWideChar(CP_ACP, 0, text.c_str(), slength, buf, len);
-	std::wstring wstring_text(buf);
-    delete[] buf;
-
-	return wstring_text;
+	using convert_typeX = std::codecvt_utf8<wchar_t>;
+	std::wstring_convert<convert_typeX, wchar_t> converterX;
+	return converterX.from_bytes(text);
 }
 
 inline std::string WideStringtoString(std::wstring wstr) 
 {
-	return std::string(wstr.begin(), wstr.end());
+	using convert_typeX = std::codecvt_utf8<wchar_t>;
+	std::wstring_convert<convert_typeX, wchar_t> converterX;
+	return converterX.to_bytes(wstr);
 }
 
 inline WCHAR* StringtoWCHARPointer(const std::string& text) 

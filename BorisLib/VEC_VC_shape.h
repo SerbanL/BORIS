@@ -15,7 +15,7 @@ void VEC_VC<VType>::setbox(const Box& box, VType value)
 
 				int idx = i + j * VEC<VType>::n.x + k * VEC<VType>::n.x*VEC<VType>::n.y;
 
-				VEC<VType>::quantity[idx] = value;
+				VEC<VType>::set_sublattices_value(idx, value);
 				mark_not_empty(idx);
 			}
 		}

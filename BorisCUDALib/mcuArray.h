@@ -97,26 +97,26 @@ public:
 	//mcu_arr<float> arr;
 	//if we have __global__ void cuda_kernel(size_t size, float* arr); then launch kernel as:
 	//cuda_kernel<<<...>>>(arr.size(mGPU), arr(mGPU)); 
-	VType*& operator()(int idx) { return *pcuarr[idx]; }
+	VType*& operator()(int mGPU_idx) { return *pcuarr[mGPU_idx]; }
 
 	//get gpu address of stored array in cpu memory, i.e. get_managed_array() returns a pointer stored in cpu memory, which contains an address to gpu memory, such that *get_managed_array() is the stored array in gpu memory
 	//This is useful to build a cu_arr of arrays.
 	//Example if we have cu_arr<float> arr1, cu_arr<float*> arr_col, then you can use arr_col.push_back(arr1.get_managed_array()); arr_col can now be passed to a __global__, where arr_col[0][0] accesses first element in arr1, etc.
-	VType**& get_managed_array(int idx)
+	VType**& get_managed_array(int mGPU_idx)
 	{
-		return pcuarr[idx]->get_managed_array();
+		return pcuarr[mGPU_idx]->get_managed_array();
 	}
 
 	//get gpu address of stored array in cpu memory directly; this can be used with thrust device pointers, e.g. thrust::device_ptr<VType> dev_ptr(arr.get_array());
-	VType*& get_array(int idx)
+	VType*& get_array(int mGPU_idx)
 	{
-		return pcuarr[idx]->get_array();
+		return pcuarr[mGPU_idx]->get_array();
 	}
 
 	//get contained cu_arr for indexed device
-	cu_arr<VType>& get_cu_arr(int idx)
+	cu_arr<VType>& get_cu_arr(int mGPU_idx)
 	{
-		return *pcuarr[idx];
+		return *pcuarr[mGPU_idx];
 	}
 
 	//------------------------------------------- INDEXING
@@ -130,20 +130,30 @@ public:
 
 	//resize indexed device to given size
 	//must be used as part of the usual mGPU for loop construct to select device before
-	bool resize(int idx, size_t size);
+	bool resize(int mGPU_idx, size_t size);
 
 	//clear for all devices
 	void clear(void);
 
 	//clear for indexed device only
 	//must be used as part of the usual mGPU for loop construct to select device before
-	void clear(int idx);
+	void clear(int mGPU_idx);
 
-	//------------------------------------------- STORE ENTRIES : mcuArray_sizing.h
+	//------------------------------------------- STORE ENTRIES : mcuArray_sizing.h, mcuArray_sizing.cuh
 
 	//new_entry is a pointer in cpu memory to an object in gpu memory. add it to indexed cu_arr
 	//must be used as part of the usual mGPU for loop construct to select device before
-	void push_back(int idx, VType*& new_entry);
+	void push_back(int mGPU_idx, VType*& new_entry);
+
+	//new_entry at given index is a pointer in cpu memory to an object in gpu memory. add it to indexed cu_arr (mGPU_idx). correct size must be allocated already.
+	//must be used as part of the usual mGPU for loop construct to select device before
+	void set(int mGPU_idx, int index, VType*& new_entry) { pcuarr[mGPU_idx]->set(index, new_entry); }
+
+	//deep copy version of push_back and set, which must be called in cu files
+	//these replace the gpu_to_gpu calls when storing entries with gpu_to_gpu_deep calls (see comments for gpu_to_gpu_deep)
+	//new_entry is stored in gpu memory
+	void push_back_deepcopy(int mGPU_idx, VType& new_entry);
+	void set_deepcopy(int mGPU_idx, int index, VType& new_entry);
 
 	//------------------------------------------- GPU <-> CPU TRANSFER : mcuArray_transfer.h
 
@@ -171,7 +181,7 @@ public:
 	//------------------------------------------- GET SIZE : mcuArray_aux.h
 
 	//get size of array on indexed device
-	size_t size(int idx);
+	size_t size(int mGPU_idx);
 
 	//get total size (i.e. sum of all allocated device sizes)
 	size_t size(void);

@@ -16,6 +16,13 @@ VEC<VType> VEC<VType>::subvec(Box box)
 		Rect newvec_rect = Rect(box.s&h, box.e&h);
 		//make appropriately sized new VEC
 		newvec.resize(h, newvec_rect);
+		newvec.set_sublattice_position(0, r_xyz[0]);
+
+		//add extra sublattices if needed
+		for (int sidx = 1; sidx < get_num_sublattices(); sidx++) {
+
+			newvec.add_sublattice(r_xyz[sidx]);
+		}
 	}
 
 	//copy data to subvec
@@ -26,9 +33,14 @@ VEC<VType> VEC<VType>::subvec(Box box)
 
 				int idx = i + j*n.x + k*n.x*n.y;
 
-				int sidx = (i - box.s.i) + (j - box.s.j)*newvec.n.x + (k - box.s.k)*newvec.n.x*newvec.n.y;
+				int subvec_idx = (i - box.s.i) + (j - box.s.j)*newvec.n.x + (k - box.s.k)*newvec.n.x*newvec.n.y;
 
-				newvec[sidx] = quantity[idx];
+				//base sublattice
+				newvec[subvec_idx] = quantity[idx];
+
+				//extra sublattices
+				for (int sidx = 1; sidx < get_num_sublattices(); sidx++)
+					newvec(sidx)[subvec_idx] = quantity_extra[sidx - 1][idx];
 			}
 		}
 	}

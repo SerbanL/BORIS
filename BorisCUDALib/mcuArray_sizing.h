@@ -21,9 +21,9 @@ bool mcu_arr<VType>::resize(size_t size)
 //resize indexed device to given size
 //must be used as part of the usual mGPU for loop construct to select device before
 template <typename VType>
-bool mcu_arr<VType>::resize(int idx, size_t size)
+bool mcu_arr<VType>::resize(int mGPU_idx, size_t size)
 {
-	return pcuarr[idx]->resize(size);
+	return pcuarr[mGPU_idx]->resize(size);
 }
 
 //clear for all devices
@@ -39,9 +39,9 @@ void mcu_arr<VType>::clear(void)
 //clear for indexed device only
 //must be used as part of the usual mGPU for loop construct to select device before
 template <typename VType>
-void mcu_arr<VType>::clear(int idx)
+void mcu_arr<VType>::clear(int mGPU_idx)
 {
-	pcuarr[idx]->clear();
+	pcuarr[mGPU_idx]->clear();
 }
 
 //------------------------------------------- STORE ENTRIES : mcuArray_sizing.h
@@ -49,7 +49,7 @@ void mcu_arr<VType>::clear(int idx)
 //new_entry is a pointer in cpu memory to an object in gpu memory. add it to indexed cu_arr
 //must be used as part of the usual mGPU for loop construct to select device before
 template <typename VType>
-void mcu_arr<VType>::push_back(int idx, VType*& new_entry)
+void mcu_arr<VType>::push_back(int mGPU_idx, VType*& new_entry)
 {
-	pcuarr[idx]->push_back(new_entry);
+	pcuarr[mGPU_idx]->push_back(new_entry);
 }

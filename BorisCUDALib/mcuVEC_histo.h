@@ -14,6 +14,8 @@ void mcuVEC<VType, MType>::setup_histogram_transfers(void)
 	}
 }
 
+//--------------------------------------------HISTOGRAMS : mcuVEC_histo.h
+
 template <typename VType, typename MType>
 bool mcuVEC<VType, MType>::get_mag_histogram(
 	std::vector<double>& histogram_x_cpu, std::vector<double>& histogram_p_cpu,
@@ -35,7 +37,7 @@ bool mcuVEC<VType, MType>::get_mag_histogram(
 
 			//in macrocell mode, need to do pre-averages in each subVEC and get min max values for each
 			stage_control = 1;
-			
+
 			min = 1e38;
 			max = -1e38;
 
@@ -98,7 +100,7 @@ bool mcuVEC<VType, MType>::get_mag_histogram(
 			histogram_size_changed = true;
 		}
 	}
-	
+
 	//refresh histogram_base_aux_col if needed
 	if (histogram_size_changed) {
 
@@ -121,7 +123,7 @@ bool mcuVEC<VType, MType>::get_mag_histogram(
 
 		histogram_transf.transfer(0, idx + 1, idx, 0);
 	}
-	
+
 	mGPU.synchronize();
 
 	//ADD HISTOGRAMS ON BASE DEVICE

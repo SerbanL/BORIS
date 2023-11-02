@@ -21,6 +21,8 @@
 #include "cuArray_sizing.h"
 #include "cuArray_transfer.h"
 
+#include "cupArray.h"
+
 #include "TEquationCUDA.h"
 #include "cuObj_Math_Special.h"
 
@@ -66,6 +68,8 @@
 #include "mcuVEC_flags.h"
 #include "mcuVEC_solve.h"
 #include "mcuVEC_cmbnd.h"
+
+#include "mcupArray.h"
 
 #include "mcuArray.h"
 #include "mcuArray_aux.h"

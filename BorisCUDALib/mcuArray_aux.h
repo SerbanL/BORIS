@@ -36,10 +36,10 @@ void mcu_arr<VType>::setvalue(int idx, VType value)
 
 //get size of array on indexed device
 template <typename VType>
-size_t mcu_arr<VType>::size(int idx)
+size_t mcu_arr<VType>::size(int mGPU_idx)
 {
 	//setting cuda device not needed here, just read size value, which is stored in cpu memory
-	return pcuarr[idx]->size();
+	return pcuarr[mGPU_idx]->size();
 }
 
 //get total size (i.e. sum of all allocated device sizes)

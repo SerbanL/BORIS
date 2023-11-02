@@ -183,10 +183,19 @@ public:
 
 	__host__ void clear(void);
 
-	//------------------------------------------- STORE ENTRIES : cuArray_sizing.h
+	//------------------------------------------- STORE ENTRIES : cuArray_sizing.h, cuArray_sizing.cuh 
 
 	//new_entry is a pointer in cpu memory to an object in gpu memory
 	__host__ void push_back(VType*& new_entry);
+
+	//new_entry at given index is a pointer in cpu memory to an object in gpu memory. correct size must be allocated already.
+	__host__ void set(int index, VType*& new_entry) { gpu_to_gpu(cu_array + index, new_entry); }
+
+	//deep copy version of push_back and set, which must be called in cu files
+	//these replace the gpu_to_gpu calls when storing entries with gpu_to_gpu_deep calls (see comments for gpu_to_gpu_deep)
+	//new_entry is stored in gpu memory
+	__host__ void push_back_deepcopy(VType& new_entry);
+	__host__ void set_deepcopy(int index, VType& new_entry);
 
 	//new_entry_cpu resides in cpu memory
 	//__host__ void push_back_from_cpu(VType& new_entry_cpu);
@@ -201,7 +210,7 @@ public:
 	template <typename Type>
 	__host__ void copy_to_vector(std::vector<Type>& cpuvec, size_t offset = 0);
 
-	//------------------------------------------- SET VALUE : cuArray_aux.h
+	//------------------------------------------- SET VALUE : cuArray_aux.h, cuArray_aux.cuh
 
 	//set all entries to given value
 	__host__ void set(VType value);

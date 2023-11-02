@@ -248,6 +248,37 @@ bool vec_convert(const std::vector<IType> &in_vec, std::vector<OType>& out_vec)
 	return true;
 }
 
+//convert input vector to output vector element by element by multiplying input with output type value and also adding output type value (e.g. double to DBL3)
+template <typename OType, typename IType>
+bool vec_convert(const std::vector<IType>& in_vec, std::vector<OType>& out_vec, OType multipy, OType add)
+{
+	if (!malloc_vector(out_vec, in_vec.size())) return false;
+
+#pragma omp parallel for
+	for (int idx = 0; idx < (int)in_vec.size(); idx++) {
+
+		out_vec[idx] = multipy * in_vec[idx] + add;
+	}
+
+	return true;
+}
+
+//convert input vector to output vector element by element by multiplying input with output type value and also adding output type value (e.g. double to DBL3)
+template <typename OType, typename IType>
+std::vector<OType> vec_convert(const std::vector<IType>& in_vec, OType multipy, OType add)
+{
+	std::vector<OType> out_vec;
+	if (!malloc_vector(out_vec, in_vec.size())) return {};
+
+#pragma omp parallel for
+	for (int idx = 0; idx < (int)in_vec.size(); idx++) {
+
+		out_vec[idx] = multipy * in_vec[idx] + add;
+	}
+
+	return out_vec;
+}
+
 //----------------------------------------
 
 //delete value repeats when next to each other - single and multiple vectors versions

@@ -5,6 +5,7 @@
 #include "VEC.h"
 #include "VEC_TransferFuncs.h"
 #include "VEC_mng.h"
+#include "VEC_extra.h"
 #include "VEC_aux.h"
 #include "VEC_subvec.h"
 #include "VEC_generate.h"

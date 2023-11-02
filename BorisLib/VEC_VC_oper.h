@@ -10,10 +10,18 @@ void VEC_VC<VType>::setnonempty(VType value)
 #pragma omp parallel for
 	for (int idx = 0; idx < VEC<VType>::n.dim(); idx++) {
 
-		if (ngbrFlags[idx] & NF_NOTEMPTY) {
+		if (ngbrFlags[idx] & NF_NOTEMPTY) VEC<VType>::set_sublattices_value(idx, value);
+	}
+}
 
-			VEC<VType>::quantity[idx] = value;
-		}
+//multiple sub-lattice version
+template <typename VType>
+void VEC_VC<VType>::setnonempty(const std::vector<VType>& value)
+{
+#pragma omp parallel for
+	for (int idx = 0; idx < VEC<VType>::n.dim(); idx++) {
+
+		if (ngbrFlags[idx] & NF_NOTEMPTY) VEC<VType>::set_sublattices_value(idx, value);
 	}
 }
 
@@ -32,7 +40,29 @@ void VEC_VC<VType>::setrectnonempty(const Rect& rectangle, VType value)
 
 				if (ngbrFlags[idx] & NF_NOTEMPTY) {
 
-					VEC<VType>::quantity[idx] = value;
+					VEC<VType>::set_sublattices_value(idx, value);
+				}
+			}
+		}
+	}
+}
+
+//multiple sub-lattice version
+template <typename VType>
+void VEC_VC<VType>::setrectnonempty(const Rect& rectangle, const std::vector<VType>& value)
+{
+	Box box = VEC<VType>::box_from_rect_max(rectangle + VEC<VType>::rect.s);
+
+#pragma omp parallel for
+	for (int j = (box.s.y >= 0 ? box.s.y : 0); j < (box.e.y <= VEC<VType>::n.y ? box.e.y : VEC<VType>::n.y); j++) {
+		for (int k = (box.s.z >= 0 ? box.s.z : 0); k < (box.e.z <= VEC<VType>::n.z ? box.e.z : VEC<VType>::n.z); k++) {
+			for (int i = (box.s.x >= 0 ? box.s.x : 0); i < (box.e.x <= VEC<VType>::n.x ? box.e.x : VEC<VType>::n.x); i++) {
+
+				int idx = i + j * VEC<VType>::n.x + k * VEC<VType>::n.x * VEC<VType>::n.y;
+
+				if (ngbrFlags[idx] & NF_NOTEMPTY) {
+
+					VEC<VType>::set_sublattices_value(idx, value);
 				}
 			}
 		}
@@ -41,7 +71,8 @@ void VEC_VC<VType>::setrectnonempty(const Rect& rectangle, VType value)
 
 //set value in solid object only containing relpos
 template <typename VType>
-void VEC_VC<VType>::setobject(VType value, DBL3 relpos)
+template <typename SLType>
+void VEC_VC<VType>::setobject(SLType value, DBL3 relpos)
 {
 	//use a simple serial algorithm for filling a solid object
 	//it's fast enough even for very large meshes (almost instantaneous in terms of response to user input) and since it's not meant to be used at runtime a parallel algorithm is not really necessary
@@ -60,7 +91,7 @@ void VEC_VC<VType>::setobject(VType value, DBL3 relpos)
 	int num_previous_cells = 0;
 	int num_current_cells = 0;
 
-	VEC<VType>::quantity[start_idx] = value;
+	VEC<VType>::set_sublattices_value(start_idx, value);
 	ngbrFlags[start_idx] &= ~NF_NOTEMPTY;
 	marked_cells[num_marked_cells++] = start_idx;
 	array2[num_current_cells++] = start_idx;
@@ -91,7 +122,7 @@ void VEC_VC<VType>::setobject(VType value, DBL3 relpos)
 			if ((ngbrFlags[pidx] & NF_NPX) && (ngbrFlags[pidx + 1] & NF_NOTEMPTY)) {
 
 				//set value and mark it as already marked
-				VEC<VType>::quantity[pidx + 1] = value;
+				VEC<VType>::set_sublattices_value(pidx + 1, value);
 				ngbrFlags[pidx + 1] &= ~NF_NOTEMPTY;
 				//save it so we can restore the NF_NOTEMPTY flags (all cells in which we set value are not actually empty)
 				marked_cells[num_marked_cells++] = pidx + 1;
@@ -101,7 +132,7 @@ void VEC_VC<VType>::setobject(VType value, DBL3 relpos)
 
 			if ((ngbrFlags[pidx] & NF_NNX) && (ngbrFlags[pidx - 1] & NF_NOTEMPTY)) {
 
-				VEC<VType>::quantity[pidx - 1] = value;
+				VEC<VType>::set_sublattices_value(pidx - 1, value);
 				ngbrFlags[pidx - 1] &= ~NF_NOTEMPTY;
 				marked_cells[num_marked_cells++] = pidx - 1;
 				array2[num_current_cells++] = pidx - 1;
@@ -109,7 +140,7 @@ void VEC_VC<VType>::setobject(VType value, DBL3 relpos)
 
 			if ((ngbrFlags[pidx] & NF_NPY) && (ngbrFlags[pidx + VEC<VType>::n.x] & NF_NOTEMPTY)) {
 
-				VEC<VType>::quantity[pidx + VEC<VType>::n.x] = value;
+				VEC<VType>::set_sublattices_value(pidx + VEC<VType>::n.x, value);
 				ngbrFlags[pidx + VEC<VType>::n.x] &= ~NF_NOTEMPTY;
 				marked_cells[num_marked_cells++] = pidx + VEC<VType>::n.x;
 				array2[num_current_cells++] = pidx + VEC<VType>::n.x;
@@ -117,7 +148,7 @@ void VEC_VC<VType>::setobject(VType value, DBL3 relpos)
 
 			if ((ngbrFlags[pidx] & NF_NNY) && (ngbrFlags[pidx - VEC<VType>::n.x] & NF_NOTEMPTY)) {
 
-				VEC<VType>::quantity[pidx - VEC<VType>::n.x] = value;
+				VEC<VType>::set_sublattices_value(pidx - VEC<VType>::n.x, value);
 				ngbrFlags[pidx - VEC<VType>::n.x] &= ~NF_NOTEMPTY;
 				marked_cells[num_marked_cells++] = pidx - VEC<VType>::n.x;
 				array2[num_current_cells++] = pidx - VEC<VType>::n.x;
@@ -125,7 +156,7 @@ void VEC_VC<VType>::setobject(VType value, DBL3 relpos)
 
 			if ((ngbrFlags[pidx] & NF_NPZ) && (ngbrFlags[pidx + VEC<VType>::n.x*VEC<VType>::n.y] & NF_NOTEMPTY)) {
 
-				VEC<VType>::quantity[pidx + VEC<VType>::n.x*VEC<VType>::n.y] = value;
+				VEC<VType>::set_sublattices_value(pidx + VEC<VType>::n.x * VEC<VType>::n.y, value);
 				ngbrFlags[pidx + VEC<VType>::n.x*VEC<VType>::n.y] &= ~NF_NOTEMPTY;
 				marked_cells[num_marked_cells++] = pidx + VEC<VType>::n.x*VEC<VType>::n.y;
 				array2[num_current_cells++] = pidx + VEC<VType>::n.x*VEC<VType>::n.y;
@@ -133,7 +164,7 @@ void VEC_VC<VType>::setobject(VType value, DBL3 relpos)
 
 			if ((ngbrFlags[pidx] & NF_NNZ) && (ngbrFlags[pidx - VEC<VType>::n.x*VEC<VType>::n.y] & NF_NOTEMPTY)) {
 
-				VEC<VType>::quantity[pidx - VEC<VType>::n.x*VEC<VType>::n.y] = value;
+				VEC<VType>::set_sublattices_value(pidx - VEC<VType>::n.x * VEC<VType>::n.y, value);
 				ngbrFlags[pidx - VEC<VType>::n.x*VEC<VType>::n.y] &= ~NF_NOTEMPTY;
 				marked_cells[num_marked_cells++] = pidx - VEC<VType>::n.x*VEC<VType>::n.y;
 				array2[num_current_cells++] = pidx - VEC<VType>::n.x*VEC<VType>::n.y;
@@ -154,14 +185,22 @@ template <typename VType>
 template <typename PType>
 void VEC_VC<VType>::renormalize(PType new_norm)
 {
+	int num_sublattices = VEC<VType>::get_num_sublattices();
+
 #pragma omp parallel for
 	for (int idx = 0; idx < VEC<VType>::n.dim(); idx++) {
 
 		PType curr_norm = GetMagnitude(VEC<VType>::quantity[idx]);
 
-		if ((ngbrFlags[idx] & NF_NOTEMPTY) && IsNZ(curr_norm)) {
+		if ((ngbrFlags[idx] & NF_NOTEMPTY)) {
 
-			VEC<VType>::quantity[idx] *= new_norm / curr_norm;
+			if (IsNZ(curr_norm)) VEC<VType>::quantity[idx] *= new_norm / curr_norm;
+
+			for (int sidx = 1; sidx < num_sublattices; sidx++) {
+
+				curr_norm = GetMagnitude(VEC<VType>::quantity_extra[sidx - 1][idx]);
+				if (IsNZ(curr_norm)) VEC<VType>::quantity_extra[sidx - 1][idx] *= new_norm / curr_norm;
+			}
 		}
 	}
 }
@@ -327,6 +366,8 @@ void VEC_VC<VType>::shift_x(double delta, const Rect& shift_rect, bool recalcula
 
 	Box shift_box = VEC<VType>::box_from_rect_min(shift_rect);
 
+	int num_sublattices = VEC<VType>::get_num_sublattices();
+
 	if (cells_shift < 0) {
 
 		for (int i = shift_box.s.x; i < shift_box.e.x + cells_shift; i++) {
@@ -338,6 +379,8 @@ void VEC_VC<VType>::shift_x(double delta, const Rect& shift_rect, bool recalcula
 					int shift_cell_idx = cell_idx - cells_shift;
 
 					VEC<VType>::quantity[cell_idx] = VEC<VType>::quantity[shift_cell_idx];
+					for (int sidx = 1; sidx < num_sublattices; sidx++) 
+						VEC<VType>::quantity_extra[sidx - 1][cell_idx] = VEC<VType>::quantity_extra[sidx - 1][shift_cell_idx];
 
 					//important to shift shape as well
 					if (is_empty(shift_cell_idx)) mark_empty(cell_idx);
@@ -357,6 +400,8 @@ void VEC_VC<VType>::shift_x(double delta, const Rect& shift_rect, bool recalcula
 					int shift_cell_idx = cell_idx - cells_shift;
 
 					VEC<VType>::quantity[cell_idx] = VEC<VType>::quantity[shift_cell_idx];
+					for (int sidx = 1; sidx < num_sublattices; sidx++)
+						VEC<VType>::quantity_extra[sidx - 1][cell_idx] = VEC<VType>::quantity_extra[sidx - 1][shift_cell_idx];
 
 					//important to shift shape as well
 					if (is_empty(shift_cell_idx)) mark_empty(cell_idx);
@@ -387,6 +432,8 @@ void VEC_VC<VType>::shift_y(double delta, const Rect& shift_rect, bool recalcula
 
 	Box shift_box = VEC<VType>::box_from_rect_min(shift_rect);
 
+	int num_sublattices = VEC<VType>::get_num_sublattices();
+
 	if (cells_shift < 0) {
 
 		for (int j = shift_box.s.y; j < shift_box.e.y + cells_shift; j++) {
@@ -398,6 +445,8 @@ void VEC_VC<VType>::shift_y(double delta, const Rect& shift_rect, bool recalcula
 					int shift_cell_idx = cell_idx - cells_shift * VEC<VType>::n.x;
 
 					VEC<VType>::quantity[cell_idx] = VEC<VType>::quantity[shift_cell_idx];
+					for (int sidx = 1; sidx < num_sublattices; sidx++)
+						VEC<VType>::quantity_extra[sidx - 1][cell_idx] = VEC<VType>::quantity_extra[sidx - 1][shift_cell_idx];
 
 					//important to shift shape as well
 					if (is_empty(shift_cell_idx)) mark_empty(cell_idx);
@@ -417,6 +466,8 @@ void VEC_VC<VType>::shift_y(double delta, const Rect& shift_rect, bool recalcula
 					int shift_cell_idx = cell_idx - cells_shift * VEC<VType>::n.x;
 
 					VEC<VType>::quantity[cell_idx] = VEC<VType>::quantity[shift_cell_idx];
+					for (int sidx = 1; sidx < num_sublattices; sidx++)
+						VEC<VType>::quantity_extra[sidx - 1][cell_idx] = VEC<VType>::quantity_extra[sidx - 1][shift_cell_idx];
 
 					//important to shift shape as well
 					if (is_empty(shift_cell_idx)) mark_empty(cell_idx);

@@ -17,7 +17,11 @@ template <typename VType>
 class VEC_VC : 
 	public VEC<VType>,
 	public ProgramState<VEC_VC<VType>, 
-	std::tuple<SZ3, DBL3, Rect, std::vector<VType>, std::vector<int>, std::vector<int>, int,
+	std::tuple<
+	SZ3, DBL3, Rect, 
+	std::vector<VType>, std::vector<std::vector<VType>>,
+	std::vector<DBL3>,
+	std::vector<int>, std::vector<int>, int,
 	std::vector<VType>, std::vector<VType>, std::vector<VType>, std::vector<VType>, std::vector<VType>, std::vector<VType>,
 	DBL2, DBL2, DBL2, DBL2, DBL2, DBL2, DBL2, DBL3, int, int, int, bool, bool>,
 	std::tuple<>>
@@ -305,7 +309,9 @@ public:
 	void RepairObjectState() 
 	{ 
 		//any mesh VEC<VType>::transfer info will have to be remade
-		VEC<VType>::transfer.clear(); 
+		VEC<VType>::transfer.clear();
+		//make sure pquantity is setup correctly now
+		VEC<VType>::set_quantity_pointers();
 	}
 
 	//--------------------------------------------SPECIAL DATA ACCESS (typically used for copy to/from cuVECs)
@@ -361,12 +367,16 @@ public:
 	bool assign(const SZ3& new_n, VType value, const VEC_VC<LVType> &linked_vec);
 	//set value but keep shape - empty cells will retain zero value : i.e. set value everywhere but in empty cells
 	bool assign(const SZ3& new_n, VType value);
+	//multiple sub-lattice version
+	bool assign(const SZ3& new_n, std::vector<VType> values);
 
 	//set value and shape from linked vec
 	template <typename LVType>
 	bool assign(const DBL3& new_h, const Rect& new_rect, VType value, const VEC_VC<LVType> &linked_vec);
 	//set value but keep shape - empty cells will retain zero value : i.e. set value everywhere but in empty cells
 	bool assign(const DBL3& new_h, const Rect& new_rect, VType value);
+	//multiple sub-lattice version
+	bool assign(const DBL3& new_h, const Rect& new_rect, std::vector<VType> values);
 
 	void clear(void);
 
@@ -481,7 +491,12 @@ public:
 
 	//mark cell as not empty / empty : internal use only; routines that use these must finish with recalculating ngbrflags as neighbours will have changed
 	void mark_not_empty(int index) { ngbrFlags[index] |= NF_NOTEMPTY; }
-	void mark_empty(int index) { ngbrFlags[index] &= ~NF_NOTEMPTY; VEC<VType>::quantity[index] = VType(); }
+	void mark_empty(int index) 
+	{ 
+		ngbrFlags[index] &= ~NF_NOTEMPTY; 
+		VEC<VType>::quantity[index] = VType(); 
+		for (int sidx = 1; sidx < VEC<VType>::get_num_sublattices(); sidx++) VEC<VType>::quantity_extra[sidx - 1][index] = VType();
+	}
 
 	//similar to set_ngbrFlags, but do not reset externally set flags, usable at runtime if shape changes
 	void set_ngbrFlags_shapeonly(void) { set_ngbrFlags(false); }
@@ -622,12 +637,17 @@ public:
 
 	//exactly the same as assign value - do not use assign as it is slow (sets flags)
 	void setnonempty(VType value = VType());
+	//multiple sub-lattice version
+	void setnonempty(const std::vector<VType>& value);
 
 	//set value in non-empty cells only in given rectangle (relative coordinates)
 	void setrectnonempty(const Rect& rectangle, VType value = VType());
+	//multiple sub-lattice version
+	void setrectnonempty(const Rect& rectangle, const std::vector<VType>& value);
 
 	//set value in solid object only containing relpos
-	void setobject(VType value, DBL3 relpos);
+	template <typename SLType>
+	void setobject(SLType value, DBL3 relpos);
 
 	//re-normalize all non-zero values to have the new magnitude (multiply by new_norm and divide by current magnitude)
 	template <typename PType = decltype(GetMagnitude(std::declval<VType>()))>

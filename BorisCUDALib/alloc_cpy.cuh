@@ -56,6 +56,26 @@ void set_cuda_array_launcher(size_t size, DType* cu_dest_ptr, DType value)
 	set_cuda_array <<< (size + CUDATHREADS) / CUDATHREADS, CUDATHREADS >>> (size, cu_dest_ptr, value);
 }
 
+//------------------------------------------------------------------- DEEP COPY
+
+template <typename DType>
+__global__ void gpu_to_gpu_deepcopy_kernel(DType* cu_dest_ptr, const DType& value, size_t dest_offset)
+{
+	if (threadIdx.x == 0) {
+
+		cu_dest_ptr[dest_offset] = value;
+	}
+}
+
+//store value in cu_dest_ptr array at given offset. Here value is in gpu memory, and cu_dest_ptr is stored in cpu memory but points gpu memory where enough memory must be allocated to include the given offset.
+//e.g. if DType is a container of device pointers, then cu_dest_ptr[dest_offset] can be used to access them in device code.
+//In such cases the simpler gpu_to_gpu call, based on cudaMemcpy, if we have a pointer to value, will not work (contained pointers will not be copied when creating the DType object in cu_dest_ptr[dest_offset])
+template <typename DType>
+void gpu_to_gpu_deepcopy(DType*& cu_dest_ptr, const DType& value, size_t dest_offset)
+{
+	gpu_to_gpu_deepcopy_kernel <<< 1, CUDATHREADS >>> (cu_dest_ptr, value, dest_offset);
+}
+
 //------------------------------------------------------------------- MULTIPLY
 
 template <typename DType>
